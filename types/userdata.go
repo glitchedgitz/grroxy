@@ -36,20 +36,36 @@ type UrlData struct {
 }
 
 type UserData struct {
-	ID               string       `db:"id" json:"id"`
-	Host             string       `db:"host" json:"host"`
-	IP               string       `db:"ip" json:"ip"`
-	Port             string       `db:"port" json:"port"`
-	Event            EventData    `db:"event" json:"event"`
-	UrlData          UrlData      `db:"url_data" json:"url_data"`
-	OriginalRequest  RequestData  `db:"original_request" json:"original_request"`
-	OriginalResponse ResponseData `db:"original_response" json:"original_response"`
-	HasResponse      bool         `db:"has_response" json:"has_response"`
-	IsRequestEdited  bool         `db:"is_request_edited" json:"is_request_edited"`
-	IsResponseEdited bool         `db:"is_response_edited" json:"is_response_edited"`
-	EditedRequest    RequestData  `db:"edited_request" json:"edited_request"`
-	EditedResponse   ResponseData `db:"edited_response" json:"edited_response"`
-	Labels           []string     `db:"labels" json:"labels"`
+	ID               string       `db:"id,omitempty" json:"id,omitempty"`
+	Host             string       `db:"host,omitempty" json:"host,omitempty"`
+	IP               string       `db:"ip,omitempty" json:"ip,omitempty"`
+	Port             string       `db:"port,omitempty" json:"port,omitempty"`
+	Event            EventData    `db:"event,omitempty" json:"event,omitempty"`
+	UrlData          UrlData      `db:"url_data,omitempty" json:"url_data,omitempty"`
+	OriginalRequest  RequestData  `db:"original_request,omitempty" json:"original_request,omitempty"`
+	OriginalResponse ResponseData `db:"original_response,omitempty" json:"original_response,omitempty"`
+	HasResponse      bool         `db:"has_response,omitempty" json:"has_response,omitempty"`
+	IsRequestEdited  bool         `db:"is_request_edited,omitempty" json:"is_request_edited,omitempty"`
+	IsResponseEdited bool         `db:"is_response_edited,omitempty" json:"is_response_edited,omitempty"`
+	EditedRequest    RequestData  `db:"edited_request,omitempty" json:"edited_request,omitempty"`
+	EditedResponse   ResponseData `db:"edited_response,omitempty" json:"edited_response,omitempty"`
+	Labels           []string     `db:"labels,omitempty" json:"labels,omitempty"`
+}
+
+type UserData2 struct {
+	ID               string      `db:"id" json:"id"`
+	Host             string      `db:"host" json:"host"`
+	IP               string      `db:"ip" json:"ip"`
+	Port             string      `db:"port" json:"port"`
+	UrlData          interface{} `db:"url_data" json:"url_data"`
+	OriginalRequest  interface{} `db:"original_request" json:"original_request"`
+	OriginalResponse interface{} `db:"original_response" json:"original_response"`
+	HasResponse      bool        `db:"has_response" json:"has_response"`
+	IsRequestEdited  bool        `db:"is_request_edited" json:"is_request_edited"`
+	IsResponseEdited bool        `db:"is_response_edited" json:"is_response_edited"`
+	EditedRequest    interface{} `db:"edited_request" json:"edited_request"`
+	EditedResponse   interface{} `db:"edited_response" json:"edited_response"`
+	// Labels           []string     `db:"labels" json:"labels"`
 }
 
 type OutputData struct {

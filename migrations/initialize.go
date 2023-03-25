@@ -152,7 +152,7 @@ func init() {
 			collection := &models.Collection{
 				Name:       name,
 				Type:       models.CollectionTypeBase,
-				ListRule:   nil,
+				ListRule:   pbTypes.Pointer(""),
 				ViewRule:   pbTypes.Pointer(""),
 				CreateRule: pbTypes.Pointer(""),
 				UpdateRule: pbTypes.Pointer(""),

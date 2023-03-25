@@ -11,6 +11,7 @@ var V1 = struct {
 	Data         Endpoint
 	SitemapNew   Endpoint
 	SitemapFetch Endpoint
+	SitemapRows  Endpoint
 }{
 	Data: Endpoint{
 		Method:   http.MethodPost,
@@ -23,5 +24,9 @@ var V1 = struct {
 	SitemapFetch: Endpoint{
 		Method:   http.MethodPost,
 		Endpoint: "/api/sitemap/fetch",
+	},
+	SitemapRows: Endpoint{
+		Method:   http.MethodPost,
+		Endpoint: "/api/sitemap/rows",
 	},
 }

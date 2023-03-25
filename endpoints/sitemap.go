@@ -14,8 +14,100 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models/schema"
+	"github.com/pocketbase/pocketbase/tools/list"
 	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 )
+
+func _getFirstFolder(path string) string {
+	firstSlash := strings.Index(path, "/")
+	if firstSlash != -1 {
+		return path[:firstSlash]
+	}
+	return ""
+}
+
+func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
+	var _api = api.V1.SitemapRows
+	e.Router.AddRoute(echo.Route{
+		Method: _api.Method,
+		Path:   _api.Endpoint,
+		Handler: func(c echo.Context) error {
+
+			var data types.SitemapRows
+			if err := c.Bind(&data); err != nil {
+				return err
+			}
+
+			log.Println("[SitemapRows] data: ", data)
+
+			db := base.ParseDatabaseName(data.Host)
+
+			var result []types.UserData2
+			var err error
+
+			type MainIDPath struct {
+				MainID string `db:"mainID"`
+				Path   string `db:"path"`
+			}
+
+			var mainIDPathResults []MainIDPath
+			if data.Path == "" || data.Path == "/" {
+				err = pocketbaseDB.App.Dao().DB().Select("mainID", "path").From(db).All(&mainIDPathResults)
+			} else {
+				regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
+				err = pocketbaseDB.App.Dao().DB().Select("mainID", "path").From(db).Where(dbx.Like("path", regexQuery)).All(&mainIDPathResults)
+			}
+
+			log.Println("[SitemapRows] mainIDPathResults: ", mainIDPathResults)
+			if err != nil {
+				apis.NewBadRequestError("Failed to fetch warehouse items", err)
+			}
+
+			uniqueFolders := make(map[string]bool)
+			folders := []string{}
+			mainIDs := []string{}
+
+			for _, result := range mainIDPathResults {
+				folder := _getFirstFolder(result.Path)
+				mainIDs = append(mainIDs, result.MainID)
+				if _, ok := uniqueFolders[folder]; ok {
+					continue
+				}
+				uniqueFolders[folder] = true
+				folders = append(folders, folder)
+			}
+
+			log.Println("[SitemapRows] folders: ", folders)
+			log.Println("[SitemapRows] mainIDs: ", mainIDs)
+
+			err = pocketbaseDB.App.Dao().DB().
+				Select("*").
+				From("data").
+				Where(dbx.In(
+					"id",
+					list.ToInterfaceSlice(mainIDs)...,
+				)).
+				OrderBy("created desc").
+				Limit(data.PerPage).
+				Offset((data.Page - 1) * data.PerPage).
+				All(&result)
+
+			log.Println("[SitemapFetch] Request: ", data)
+			log.Println("[SitemapFetch] Response: ", result)
+
+			if err != nil {
+				apis.NewBadRequestError("Failed to fetch warehouse items", err)
+			}
+
+			return c.JSON(http.StatusOK, result)
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(pocketbaseDB.App),
+		},
+	})
+
+	return nil
+}
 
 func (pocketbaseDB *DatabaseAPI) SitemapFetch(e *core.ServeEvent) error {
 	var _api = api.V1.SitemapFetch
@@ -34,7 +126,7 @@ func (pocketbaseDB *DatabaseAPI) SitemapFetch(e *core.ServeEvent) error {
 			// Regex: '^path/([^/]+\s*)?$'
 			regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
 
-			var result []types.SitemapFetch
+			var result []types.SitemapFetchResponse
 
 			var err error
 
@@ -104,10 +196,17 @@ func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
 			))
 
 			// Checking error if it is collection already exists
-			// This is the error "constraint failed: UNIQUE constraint failed: _collections.name (2067)"
+			// This is the error "constraint failed: UNIQUE constraint failed: collections.name (2067)"
 
 			if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				log.Println("collection already exists: ", collection)
+			}
+
+			if data.Query != "" {
+				data.Query = "?" + data.Query
+			}
+			if data.Fragment != "" {
+				data.Fragment = "#" + data.Fragment
 			}
 
 			// Inserting data

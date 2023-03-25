@@ -27,7 +27,7 @@ func (pocketbaseDB *DatabaseAPI) GetData(e *core.ServeEvent) error {
 			ids := data.Ids
 			log.Println("Request: ", data)
 
-			var result []types.UserData
+			var result []types.UserData2
 
 			err := pocketbaseDB.App.Dao().DB().
 				Select("*").

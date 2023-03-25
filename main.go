@@ -26,6 +26,7 @@ func main() {
 	pocketbaseDB.App.OnBeforeServe().Add(pocketbaseDB.GetData)
 	pocketbaseDB.App.OnBeforeServe().Add(pocketbaseDB.SitemapNew)
 	pocketbaseDB.App.OnBeforeServe().Add(pocketbaseDB.SitemapFetch)
+	pocketbaseDB.App.OnBeforeServe().Add(pocketbaseDB.SitemapRows)
 
 	if err := pocketbaseDB.App.Start(); err != nil {
 		log.Fatal(err)
