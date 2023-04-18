@@ -43,6 +43,20 @@ func (p *Proxy) InterceptManager() {
 
 		if value == "false" {
 			p.options.Intercept = false
+			collection := sdk.CollectionSet[types.RealtimeRecord](p.grroxydb, "intercept")
+			response, err := collection.List(types.ParamsList{
+				Page: 1, Size: 1000, Sort: "created",
+			})
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			// update each record action to forward
+			for _, record := range response.Items {
+				record.Action = "forward"
+				p.grroxydb.Update("intercept", record.ID, record)
+			}
 		} else {
 			p.options.Intercept = true
 		}

@@ -2,7 +2,7 @@ package migrations
 
 import "github.com/pocketbase/pocketbase/models/schema"
 
-var rows = schema.NewSchema(
+var Rows = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "host",
 		Type: schema.FieldTypeText,

@@ -100,6 +100,7 @@ type RealtimeRecord struct {
 	EditedRequest    interface{} `db:"edited_request" json:"edited_request"`
 	EditedResponse   interface{} `db:"edited_response" json:"edited_response"`
 	Labels           interface{} `db:"labels,omitempty" json:"labels,omitempty"`
+	Action           string      `db:"action,omitempty" json:"action,omitempty"`
 }
 
 type OutputData struct {

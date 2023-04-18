@@ -15,11 +15,11 @@ import (
 
 // collections map
 var collections = map[string]schema.Schema{
-	"data":      rows,
-	"intercept": intercept,
-	"store":     store,
-	"sites":     sites,
-	"settings":  settings,
+	"data":      Rows,
+	"intercept": Intercept,
+	"store":     Store,
+	"sites":     Sites,
+	"settings":  Settings,
 }
 
 func init() {

@@ -47,11 +47,6 @@ func (p *Proxy) MatchReplaceRequest(req string) string {
 //	if p.options.RequestMatchReplaceDSL != "" {
 //		reqString = p.MatchReplaceRequest(reqString)
 //	}
-type post struct {
-	ID      string
-	Field   string
-	Created string
-}
 
 func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 
@@ -167,24 +162,56 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 		log.Print("Subcrbie is ready")
 
+		updatedRow := types.RealtimeRecord{}
+
 		for ev := range stream.Events() {
 			log.Print(ev.Action, ev.Record)
-			// updatedReq = ParseDataFromFrontend[types.UserData](results)
-			stream.Unsubscribe()
+			if ev.Record.Action == "forward" {
+				log.Println("Forwarding Request...")
+				updatedRow = ev.Record
+			} else if ev.Record.Action == "drop" {
+				// GPT4's Idea
+				log.Println("Drop Request...")
+				return req, goproxy.NewResponse(req, goproxy.ContentTypeText, 444, "")
+			} else {
+				continue
+			}
 			break
 		}
 
+		stream.Unsubscribe()
 		log.Print("Unsubscribed")
 
-		requestNew, err := http.ReadRequest(bufio.NewReader(strings.NewReader(fmt.Sprint("Event Data"))))
+		p.grroxydb.Delete("intercept", userdata.ID)
+		p.grroxydb.Create("data", userdata)
+
+		collection := sdk.CollectionSet[any](p.grroxydb, "store")
+		updatedData, err := collection.One(updatedRow.ID)
+		if err != nil {
+			log.Println(err)
+		}
+
+		var updatedString string
+
+		log.Println("Edited Request is not empty -----------------------")
+		log.Println(updatedData)
+
+		upData := updatedData.(map[string]interface{})
+		log.Println("Updated Data --------------  ", upData)
+
+		if updatedRow.IsRequestEdited {
+			updatedString = upData["request_edited"].(string)
+		} else {
+			updatedString = upData["request"].(string)
+		}
+
+		requestNew, err := http.ReadRequest(bufio.NewReader(strings.NewReader(fmt.Sprint(updatedString))))
 
 		// Update Host
 		if err != nil {
-			log.Fatal("Request: -----------------------\n", err)
+			log.Println("[ERR] Request: -----------------------\n", err)
 		}
 
-		// userdata = updatedReq
-		p._requestAddToDB(updatedReq)
 		ctx.UserData = updatedReq
 
 		req.Body.Close()
@@ -214,8 +241,6 @@ func (p *Proxy) _requestAddToDB(userdata types.UserData) {
 	}
 
 	p.grroxydb.Delete("intercept", userdata.ID)
-	p.DBCreate("data", userdata)
-	// p.DBCreate("store", r_data)
 	p.DBCreate("sites", map[string]string{
 		"site": userdata.Host,
 	})

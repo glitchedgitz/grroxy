@@ -2,7 +2,7 @@ package migrations
 
 import "github.com/pocketbase/pocketbase/models/schema"
 
-var settings = schema.NewSchema(
+var Settings = schema.NewSchema(
 	&schema.SchemaField{
 		Name:     "option",
 		Type:     schema.FieldTypeText,
