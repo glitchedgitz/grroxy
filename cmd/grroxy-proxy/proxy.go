@@ -94,10 +94,10 @@ func (p *Proxy) RunProxy() error {
 		if p.options.OnRequestCallback != nil {
 			onRequest = p.options.OnRequestCallback
 		}
-		// onResponse := p.OnResponse
-		// if p.options.OnResponseCallback != nil {
-		// 	onResponse = p.options.OnResponseCallback
-		// }
+		onResponse := p.OnResponse
+		if p.options.OnResponseCallback != nil {
+			onResponse = p.options.OnResponseCallback
+		}
 
 		// Doubt: What about other ports
 		p.httpproxy.OnRequest(goproxy.ReqHostMatches(regexp.MustCompile("^.*:80$"))).HandleConnectFunc(onConnectHTTP)
@@ -105,7 +105,7 @@ func (p *Proxy) RunProxy() error {
 		// catch all
 		p.httpproxy.OnRequest().HandleConnectFunc(onConnectHTTPS)
 		p.httpproxy.OnRequest().DoFunc(onRequest)
-		// p.httpproxy.OnResponse().DoFunc(onResponse)
+		p.httpproxy.OnResponse().DoFunc(onResponse)
 
 		// Serve the certificate when the user makes requests to /grroxy
 		p.httpproxy.OnRequest(goproxy.DstHostIs("grroxy")).DoFunc(

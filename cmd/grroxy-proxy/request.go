@@ -135,6 +135,11 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	// p.save.Save("req", userdata) //nolint
 	// runtime.LogPrintf(p.options.Ctx, "Intercept is %v", p.options.Intercept)
 
+	p.DBCreate("store", map[string]string{
+		"id":      userdata.ID,
+		"request": reqDataInString,
+	})
+
 	if p.options.Intercept {
 
 		var wg sync.WaitGroup
@@ -144,12 +149,6 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 		//Add to database
 		p.DBCreate("intercept", userdata)
-
-		r_data := map[string]string{
-			"id":      userdata.ID,
-			"request": reqDataInString,
-		}
-		p.DBCreate("store", r_data)
 
 		stream, err := sdk.CollectionSet[types.RealtimeRecord](p.grroxydb, "intercept").Subscribe("intercept/" + id)
 
@@ -201,6 +200,9 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 		if updatedRow.IsRequestEdited {
 			updatedString = upData["request_edited"].(string)
+			// p.DBUpdate("store", userdata.ID, map[string]string{
+			// 	"request_edited": updatedString,
+			// })
 		} else {
 			updatedString = upData["request"].(string)
 		}
@@ -211,6 +213,20 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 		if err != nil {
 			log.Println("[ERR] Request: -----------------------\n", err)
 		}
+
+		// updatedReq = types.UserData{
+		// 	ID:               updatedRow.ID,
+		// 	Host:             updatedRow.Host,
+		// 	Port:             updatedRow.Port,
+		// 	IP:               updatedRow.IP,
+		// 	UrlData:          updatedRow.UrlData,
+		// 	HasResponse:      updatedRow.HasResponse,
+		// 	OriginalRequest:  updatedRow.OriginalRequest.(types.RequestData),
+		// 	OriginalResponse: updatedRow.OriginalResponse(types.ResponseData),
+		// 	IsRequestEdited:  updatedRow.IsRequestEdited,
+		// 	IsResponseEdited: updatedRow.IsResponseEdited,
+		// 	Labels:           updatedRow.Labels,
+		// }
 
 		ctx.UserData = updatedReq
 
@@ -226,21 +242,18 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 func (p *Proxy) _requestAddToDB(userdata types.UserData) {
 
-	// r_data := Store_Req{
-	// 	ID:      userdata.ID,
-	// 	Request: userdata.Event.Data,
-	// }
-
 	s_data := types.SitemapGet{
 		Host:     userdata.Host,
 		Path:     userdata.OriginalRequest.AllURL.Path,
 		Query:    userdata.OriginalRequest.AllURL.RawQuery,
 		Fragment: userdata.OriginalRequest.AllURL.RawFragment,
-		Type:     "Dummy",
+		Type:     "folder",
 		MainID:   userdata.ID,
 	}
 
 	p.grroxydb.Delete("intercept", userdata.ID)
+	p.grroxydb.Create("data", userdata)
+
 	p.DBCreate("sites", map[string]string{
 		"site": userdata.Host,
 	})
