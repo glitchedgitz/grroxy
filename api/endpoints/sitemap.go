@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 
-	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/api"
+	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/types"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
@@ -26,6 +27,22 @@ func _getFirstFolder(path string) string {
 	return ""
 }
 
+type UserData struct {
+	ID               string `db:"id" json:"id"`
+	Host             string `db:"host" json:"host"`
+	IP               string `db:"ip" json:"ip"`
+	Port             string `db:"port" json:"port"`
+	UrlData          string `db:"url_data" json:"url_data"`
+	OriginalRequest  string `db:"original_request" json:"original_request"`
+	OriginalResponse string `db:"original_response" json:"original_response"`
+	HasResponse      bool   `db:"has_response" json:"has_response"`
+	IsRequestEdited  bool   `db:"is_request_edited" json:"is_request_edited"`
+	IsResponseEdited bool   `db:"is_response_edited" json:"is_response_edited"`
+	EditedRequest    string `db:"edited_request" json:"edited_request"`
+	EditedResponse   string `db:"edited_response" json:"edited_response"`
+	// Labels           []string     `db:"labels" json:"labels"`
+}
+
 func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
 	var _api = api.V1.SitemapRows
 	e.Router.AddRoute(echo.Route{
@@ -42,7 +59,6 @@ func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
 
 			db := base.ParseDatabaseName(data.Host)
 
-			var result []types.UserData2
 			var err error
 
 			type MainIDPath struct {
@@ -54,8 +70,13 @@ func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
 			if data.Path == "" || data.Path == "/" {
 				err = pocketbaseDB.App.Dao().DB().Select("mainID", "path").From(db).All(&mainIDPathResults)
 			} else {
-				regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
-				err = pocketbaseDB.App.Dao().DB().Select("mainID", "path").From(db).Where(dbx.Like("path", regexQuery)).All(&mainIDPathResults)
+				// regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
+				// err = pocketbaseDB.App.Dao().DB().Select("mainID", "path").From(db).Where(dbx.Like("path", regexQuery)).All(&mainIDPathResults)
+
+				regexQuery := data.Path + `/%`
+
+				err = pocketbaseDB.App.Dao().DB().NewQuery("SELECT mainID,path FROM " + db + " WHERE path LIKE '" + regexQuery + "'").All(&mainIDPathResults)
+
 			}
 
 			log.Println("[SitemapRows] mainIDPathResults: ", mainIDPathResults)
@@ -80,6 +101,10 @@ func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
 			log.Println("[SitemapRows] folders: ", folders)
 			log.Println("[SitemapRows] mainIDs: ", mainIDs)
 
+			// var tmpResults []UserData
+			var results []types.UserData2
+
+			// tmp:= pocketbaseDB.App.Dao().DB().NewQuery().Execute()
 			err = pocketbaseDB.App.Dao().DB().
 				Select("*").
 				From("data").
@@ -87,19 +112,25 @@ func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
 					"id",
 					list.ToInterfaceSlice(mainIDs)...,
 				)).
-				OrderBy("created desc").
-				Limit(data.PerPage).
-				Offset((data.Page - 1) * data.PerPage).
-				All(&result)
+				// OrderBy("created desc").
+				// Limit(data.PerPage).
+				// Offset((data.Page - 1) * data.PerPage).
+				All(&results)
 
-			log.Println("[SitemapFetch] Request: ", data)
-			log.Println("[SitemapFetch] Response: ", result)
+			// for i, result := range tmpResults {
+			// 	if err := json.Unmarshal(result.Userdata, &result.OriginalRequest); err != nil {
+			// 		// handle error
+			// 	}
+			// }
+
+			log.Println("[SitemapRows] Request: ", data)
+			log.Println("[SitemapRows] Response: ", results)
 
 			if err != nil {
 				apis.NewBadRequestError("Failed to fetch warehouse items", err)
 			}
 
-			return c.JSON(http.StatusOK, result)
+			return c.JSON(http.StatusOK, results)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(pocketbaseDB.App),
@@ -124,32 +155,60 @@ func (pocketbaseDB *DatabaseAPI) SitemapFetch(e *core.ServeEvent) error {
 			db := base.ParseDatabaseName(data.Host)
 
 			// Regex: '^path/([^/]+\s*)?$'
-			regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
+			// regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
+
+			// Simplier for noeWHERE path LIKE '/s/%'
+			regexQuery := data.Path + `/%`
 
 			var result []types.SitemapFetchResponse
-
+			// var tmpResult []map[string]interface{}
+			uniqueMap := make(map[string]map[string]interface{})
+			var titles []string
 			var err error
 
 			if data.Path == "" {
-				err = pocketbaseDB.App.Dao().DB().
-					Select("*").
-					From(db).
-					All(&result)
+				err = pocketbaseDB.App.Dao().DB().NewQuery("SELECT * FROM " + db).All(&result)
 			} else {
-				err = pocketbaseDB.App.Dao().DB().Select("*").
-					From(db).
-					Where(dbx.Like("path", regexQuery)).
-					All(&result)
+				err = pocketbaseDB.App.Dao().DB().NewQuery("SELECT * FROM " + db + " WHERE path LIKE '" + regexQuery + "'").All(&result)
 			}
 
+			for _, item := range result {
+				tmpPath := strings.TrimPrefix(item.Path, data.Path)
+				tmpPath = strings.TrimPrefix(tmpPath, "/")
+
+				var part string
+				if index := strings.IndexAny(tmpPath, "?#"); index != -1 {
+					part = tmpPath[:index]
+				} else {
+					part = tmpPath
+				}
+
+				title := strings.Split(part, "/")[0]
+
+				if _, exists := uniqueMap[title]; !exists {
+					uniqueMap[title] = map[string]interface{}{
+						"host":  data.Host,
+						"path":  data.Path + "/" + title,
+						"type":  item.Type,
+						"title": title,
+					}
+					titles = append(titles, title)
+				}
+			}
+
+			sort.Strings(titles)
+			var tmpResult2 []map[string]interface{}
+			for _, title := range titles {
+				tmpResult2 = append(tmpResult2, uniqueMap[title])
+			}
 			log.Println("[SitemapFetch] Request: ", data)
-			log.Println("[SitemapFetch] Response: ", result)
+			log.Println("[SitemapFetch] Response: ", tmpResult2)
 
 			if err != nil {
 				apis.NewBadRequestError("Failed to fetch warehouse items", err)
 			}
 
-			return c.JSON(http.StatusOK, result)
+			return c.JSON(http.StatusOK, tmpResult2)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(pocketbaseDB.App),

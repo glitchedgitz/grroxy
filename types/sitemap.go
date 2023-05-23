@@ -19,6 +19,7 @@ type SitemapFetch struct {
 type SitemapFetchResponse struct {
 	Path   string `db:"path" json:"path"`
 	Type   string `db:"type" json:"type"`
+	Title  string `db:"title" json:"title"` // The first folder  OR file OR anything after ?/#
 	MainID string `db:"mainID" json:"mainID"`
 }
 
