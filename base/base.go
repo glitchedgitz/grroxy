@@ -24,8 +24,22 @@ var Color = struct {
 	Reverse: "\u001b[7m",
 }
 
+func CheckErr(msg string, err error) {
+	if err != nil {
+		log.Println(Color.Red+msg+Color.Reset, err)
+	}
+}
+
 func ParseDatabaseName(site string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(site, "://", "__"), ".", "_")
+}
+
+// Add underscrore to a string until it reachs 15 length
+func AddUnderscore(str string) string {
+	for len(str) < 15 {
+		str += "_"
+	}
+	return str
 }
 
 // Parse Data From Frontend to Search
