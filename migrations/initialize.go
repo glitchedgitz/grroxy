@@ -4,7 +4,8 @@ package migrations
 import (
 	"log"
 
-	"github.com/glitchedgitz/grroxy-db/types"
+	"github.com/glitchedgitz/grroxy-db/base"
+	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/daos"
 	m "github.com/pocketbase/pocketbase/migrations"
@@ -13,13 +14,24 @@ import (
 	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 )
 
+type db struct {
+	name   string
+	schema schema.Schema
+}
+
 // collections map
-var collections = map[string]schema.Schema{
-	"data":      Rows,
-	"intercept": Intercept,
-	"store":     Store,
-	"sites":     Sites,
-	"settings":  Settings,
+var collections = []db{
+	{"store", schemas.Store},
+	{"data", schemas.Rows},
+	{"intercept", schemas.Intercept},
+	{"sites", schemas.Sites},
+	{"settings", schemas.Settings},
+}
+
+type setting struct {
+	ID    string
+	Name  string
+	Value string
 }
 
 func init() {
@@ -49,37 +61,70 @@ func init() {
 		}
 
 		// create collections
-		for name, schema := range collections {
+		for _, db := range collections {
 			collection := &models.Collection{
-				Name:       name,
+				Name:       db.name,
 				Type:       models.CollectionTypeBase,
 				ListRule:   pbTypes.Pointer(""),
 				ViewRule:   pbTypes.Pointer(""),
 				CreateRule: pbTypes.Pointer(""),
 				UpdateRule: pbTypes.Pointer(""),
 				DeleteRule: nil,
-				Schema:     schema,
+				Schema:     db.schema,
 			}
+
+			collection.SetId(db.name)
 
 			if err := dao.SaveCollection(collection); err != nil {
 				log.Println("[migration][init] Error: ", err)
 			}
 
-			log.Println("[migration][init] Creating collection: ", name)
+			log.Println("[migration][init] Creating collection: ", db.name)
 		}
 
-		collection, err = dao.FindCollectionByNameOrId("settings")
+		// sites
+		dao.DB().NewQuery(`
+			CREATE UNIQUE INDEX idx_sites_site ON sites (site);
+		`).Execute()
+
+		settingsCollection, err := dao.FindCollectionByNameOrId("settings")
 		if err != nil {
 			return err
 		}
 
-		record := models.NewRecord(collection)
-		record.Set("id", types.Settings.Intercept)
-		record.Set("option", "Intercept")
-		record.Set("value", true)
+		settings := []setting{
+			{
+				ID:    base.AddUnderscore("PROJECT_NAME"),
+				Name:  "Project Name",
+				Value: "Untitled Project",
+			},
+			{
+				ID:    base.AddUnderscore("PROXY"),
+				Name:  "Proxy",
+				Value: "127.0.0.1:8080",
+			},
+			{
+				ID:    base.AddUnderscore("INTERCEPT"),
+				Name:  "Intercept",
+				Value: "true",
+			},
+			{
+				ID:    base.AddUnderscore("MAIN_TAB"),
+				Name:  "Main Tab",
+				Value: "Sitemaps",
+			},
+		}
 
-		if err := dao.SaveRecord(record); err != nil {
-			return err
+		for _, val := range settings {
+			record := models.NewRecord(settingsCollection)
+
+			record.Set("id", val.ID)
+			record.Set("option", val.Name)
+			record.Set("value", val.Value)
+
+			if err := dao.SaveRecord(record); err != nil {
+				return err
+			}
 		}
 
 		return nil

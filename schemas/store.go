@@ -1,4 +1,4 @@
-package migrations
+package schemas
 
 import "github.com/pocketbase/pocketbase/models/schema"
 

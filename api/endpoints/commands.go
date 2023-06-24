@@ -95,7 +95,7 @@ func (pocketbaseDB *DatabaseAPI) RunCommand(e *core.ServeEvent) error {
 					Required: true,
 				},
 				&schema.SchemaField{
-					Name:     "mainID",
+					Name:     "main_id",
 					Type:     schema.FieldTypeText,
 					Required: true,
 				},

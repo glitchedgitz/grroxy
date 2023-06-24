@@ -9,14 +9,13 @@ import (
 
 	"github.com/glitchedgitz/grroxy-db/api"
 	"github.com/glitchedgitz/grroxy-db/base"
+	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/glitchedgitz/grroxy-db/types"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/models/schema"
 	"github.com/pocketbase/pocketbase/tools/list"
-	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 )
 
 func _getFirstFolder(path string) string {
@@ -62,21 +61,17 @@ func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
 			var err error
 
 			type MainIDPath struct {
-				MainID string `db:"mainID"`
+				MainID string `db:"main_id"`
 				Path   string `db:"path"`
 			}
 
 			var mainIDPathResults []MainIDPath
 			if data.Path == "" || data.Path == "/" {
-				err = pocketbaseDB.App.Dao().DB().Select("mainID", "path").From(db).All(&mainIDPathResults)
+				err = pocketbaseDB.App.Dao().DB().Select("main_id", "path").From(db).All(&mainIDPathResults)
 			} else {
-				// regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
-				// err = pocketbaseDB.App.Dao().DB().Select("mainID", "path").From(db).Where(dbx.Like("path", regexQuery)).All(&mainIDPathResults)
-
 				regexQuery := data.Path + `/%`
 
-				err = pocketbaseDB.App.Dao().DB().NewQuery("SELECT mainID,path FROM " + db + " WHERE path LIKE '" + regexQuery + "'").All(&mainIDPathResults)
-
+				err = pocketbaseDB.App.Dao().DB().NewQuery("SELECT main_id,path FROM " + db + " WHERE path LIKE '" + regexQuery + "'").All(&mainIDPathResults)
 			}
 
 			log.Println("[SitemapRows] mainIDPathResults: ", mainIDPathResults)
@@ -102,7 +97,7 @@ func (pocketbaseDB *DatabaseAPI) SitemapRows(e *core.ServeEvent) error {
 			log.Println("[SitemapRows] mainIDs: ", mainIDs)
 
 			// var tmpResults []UserData
-			var results []types.UserData2
+			var results []types.UserData
 
 			// tmp:= pocketbaseDB.App.Dao().DB().NewQuery().Execute()
 			err = pocketbaseDB.App.Dao().DB().
@@ -232,27 +227,7 @@ func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
 			fmt.Print("SitemapNew: ", data)
 			collection := base.ParseDatabaseName(data.Host)
 
-			err := pocketbaseDB.CreateCollection(collection, schema.NewSchema(
-				&schema.SchemaField{
-					Name:     "path",
-					Type:     schema.FieldTypeText,
-					Required: true,
-				}, &schema.SchemaField{
-					Name:     "type",
-					Type:     schema.FieldTypeText,
-					Required: true,
-				},
-				&schema.SchemaField{
-					Name:     "mainID",
-					Type:     schema.FieldTypeText,
-					Required: true,
-					Options: &schema.RelationOptions{
-						MaxSelect:     pbTypes.Pointer(1),
-						CollectionId:  "ae40239d2bc4477",
-						CascadeDelete: true,
-					},
-				},
-			))
+			err := pocketbaseDB.CreateCollection(collection, schemas.Sitemap)
 
 			// Checking error if it is collection already exists
 			// This is the error "constraint failed: UNIQUE constraint failed: collections.name (2067)"
@@ -261,19 +236,14 @@ func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
 				log.Println("collection already exists: ", collection)
 			}
 
-			if data.Query != "" {
-				data.Query = "?" + data.Query
-			}
-			if data.Fragment != "" {
-				data.Fragment = "#" + data.Fragment
-			}
-
 			// Inserting data
 			result, err := pocketbaseDB.App.Dao().DB().Insert(collection, dbx.Params{
-				"id":     data.MainID,
-				"path":   data.Path + data.Query + data.Fragment,
-				"type":   data.Type,
-				"mainID": data.MainID,
+				"id":       data.MainID,
+				"path":     data.Path,
+				"query":    data.Query,
+				"fragment": data.Fragment,
+				"type":     data.Type,
+				"main_id":  data.MainID,
 			}).Execute()
 
 			log.Println("Executed: ", result)

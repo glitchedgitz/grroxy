@@ -9,7 +9,7 @@ import (
 
 	"github.com/glitchedgitz/grroxy-db/api/endpoints"
 	"github.com/glitchedgitz/grroxy-db/config"
-	"github.com/glitchedgitz/grroxy-db/migrations"
+	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
@@ -53,6 +53,7 @@ func main() {
 	pb.App.OnBeforeServe().Add(pb.SitemapRows)
 	pb.App.OnBeforeServe().Add(pb.RunCommand)
 	pb.App.OnBeforeServe().Add(pb.SendRawRequest)
+	pb.App.OnBeforeServe().Add(pb.TextSQL)
 	pb.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		collection, err := pb.App.Dao().FindCollectionByNameOrId("intercept")
 		if err != nil {
@@ -72,7 +73,7 @@ func main() {
 			CreateRule: pbTypes.Pointer(""),
 			UpdateRule: pbTypes.Pointer(""),
 			DeleteRule: nil,
-			Schema:     migrations.Intercept,
+			Schema:     schemas.Intercept,
 		}
 
 		if err := pb.App.Dao().SaveCollection(collection); err != nil {

@@ -1,8 +1,8 @@
-package migrations
+package schemas
 
 import "github.com/pocketbase/pocketbase/models/schema"
 
-var Rows = schema.NewSchema(
+var Intercept = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "host",
 		Type: schema.FieldTypeText,
@@ -50,5 +50,9 @@ var Rows = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "labels",
 		Type: schema.FieldTypeJson,
+	},
+	&schema.SchemaField{
+		Name: "action",
+		Type: schema.FieldTypeText,
 	},
 )
