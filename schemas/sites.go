@@ -8,4 +8,8 @@ var Sites = schema.NewSchema(
 		Type:     schema.FieldTypeText,
 		Required: true,
 	},
+	&schema.SchemaField{
+		Name: "reverse",
+		Type: schema.FieldTypeText,
+	},
 )

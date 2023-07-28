@@ -10,6 +10,7 @@ import (
 	"github.com/elazarl/goproxy"
 	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/types"
+	"github.com/jpillora/go-tld"
 	"github.com/projectdiscovery/dsl"
 )
 
@@ -25,10 +26,6 @@ func (p *Proxy) MatchReplaceRequest(req string) string {
 	}
 }
 
-// const CONCURRENCY = 20
-
-// var rateLimit = make(chan string, CONCURRENCY)
-
 func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 	// rateLimit <- ""
 	// defer func() { <-rateLimit }()
@@ -43,12 +40,15 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	base.CheckErr("Req:Dumping Bytes Error", err)
 	requestInString := string(requestInBytes)
 
+	requestRateLimit <- 0
+
 	// Initiate variables
 	var (
 		id      = base.RandomString(15)
 		method  = http.MethodGet
 		host    = req.URL.Host
 		port    = ""
+		index   = <-generateIndex
 		isHttps = req.URL.Scheme != "https"
 	)
 
@@ -72,7 +72,9 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 	userdata = types.UserData{
 		ID:          id,
+		Index:       index,
 		StoreID:     id,
+		ExtraID:     id,
 		Host:        host,
 		Port:        port,
 		IP:          req.RemoteAddr,
@@ -104,9 +106,14 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 	// Add to database
 	func() {
-		p.DBCreate("store", map[string]string{
+		p.DBCreate("_store", map[string]string{
 			"id":      userdata.ID,
 			"request": requestInString,
+		})
+		p.DBCreate("_extra", map[string]string{
+			"id":    userdata.ID,
+			"label": requestInString,
+			"note":  "",
 		})
 		// p.grroxydb.Create("data", userdata)
 	}()
@@ -122,7 +129,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 			userdata.IsResponseEdited = true
 		}
 
-		p.grroxydb.Create("data", userdata)
+		p.grroxydb.Create("_data", userdata)
 
 		// Convert string to request
 		req.Body.Close()
@@ -152,12 +159,27 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	return req, nil
 }
 
+func splitAndJoin(s string) string {
+	u, _ := tld.Parse(s)
+	arr := strings.Split(u.Subdomain, ".")
+	arr = append(arr, u.TLD)
+	arr = append(arr, u.Domain)
+
+	arr2 := []string{}
+	for i := len(arr); i > 0; i-- {
+		arr2 = append(arr2, arr[i-1])
+	}
+
+	return strings.Join(arr2, ".")
+}
+
 func (p *Proxy) _requestAddToDB(userdata types.UserData) {
 
-	p.grroxydb.Create("data", userdata)
+	p.grroxydb.Create("_data", userdata)
 
-	p.DBCreate("sites", map[string]string{
-		"site": userdata.Host,
+	p.DBCreate("_sites", map[string]string{
+		"site":    userdata.Host,
+		"reverse": splitAndJoin(userdata.Host),
 	})
 
 	s_data := types.SitemapGet{
