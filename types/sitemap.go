@@ -8,7 +8,6 @@ type SitemapGet struct {
 	MainID    string `db:"main_id" json:"main_id"`
 	Type      string `db:"type" json:"type"`
 	Extension string `db:"extension" json:"extension"`
-	Title     string `db:"title" json:"title"` // The first folder  OR file OR anything after ?/#
 }
 
 // type SitemapFetchResponse struct {
