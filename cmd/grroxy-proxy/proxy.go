@@ -281,6 +281,7 @@ func NewProxy(options *Options) (*Proxy, error) {
 
 	proxy.socks5proxy = socks5proxy
 	go proxy.InterceptManager()
+	go proxy.RateLimitManager()
 
 	return proxy, nil
 }

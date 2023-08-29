@@ -12,4 +12,8 @@ var Sites = schema.NewSchema(
 		Name: "reverse",
 		Type: schema.FieldTypeText,
 	},
+	&schema.SchemaField{
+		Name: "domain",
+		Type: schema.FieldTypeText,
+	},
 )

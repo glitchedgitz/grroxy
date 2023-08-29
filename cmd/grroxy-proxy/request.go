@@ -77,7 +77,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 		ExtraID:     id,
 		Host:        host,
 		Port:        port,
-		IP:          req.RemoteAddr,
+		IP:          "",
 		HasResponse: false,
 		OriginalRequest: types.RequestData{
 			Method:        method,
@@ -106,14 +106,15 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 	// Add to database
 	func() {
-		p.DBCreate("_store", map[string]string{
-			"id":      userdata.ID,
-			"request": requestInString,
-		})
-		p.DBCreate("_extra", map[string]string{
+		p.DBCreate("_extra", map[string]any{
 			"id":    userdata.ID,
-			"label": requestInString,
+			"label": map[string]string{},
 			"note":  "",
+		})
+		p.DBCreate("_store", map[string]string{
+			"id":       userdata.ID,
+			"request":  requestInString,
+			"extra_id": userdata.ID,
 		})
 		// p.grroxydb.Create("data", userdata)
 	}()
@@ -126,7 +127,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 		updatedString, edited := p.interceptWait(userdata, "request", req.ContentLength)
 
 		if edited {
-			userdata.IsResponseEdited = true
+			userdata.IsRequestEdited = true
 		}
 
 		p.grroxydb.Create("_data", userdata)
@@ -145,6 +146,8 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 		newURL.Host = req.URL.Host
 		newURL.Scheme = req.URL.Scheme
 		req.URL = newURL
+
+		// fmt.Println(http.DumpRequestOut())
 
 		// Todo: Set Host, Port and Scheme
 		// req.URL.Host // this can include the port also
@@ -174,37 +177,41 @@ func splitAndJoin(s string) string {
 }
 
 func (p *Proxy) _requestAddToDB(userdata types.UserData) {
+	path := userdata.OriginalRequest.Path
+	typ := "folder"
+	extension := ""
 
+	fmt.Println("[_requestAddToDB]userdata: ", userdata)
 	p.grroxydb.Create("_data", userdata)
+
+	u, _ := tld.Parse(userdata.Host)
 
 	p.DBCreate("_sites", map[string]string{
 		"site":    userdata.Host,
 		"reverse": splitAndJoin(userdata.Host),
+		"domain":  u.Domain + "." + u.TLD,
 	})
 
-	s_data := types.SitemapGet{
-		Host:     userdata.Host,
-		Path:     userdata.OriginalRequest.Path,
-		Query:    userdata.OriginalRequest.Query,
-		Fragment: userdata.OriginalRequest.Fragment,
-		Type:     "folder",
-		MainID:   userdata.ID,
+	if path != "" {
+		p := strings.Split(path, "/")
+		lastfile := p[len(p)-1]
+
+		if strings.Contains(lastfile, ".") {
+			l := strings.Split(lastfile, ".")
+			extension = l[len(l)-1]
+			typ = "file"
+		}
 	}
 
-	// check path and detect file or folder
-	// d := strings.Split(s_data.Path, "/")
-	// folder := d[len(d)-1]
-
-	// // check if this is file
-	// if strings.Contains(folder, ".") {
-	// 	s_data.Type = "file"
-
-	// 	// check extension
-	// 	e := strings.Split(folder, ".")
-	// 	ext := e[len(e)-1]
-	// 	switch ext {
-	// 	case "js":
-	// }
+	s_data := types.SitemapGet{
+		Host:      userdata.Host,
+		Path:      userdata.OriginalRequest.Path,
+		Query:     userdata.OriginalRequest.Query,
+		Fragment:  userdata.OriginalRequest.Fragment,
+		Type:      typ,
+		MainID:    userdata.ID,
+		Extension: extension,
+	}
 
 	p.DBNewSitemap(s_data)
 }
