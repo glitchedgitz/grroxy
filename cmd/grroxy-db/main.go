@@ -2,8 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
-	"path"
 
 	// "github.com/pocketbase/dbx"
 
@@ -12,35 +10,29 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
+	"github.com/spf13/cobra"
 
 	// "github.com/pocketbase/pocketbase/tools/list"
 	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-db/migrations"
 )
 
+var conf config.Config
+var pb endpoints.DatabaseAPI
+
 func main() {
 
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		// Almost never here but panic
-		panic(err)
-	}
-
-	os.MkdirAll(path.Join(homeDir, ".cache", "grroxy"), 0644)
+	conf.Initiate()
 
 	// Create an instance of the app structure
-	pb := endpoints.DatabaseAPI{
+	pb = endpoints.DatabaseAPI{
 		App: pocketbase.NewWithConfig(
 			&pocketbase.Config{
-				DefaultDataDir: "grroxy",
+				DefaultDataDir:       "grroxy",
+				// HideStartBanner:      true,
+				// DefaultEncryptionEnv: "hJH#GRJ#HG$JH$54h5kjhHJG#JHG#*&Y&EG#F&GIG@JKGH$JHRGJ##JKJH#JHG",
 			},
 		),
-
-		Config: &config.Config{
-			CacheDirectory:    path.Join(homeDir, ".cache", "grroxy"),
-			ProjectDirectory:  "grroxy_test",
-			DatabaseDirectory: "grroxy",
-		},
-
+		Config:     &conf,
 		CmdChannel: make(chan endpoints.RunCommandData),
 	}
 
@@ -67,8 +59,38 @@ func main() {
 		return nil
 	})
 
+	pb.App.RootCmd.AddCommand(&cobra.Command{
+		Use: "list",
+		Run: func(cmd *cobra.Command, args []string) {
+			conf.ListProjects()
+			pb.Serve()
+		},
+	})
+
+	pb.App.RootCmd.AddCommand(&cobra.Command{
+		Use: ".",
+		Run: func(cmd *cobra.Command, args []string) {
+			conf.OpenCWD()
+			pb.Serve()
+		},
+	})
+
+	pb.App.RootCmd.AddCommand(&cobra.Command{
+		Use: "config",
+		Run: func(cmd *cobra.Command, args []string) {
+			conf.ShowConfig()
+		},
+	})
+
+	pb.App.RootCmd.AddCommand(&cobra.Command{
+		Use: "create",
+		Run: func(cmd *cobra.Command, args []string) {
+			conf.NewProject()
+			pb.Serve()
+		},
+	})
+
 	if err := pb.App.Start(); err != nil {
 		log.Fatal(err)
 	}
-
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/armon/go-socks5"
 	"github.com/elazarl/goproxy"
 	"github.com/glitchedgitz/grroxy-db/certs"
-	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/save"
 	"github.com/glitchedgitz/grroxy-db/sdk"
 	"github.com/haxii/fastproxy/bufiopool"
@@ -53,7 +52,6 @@ type Proxy struct {
 	Dialer       *fastdialer.Dialer
 	options      *Options
 	save         *save.Logger
-	config       *config.Config
 	certs        *certs.Manager
 	httpproxy    *goproxy.ProxyHttpServer
 	socks5proxy  *socks5.Server

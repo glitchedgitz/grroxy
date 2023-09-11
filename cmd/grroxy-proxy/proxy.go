@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,7 +17,6 @@ import (
 	"github.com/armon/go-socks5"
 	"github.com/elazarl/goproxy"
 	certs "github.com/glitchedgitz/grroxy-db/certs"
-	config "github.com/glitchedgitz/grroxy-db/config"
 	save "github.com/glitchedgitz/grroxy-db/save"
 	"github.com/glitchedgitz/grroxy-db/sdk"
 	"github.com/glitchedgitz/grroxy-db/types"
@@ -170,13 +168,6 @@ func NewProxy(options *Options) (*Proxy, error) {
 		"http://127.0.0.1:8090",
 		sdk.WithAdminEmailPassword("new@example.com", "1234567890"))
 
-	var conf = &config.Config{
-		ProjectDirectory:  "grroxy_test",
-		DatabaseDirectory: "D:\\test",
-	}
-
-	conf.Setup()
-
 	certs, err := certs.New(&certs.Options{
 		CacheSize: options.CertCacheSize,
 		Directory: options.Directory,
@@ -205,7 +196,7 @@ func NewProxy(options *Options) (*Proxy, error) {
 	goproxy.RejectConnect = &goproxy.ConnectAction{Action: goproxy.ConnectReject, TLSConfig: certs.TLSConfigFromCA()}
 
 	logger := save.NewLogger(&save.OptionsLogger{
-		OutputFolder: path.Join(conf.DatabaseDirectory, options.OutputDirectory),
+		// OutputFolder: path.Join(conf.DatabaseDirectory, options.OutputDirectory),
 	})
 
 	var tdns *tinydns.TinyDNS
@@ -258,7 +249,6 @@ func NewProxy(options *Options) (*Proxy, error) {
 		options:   options,
 		Dialer:    dialer,
 		tinydns:   tdns,
-		config:    conf,
 		rbhttp:    rbhttp,
 		rbsocks5:  rbsocks5,
 		grroxydb:  grroxydb,
