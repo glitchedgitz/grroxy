@@ -66,6 +66,7 @@ func main() {
 	pb.App.OnBeforeServe().Add(pb.SendRawRequest)
 	pb.App.OnBeforeServe().Add(pb.TextSQL)
 	pb.App.OnBeforeServe().Add(pb.SaveFile)
+	pb.App.OnBeforeServe().Add(pb.ReadFile)
 	pb.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		pb.App.Dao().DB().NewQuery(`
 			DELETE FROM _intercept;

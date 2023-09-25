@@ -7,10 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
-	"path"
 
 	"github.com/glitchedgitz/grroxy-db/base"
-	"github.com/glitchedgitz/grroxy-db/save"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -212,35 +210,4 @@ func (pocketbaseDB *DatabaseAPI) RunningCommandSaveToCollection(id, command, col
 
 	pocketbaseDB.SetProcess(id, process.completed)
 
-}
-
-func (pocketbaseDB *DatabaseAPI) SaveFile(e *core.ServeEvent) error {
-	e.Router.AddRoute(echo.Route{
-		Method: http.MethodPost,
-		Path:   "/api/savefile",
-		Handler: func(c echo.Context) error {
-
-			var data map[string]interface{}
-			if err := c.Bind(&data); err != nil {
-				return err
-			}
-			log.Println("[SaveFile]: ", data)
-
-			fileName := data["fileName"].(string)
-			fileData := data["fileData"].(string)
-
-			filePath := path.Join(pocketbaseDB.Config.CacheDirectory, fileName)
-
-			// Save request_id.txt
-			save.WriteFile(filePath, []byte(fileData))
-
-			return c.JSON(http.StatusOK, map[string]interface{}{
-				"filepath": filePath,
-			})
-		},
-		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
-		},
-	})
-	return nil
 }
