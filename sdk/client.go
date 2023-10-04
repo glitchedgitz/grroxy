@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/duke-git/lancet/v2/convertor"
@@ -118,6 +119,39 @@ func (c *Client) Create(collection string, body any) (types.ResponseCreate, erro
 	}
 
 	return *resp.Result().(*types.ResponseCreate), nil
+}
+
+func (c *Client) CreateCollection(body any) (any, error) {
+	var response any
+
+	if err := c.Authorize(); err != nil {
+		return response, err
+	}
+
+	request := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		SetResult(&response)
+
+	log.Println(response)
+
+	resp, err := request.Post(c.url + "/api/collections")
+	if err != nil {
+		return response, fmt.Errorf("[create] can't send create collection request to pocketbase, err %w", err)
+	}
+
+	if resp.IsError() {
+		return response, fmt.Errorf("[create] pocketbase returned status: %d, msg: %s, body: %s, err %w",
+			resp.StatusCode(),
+			resp.String(),
+			fmt.Sprintf("%+v", body), // TODO remove that after debugging
+			ErrInvalidResponse,
+		)
+	}
+
+	v := *resp.Result().(*interface{})
+
+	return v, nil
 }
 
 func (c *Client) Delete(collection string, id string) error {
@@ -243,30 +277,30 @@ func (c *Client) List(collection string, params types.ParamsList) (types.Respons
 //     ],
 // });
 
-func (c *Client) CreateCollection(data types.Collection) error {
-	if err := c.Authorize(); err != nil {
-		return err
-	}
+// func (c *Client) CreateCollection(data types.Collection) error {
+// 	if err := c.Authorize(); err != nil {
+// 		return err
+// 	}
 
-	request := c.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(data)
+// 	request := c.client.R().
+// 		SetHeader("Content-Type", "application/json").
+// 		SetBody(data)
 
-	resp, err := request.Post(c.url + "/api/collections")
-	if err != nil {
-		return fmt.Errorf("[collection] can't send update request to pocketbase, err %w", err)
-	}
+// 	resp, err := request.Post(c.url + "/api/collections")
+// 	if err != nil {
+// 		return fmt.Errorf("[collection] can't send update request to pocketbase, err %w", err)
+// 	}
 
-	if resp.IsError() {
-		return fmt.Errorf("[collection] pocketbase returned status: %d, msg: %s, err %w",
-			resp.StatusCode(),
-			resp.String(),
-			ErrInvalidResponse,
-		)
-	}
+// 	if resp.IsError() {
+// 		return fmt.Errorf("[collection] pocketbase returned status: %d, msg: %s, err %w",
+// 			resp.StatusCode(),
+// 			resp.String(),
+// 			ErrInvalidResponse,
+// 		)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // Sitemap New using endpoint form APIEndpoints[SitemapNew]
 func (c *Client) SitemapNew(data types.SitemapGet) error {
