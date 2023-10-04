@@ -118,6 +118,7 @@ func (c *Config) OpenCWD() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	c.CWDirectory = cwd
 	found := false
 	currenttime := time.Now().Format(time.DateTime)
 	for i, project := range c.AppData.Projects {
