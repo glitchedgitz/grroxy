@@ -18,10 +18,13 @@ import (
 	"github.com/elazarl/goproxy"
 	certs "github.com/glitchedgitz/grroxy-db/certs"
 	save "github.com/glitchedgitz/grroxy-db/save"
+	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/glitchedgitz/grroxy-db/sdk"
 	"github.com/glitchedgitz/grroxy-db/types"
 	"github.com/haxii/fastproxy/bufiopool"
 	"github.com/haxii/fastproxy/superproxy"
+	"github.com/pocketbase/pocketbase/models"
+	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 	"github.com/projectdiscovery/fastdialer/fastdialer"
 	rbtransport "github.com/projectdiscovery/roundrobin/transport"
 	"github.com/projectdiscovery/tinydns"
@@ -254,6 +257,23 @@ func NewProxy(options *Options) (*Proxy, error) {
 		grroxydb:  grroxydb,
 	}
 
+	proxy.grroxydb.CreateCollection(models.Collection{
+		Name:       "tmp_intercept",
+		Type:       models.CollectionTypeBase,
+		ListRule:   pbTypes.Pointer(""),
+		ViewRule:   pbTypes.Pointer(""),
+		CreateRule: pbTypes.Pointer(""),
+		UpdateRule: pbTypes.Pointer(""),
+		DeleteRule: nil,
+		Schema:     schemas.Intercept,
+	})
+
+	proxy.DBCreate("_ui", map[string]string{
+		"id":        "___INTERCEPT___",
+		"unique_id": "___INTERCEPT___",
+		"data":      `{"filters": [],"filterstring":"","sort": "created"}`,
+	})
+
 	var socks5proxy *socks5.Server
 	if options.ListenAddrSocks5 != "" {
 		socks5Config := &socks5.Config{
@@ -270,6 +290,7 @@ func NewProxy(options *Options) (*Proxy, error) {
 
 	proxy.socks5proxy = socks5proxy
 	go proxy.InterceptManager()
+	go proxy.FiltersManager()
 	go proxy.RateLimitManager()
 
 	return proxy, nil

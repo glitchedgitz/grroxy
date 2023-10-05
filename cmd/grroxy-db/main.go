@@ -70,6 +70,7 @@ func main() {
 	pb.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		pb.App.Dao().DB().NewQuery(`
 			DELETE FROM _intercept;
+			DELETE FROM tmp_intercept;
 		`).Execute()
 		return nil
 	})

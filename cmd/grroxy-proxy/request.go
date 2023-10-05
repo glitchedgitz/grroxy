@@ -123,7 +123,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	var requestNew *http.Request
 
 	// Intercept
-	if p.options.Intercept {
+	if p.options.Intercept && p.checkFilters(userdata) {
 
 		updatedString, edited := p.interceptWait(userdata, "request", req.ContentLength)
 
