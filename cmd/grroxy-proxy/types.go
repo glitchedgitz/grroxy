@@ -44,6 +44,7 @@ type Options struct {
 	// Elastic                     *elastic.Options
 	// Kafka                       *kafka.Options
 	Intercept bool
+	Filters   string
 	Waiting   bool
 	Ctx       context.Context
 }

@@ -77,7 +77,7 @@ func (p *Proxy) OnResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Res
 	// var updatedString string
 	var edited bool
 	// Intercept
-	if p.options.Intercept {
+	if p.options.Intercept && p.checkFilters(userdata) {
 
 		responseInString, edited = p.interceptWait(userdata, "response", resp.ContentLength)
 
