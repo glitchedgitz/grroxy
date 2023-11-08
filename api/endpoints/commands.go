@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"strings"
 
 	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/labstack/echo/v5"
@@ -22,10 +23,8 @@ func (pocketbaseDB *DatabaseAPI) CommandManager() {
 		log.Println("Command received: ", c)
 		if c.SaveTo == "collection" {
 			pocketbaseDB.RunningCommandSaveToCollection(c.ID, c.Command, c.Collection)
-		} else if c.SaveTo == "file" {
-			pocketbaseDB.RunningCommand(c.ID, c.Command+" > "+c.Filename)
 		} else {
-			pocketbaseDB.RunningCommand(c.ID, c.Command)
+			pocketbaseDB.RunningCommand(c.ID, c.Command, c.Filename)
 		}
 	}
 }
@@ -124,12 +123,32 @@ func (pocketbaseDB *DatabaseAPI) RunCommand(e *core.ServeEvent) error {
 	return nil
 }
 
-func (pocketbaseDB *DatabaseAPI) RunningCommand(id, command string) {
+func (pocketbaseDB *DatabaseAPI) RunningCommand(id string, command string, filename string) {
 
 	pocketbaseDB.SetProcess(id, process.running)
+	var cmd *exec.Cmd
+	saveToFile := filename != ""
 
-	log.Println("RunningCommand: ", command)
-	cmd := exec.Command("cmd", "/C", command)
+	// if saveToFile {
+	// 	command = command + " > " + c.Filename
+	// }
+	// cmd = exec.Command("cmd", "/C", command)
+
+	if strings.HasPrefix(command, "bash -c") {
+		command := strings.Trim(strings.Trim(strings.TrimLeft(command, "bash -c"), `"`), `'`)
+		if saveToFile {
+			command = command + " > " + filename
+		}
+		// command = `"` + command + `"`
+		cmd = exec.Command("bash", "-c", command)
+	} else {
+		if saveToFile {
+			command = command + " > " + filename
+		}
+		cmd = exec.Command("cmd", "/C", command)
+	}
+
+	log.Println("RunningCommand: ", cmd)
 
 	// Create a pipe for the output of the command
 	_, err := cmd.StdoutPipe()
