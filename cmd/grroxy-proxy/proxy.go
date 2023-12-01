@@ -132,6 +132,13 @@ func (p *Proxy) RunProxy() error {
 				return r, resp
 			},
 		)
+
+		// p.httpproxy.OnResponse(goproxy.DstHostIs("grroxy")).DoFunc(
+		// 	func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+		// 		return resp
+		// 	},
+		// )
+
 		go http.ListenAndServe(p.options.ListenAddrHTTP, p.httpproxy) // nolint
 	}
 

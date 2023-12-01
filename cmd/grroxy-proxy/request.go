@@ -30,6 +30,11 @@ func (p *Proxy) MatchReplaceRequest(req string) string {
 func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 	// rateLimit <- ""
 	// defer func() { <-rateLimit }()
+
+	if strings.Contains(req.URL.Host, "grroxy") {
+		return req, nil
+	}
+
 	var userdata types.UserData
 
 	if ctx.UserData != nil {

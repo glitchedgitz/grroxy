@@ -39,6 +39,11 @@ func (p *Proxy) MatchReplaceResponse(resp string) string {
 
 func (p *Proxy) OnResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 
+	if strings.Contains(resp.Request.URL.Host, "grroxy") {
+		return resp
+	}
+
+	log.Print("[OnResponse] Starting OnResponse")
 	userdata := ctx.UserData.(types.UserData)
 	log.Printf("[Response][Intercept][%s]: ResponseUserdata \n", userdata)
 
@@ -46,6 +51,7 @@ func (p *Proxy) OnResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Res
 	userdata.HasResponse = true
 
 	if resp == nil {
+		log.Print("[OnResponse]Returning nil response")
 		return nil
 	}
 
