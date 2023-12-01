@@ -21,15 +21,23 @@ import (
 var conf config.Config
 var pb endpoints.DatabaseAPI
 var noUI bool
+var noProxy bool
 
 func serveAndOpen() {
+	C2 := exec.Command("grroxy-proxy")
+	if !noProxy {
+		C2.Start()
+	}
 	if noUI {
 		pb.Serve()
 	} else {
-		C := exec.Command("grroxy")
+		C1 := exec.Command("grroxy-ui")
 		go pb.Serve()
-		C.Start()
-		C.Wait()
+		C1.Start()
+		C1.Wait()
+	}
+	if !noProxy {
+		C2.Wait()
 	}
 }
 
@@ -76,6 +84,7 @@ func main() {
 	})
 
 	pb.App.RootCmd.PersistentFlags().BoolVar(&noUI, "no-ui", false, "A global flag for the application")
+	pb.App.RootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "A global flag for the application")
 
 	pb.App.RootCmd.AddCommand(&cobra.Command{
 		Use: "list",
