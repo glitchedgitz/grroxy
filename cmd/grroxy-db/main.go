@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strings"
 
 	// "github.com/pocketbase/dbx"
 
@@ -120,8 +121,13 @@ func main() {
 
 	pb.App.RootCmd.AddCommand(&cobra.Command{
 		Use: "create",
-		Run: func(cmd *cobra.Command, args []string) {
-			conf.NewProject()
+		Run	: func(cmd *cobra.Command, args []string) {
+
+			projectName := "Project"
+			if len(args) > 0 && args[0] != "." {
+				projectName = strings.Join([]string(args), " ")
+			}
+			conf.NewProject(projectName)
 			serveAndOpen()
 		},
 	})

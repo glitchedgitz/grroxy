@@ -69,7 +69,7 @@ func (c *Config) ListProjects() {
 	c.OpenProject(n)
 }
 
-func (c *Config) NewProject() {
+func (c *Config) NewProject(projectName string) {
 	projectId := xid.New().String()
 	projectPath := path.Join(c.ConfigDirectory, projectId)
 	os.MkdirAll(projectPath, 0644)
@@ -77,7 +77,7 @@ func (c *Config) NewProject() {
 	currenttime := time.Now().Format(time.DateTime)
 
 	new := Project{
-		Name:     "Project",
+		Name:     projectName,
 		Location: projectPath,
 		Created:  currenttime,
 		Updated:  currenttime,
