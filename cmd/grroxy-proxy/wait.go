@@ -59,7 +59,7 @@ func (p *Proxy) interceptWait(userdata types.UserData, field string, contentLeng
 		// return goproxy.NewWaitData(ctx.Req, goproxy.ContentTypeText, 444, "")
 	}
 
-	collection := sdk.CollectionSet[any](p.grroxydb, "_store")
+	collection := sdk.CollectionSet[any](p.grroxydb, "_raw")
 	updatedData, err := collection.One(updatedRow.ID)
 	if err != nil {
 		log.Println(err)
@@ -74,10 +74,10 @@ func (p *Proxy) interceptWait(userdata types.UserData, field string, contentLeng
 	log.Println("[onWaitData] Updated Data --------------  ", upData)
 
 	edited := false
-	if field == "request" && updatedRow.IsRequestEdited {
+	if field == "req" && updatedRow.IsReqEdited {
 		edited = true
 		log.Println("[onWaitData] Request is edited -----------------------")
-	} else if field == "response" && updatedRow.IsResponseEdited {
+	} else if field == "resp" && updatedRow.IsRespEdited {
 		log.Println("[onWaitData] Response is edited -----------------------")
 		edited = true
 	}

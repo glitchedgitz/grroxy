@@ -19,7 +19,7 @@ import (
 func (p *Proxy) MatchReplaceRequest(req string) string {
 	// lazy mode - ninja level - elaborate
 	m := make(map[string]interface{})
-	m["request"] = req
+	m["req"] = req
 	if v, err := dsl.EvalExpr(p.options.RequestMatchReplaceDSL, m); err != nil {
 		return req
 	} else {
@@ -76,51 +76,62 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 		host = req.URL.Scheme + "://" + host
 	}()
 
+	extension := ""
+
+	if req.URL.Path != "" {
+		p := strings.Split(req.URL.Path, "/")
+		lastfile := p[len(p)-1]
+
+		if strings.Contains(lastfile, ".") {
+			l := strings.Split(lastfile, ".")
+			extension = l[len(l)-1]
+		}
+	}
+
 	userdata = types.UserData{
-		ID:          id,
-		Index:       index,
-		StoreID:     id,
-		ExtraID:     id,
-		Host:        host,
-		Port:        port,
-		IP:          "",
-		HasResponse: false,
-		OriginalRequest: types.RequestData{
-			Method:        method,
-			HasCookies:    len(req.Cookies()) > 0,
-			HasParams:     len(req.URL.Query()) > 0,
-			ContentLength: len(requestInString),
-			IsHTTPS:       isHttps,
-			Url:           req.URL.RequestURI(),
-			Path:          req.URL.Path,
-			Query:         req.URL.RawQuery,
-			Fragment:      req.URL.RawFragment,
+		ID:       id,
+		Index:    index,
+		Raw:      id,
+		Attached: id,
+		Host:     host,
+		Port:     port,
+		HasResp:  false,
+		Req: types.RequestData{
+			Method:     method,
+			HasCookies: len(req.Cookies()) > 0,
+			HasParams:  len(req.URL.Query()) > 0,
+			Length:     len(requestInString),
+			IsHTTPS:    isHttps,
+			Url:        req.URL.RequestURI(),
+			Path:       req.URL.Path,
+			Query:      req.URL.RawQuery,
+			Fragment:   req.URL.RawFragment,
+			Ext:        extension,
 		},
-		OriginalResponse: types.ResponseData{
-			Title:         "",
-			Mimetype:      "",
-			StatusCode:    0,
-			ContentLength: 0,
-			HasCookies:    false,
-			Date:          "",
-			Time:          "",
+		Resp: types.ResponseData{
+			Title:      "",
+			Mime:       "",
+			Status:     0,
+			Length:     0,
+			HasCookies: false,
+			Date:       "",
+			Time:       "",
 		},
-		IsRequestEdited:  false,
-		IsResponseEdited: false,
-		// Labels:           []string{"test"},
+		IsReqEdited:  false,
+		IsRespEdited: false,
 	}
 
 	// Add to database
 	func() {
-		p.DBCreate("_extra", map[string]any{
+		p.DBCreate("_attached", map[string]any{
 			"id":    userdata.ID,
 			"label": map[string]string{},
 			"note":  "",
 		})
-		p.DBCreate("_store", map[string]string{
+		p.DBCreate("_raw", map[string]string{
 			"id":       userdata.ID,
-			"request":  requestInString,
-			"extra_id": userdata.ID,
+			"req":      requestInString,
+			"attached": userdata.ID,
 		})
 		// p.grroxydb.Create("data", userdata)
 	}()
@@ -130,10 +141,10 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	// Intercept
 	if p.options.Intercept && p.checkFilters(userdata) {
 
-		updatedString, edited := p.interceptWait(userdata, "request", req.ContentLength)
+		updatedString, edited := p.interceptWait(userdata, "req", req.ContentLength)
 
 		if edited {
-			userdata.IsRequestEdited = true
+			userdata.IsReqEdited = true
 		}
 
 		p.grroxydb.Create("_data", userdata)
@@ -168,7 +179,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	return req, nil
 }
 
-func splitAndJoin(s string) string {
+func smartSort(s string) string {
 	u, _ := tld.Parse(s)
 	arr := strings.Split(u.Subdomain, ".")
 	arr = append(arr, u.TLD)
@@ -183,40 +194,30 @@ func splitAndJoin(s string) string {
 }
 
 func (p *Proxy) _requestAddToDB(userdata types.UserData) {
-	path := userdata.OriginalRequest.Path
 	typ := "folder"
-	extension := ""
+	if userdata.Req.Ext != "" {
+		typ = "file"
+	}
 
 	log.Println("[_requestAddToDB]userdata: ", userdata)
 	p.grroxydb.Create("_data", userdata)
 
 	u, _ := tld.Parse(userdata.Host)
 
-	p.DBCreate("_sites", map[string]string{
-		"site":    userdata.Host,
-		"reverse": splitAndJoin(userdata.Host),
-		"domain":  u.Domain + "." + u.TLD,
+	p.DBCreate("_hosts", map[string]string{
+		"host":      userdata.Host,
+		"smartsort": smartSort(userdata.Host),
+		"domain":    u.Domain + "." + u.TLD,
 	})
 
-	if path != "" {
-		p := strings.Split(path, "/")
-		lastfile := p[len(p)-1]
-
-		if strings.Contains(lastfile, ".") {
-			l := strings.Split(lastfile, ".")
-			extension = l[len(l)-1]
-			typ = "file"
-		}
-	}
-
 	s_data := types.SitemapGet{
-		Host:      userdata.Host,
-		Path:      userdata.OriginalRequest.Path,
-		Query:     userdata.OriginalRequest.Query,
-		Fragment:  userdata.OriginalRequest.Fragment,
-		Type:      typ,
-		MainID:    userdata.ID,
-		Extension: extension,
+		Host:     userdata.Host,
+		Path:     userdata.Req.Path,
+		Query:    userdata.Req.Query,
+		Fragment: userdata.Req.Fragment,
+		Ext:      userdata.Req.Ext,
+		Type:     typ,
+		Data:     userdata.ID,
 	}
 
 	p.DBNewSitemap(s_data)

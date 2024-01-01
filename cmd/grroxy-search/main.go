@@ -61,7 +61,7 @@ func main() {
 	collection := "_data"
 	sortBy := "-created"
 	filters :=
-		"(original_response.mimetype !~ 'video%' && original_response.mimetype !~ 'audio%' && original_response.mimetype !~ 'image%' && original_response.mimetype !~ 'font%' && original_response.mimetype !~ 'application/font%' && original_response.mimetype !~ 'text/css%') && host ~ 'infojobs' && store_id.response ~ 'candidate-'"
+		"(resp.mime !~ 'video%' && resp.mime !~ 'audio%' && resp.mime !~ 'image%' && resp.mime !~ 'font%' && resp.mime !~ 'application/font%' && resp.mime !~ 'text/css%') && host ~ 'infojobs' && raw.resp ~ 'candidate-'"
 
 	records = make(chan types.ResponseList[map[string]any])
 	go recordsManager()

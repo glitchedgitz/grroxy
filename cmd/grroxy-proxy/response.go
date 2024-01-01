@@ -18,10 +18,10 @@ import (
 
 type Store_Req struct {
 	ID      string `db:"id" json:"id"`
-	Request string `db:"request" json:"request"`
+	Request string `db:"req" json:"req"`
 }
 type Store_Resp struct {
-	Response string `db:"response" json:"response"`
+	Response string `db:"resp" json:"resp"`
 }
 
 // MatchReplaceRequest strings or regex
@@ -29,7 +29,7 @@ func (p *Proxy) MatchReplaceResponse(resp string) string {
 	// resp.ContentLength = 0
 
 	m := make(map[string]interface{})
-	m["response"] = resp
+	m["resp"] = resp
 	if v, err := dsl.EvalExpr(p.options.ResponseMatchReplaceDSL, m); err != nil {
 		return resp
 	} else {
@@ -48,7 +48,7 @@ func (p *Proxy) OnResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Res
 	log.Printf("[Response][Intercept][%s]: ResponseUserdata \n", userdata)
 
 	id := userdata.ID
-	userdata.HasResponse = true
+	userdata.HasResp = true
 
 	if resp == nil {
 		log.Print("[OnResponse]Returning nil response")
@@ -64,31 +64,31 @@ func (p *Proxy) OnResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Res
 		title, _ = extractTitle(responseInBytes)
 	}
 
-	userdata.OriginalResponse = types.ResponseData{
-		HasCookies:    len(resp.Cookies()) > 0,
-		Title:         title,
-		Mimetype:      resp.Header.Get("content-type"),
-		StatusCode:    resp.StatusCode,
-		ContentLength: len(responseInString),
-		Date:          resp.Header.Get("Date"),
-		Time:          time.Now().Format(time.RFC3339),
+	userdata.Resp = types.ResponseData{
+		HasCookies: len(resp.Cookies()) > 0,
+		Title:      title,
+		Mime:       resp.Header.Get("content-type"),
+		Status:     resp.StatusCode,
+		Length:     len(responseInString),
+		Date:       resp.Header.Get("Date"),
+		Time:       time.Now().Format(time.RFC3339),
 	}
 
 	r_data := Store_Resp{
 		Response: responseInString,
 	}
 
-	p.grroxydb.Update("_store", id, r_data)
+	p.grroxydb.Update("_raw", id, r_data)
 
 	// var updatedString string
 	var edited bool
 	// Intercept
 	if p.options.Intercept && p.checkFilters(userdata) {
 
-		responseInString, edited = p.interceptWait(userdata, "response", resp.ContentLength)
+		responseInString, edited = p.interceptWait(userdata, "resp", resp.ContentLength)
 
 		if edited {
-			userdata.IsResponseEdited = true
+			userdata.IsRespEdited = true
 		}
 
 		p.grroxydb.Update("_data", userdata.ID, userdata)

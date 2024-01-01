@@ -22,11 +22,11 @@ var Sitemap = schema.NewSchema(
 		Type:     schema.FieldTypeText,
 		Required: true,
 	}, &schema.SchemaField{
-		Name:     "extension",
+		Name:     "ext",
 		Type:     schema.FieldTypeText,
 		Required: true,
 	}, &schema.SchemaField{
-		Name:     "main_id",
+		Name:     "data",
 		Type:     schema.FieldTypeRelation,
 		Required: true,
 		Options: &schema.RelationOptions{

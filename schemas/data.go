@@ -7,67 +7,59 @@ import (
 
 var Rows = schema.NewSchema(
 	&schema.SchemaField{
-		Name: "host",
-		Type: schema.FieldTypeText,
-	},
-	&schema.SchemaField{
-		Name: "ip",
-		Type: schema.FieldTypeText,
-	},
-	&schema.SchemaField{
 		Name: "index",
 		Type: schema.FieldTypeNumber,
+	},
+	&schema.SchemaField{
+		Name: "host",
+		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
 		Name: "port",
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "url_data",
+		Name: "req",
 		Type: schema.FieldTypeJson,
 	},
 	&schema.SchemaField{
-		Name: "original_request",
+		Name: "resp",
 		Type: schema.FieldTypeJson,
 	},
 	&schema.SchemaField{
-		Name: "original_response",
-		Type: schema.FieldTypeJson,
-	},
-	&schema.SchemaField{
-		Name: "has_response",
+		Name: "has_resp",
 		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
-		Name: "is_request_edited",
+		Name: "is_req_edited",
 		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
-		Name: "is_response_edited",
+		Name: "is_resp_edited",
 		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
-		Name: "edited_request",
+		Name: "req_edited",
 		Type: schema.FieldTypeJson,
 	},
 	&schema.SchemaField{
-		Name: "edited_response",
+		Name: "resp_edited",
 		Type: schema.FieldTypeJson,
 	},
 	&schema.SchemaField{
-		Name:     "store_id",
+		Name:     "raw",
 		Type:     schema.FieldTypeRelation,
 		Required: true,
 		Options: &schema.RelationOptions{
-			CollectionId:  "_store",
+			CollectionId:  "_raw",
 			CascadeDelete: true,
 		},
 	},
 	&schema.SchemaField{
-		Name: "extra_id",
+		Name: "attached",
 		Type: schema.FieldTypeRelation,
 		Options: &schema.RelationOptions{
-			CollectionId: "_extra",
+			CollectionId: "_attached",
 			MaxSelect:    types.Pointer(1),
 		},
 	},

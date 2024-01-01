@@ -8,7 +8,7 @@ import (
 	"github.com/glitchedgitz/grroxy-db/sdk"
 )
 
-var field = "response"
+var field = "resp"
 var re *regexp.Regexp
 var err error
 
@@ -36,7 +36,7 @@ func compileRegex() {
 func searchRecord(id string) {
 	defer wg.Done()
 	// log.Println(id)
-	collection := sdk.CollectionSet[map[string]any](grroxydb, "_store")
+	collection := sdk.CollectionSet[map[string]any](grroxydb, "_raw")
 	data, err := collection.One(id)
 	if err != nil {
 		log.Println("Error reading record:", id, " ", err)

@@ -40,13 +40,13 @@ func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
 
 			// Inserting data
 			result, err := pocketbaseDB.App.Dao().DB().Insert(collection, dbx.Params{
-				"id":        data.MainID,
-				"path":      data.Path,
-				"query":     data.Query,
-				"fragment":  data.Fragment,
-				"type":      data.Type,
-				"extension": data.Extension,
-				"main_id":   data.MainID,
+				"id":       data.Data,
+				"path":     data.Path,
+				"query":    data.Query,
+				"fragment": data.Fragment,
+				"type":     data.Type,
+				"ext":      data.Ext,
+				"data":     data.Data,
 			}).Execute()
 
 			log.Println("Executed: ", result)
@@ -112,12 +112,12 @@ func (pocketbaseDB *DatabaseAPI) SitemapFetch(e *core.ServeEvent) error {
 
 				if _, exists := uniqueMap[title]; !exists {
 					uniqueMap[title] = map[string]interface{}{
-						"host":      data.Host,
-						"path":      data.Path + "/" + title,
-						"type":      item.Type,
-						"title":     title,
-						"extension": item.Extension,
-						"query":     item.Query,
+						"host":  data.Host,
+						"path":  data.Path + "/" + title,
+						"type":  item.Type,
+						"title": title,
+						"ext":   item.Ext,
+						"query": item.Query,
 					}
 					titles = append(titles, title)
 				}

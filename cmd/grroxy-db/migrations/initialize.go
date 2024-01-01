@@ -10,23 +10,8 @@ import (
 	"github.com/pocketbase/pocketbase/daos"
 	m "github.com/pocketbase/pocketbase/migrations"
 	"github.com/pocketbase/pocketbase/models"
-	"github.com/pocketbase/pocketbase/models/schema"
 	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 )
-
-type db struct {
-	name   string
-	schema schema.Schema
-}
-
-// collections map
-var collections = []db{
-	{"_store", schemas.Store},
-	{"_data", schemas.Rows},
-	{"_intercept", schemas.Intercept},
-	{"_sites", schemas.Sites},
-	{"_settings", schemas.Settings},
-}
 
 type setting struct {
 	ID    string
@@ -61,31 +46,42 @@ func init() {
 		}
 
 		// create collections
-		for _, db := range collections {
+		for _, db := range schemas.Collections {
 			collection := &models.Collection{
-				Name:       db.name,
+				Name:       db.Name,
 				Type:       models.CollectionTypeBase,
 				ListRule:   pbTypes.Pointer(""),
 				ViewRule:   pbTypes.Pointer(""),
 				CreateRule: pbTypes.Pointer(""),
 				UpdateRule: pbTypes.Pointer(""),
 				DeleteRule: nil,
-				Schema:     db.schema,
+				Schema:     db.Schema,
 			}
 
-			collection.SetId(db.name)
+			collection.SetId(db.Name)
+
+			// if db.HasIndex {
+			// 	collection.Indexes = db.Index
+			// }
 
 			if err := dao.SaveCollection(collection); err != nil {
 				log.Println("[migration][init] Error: ", err)
 			}
 
-			log.Println("[migration][init] Creating collection: ", db.name)
+			// sites
+
+			log.Println("[migration][init] Creating collection: ", db.Name)
 		}
 
+		var ind = ""
+		for _, db := range schemas.Collections {
+			ind += db.Index
+		}
+		dao.DB().NewQuery(ind).Execute()
 		// sites
-		dao.DB().NewQuery(`
-			CREATE UNIQUE INDEX idx_sites_site ON _sites (site);
-		`).Execute()
+		// dao.DB().NewQuery(`
+		// 	CREATE UNIQUE INDEX idx_hosts_host ON _hosts (host);
+		// `).Execute()
 
 		settingsCollection, err := dao.FindCollectionByNameOrId("_settings")
 		if err != nil {

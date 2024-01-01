@@ -188,7 +188,7 @@ func (pocketbaseDB *DatabaseAPI) SendRawRequest(e *core.ServeEvent) error {
 			host = strings.TrimPrefix(host, "http://")
 			host = strings.TrimPrefix(host, "https://")
 
-			request := data["request"].(string)
+			request := data["req"].(string)
 			// replace \n with \r\n
 
 			// request = strings.ReplaceAll(request, "\n", "\r\n") + "\r\n\r\n"
@@ -224,7 +224,7 @@ func (pocketbaseDB *DatabaseAPI) SendRawRequest(e *core.ServeEvent) error {
 			}
 
 			response := map[string]interface{}{
-				"response": respString,
+				"resp": respString,
 			}
 
 			return c.JSON(http.StatusOK, response)

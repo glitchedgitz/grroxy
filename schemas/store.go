@@ -7,26 +7,26 @@ import (
 
 var Store = schema.NewSchema(
 	&schema.SchemaField{
-		Name: "request",
+		Name: "req",
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "response",
+		Name: "resp",
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "request_edited",
+		Name: "req_edited",
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "response_edited",
+		Name: "resp_edited",
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "extra_id",
+		Name: "attached",
 		Type: schema.FieldTypeRelation,
 		Options: &schema.RelationOptions{
-			CollectionId: "_extra",
+			CollectionId: "_attached",
 			MaxSelect:    types.Pointer(1),
 		},
 	},

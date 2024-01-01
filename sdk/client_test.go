@@ -344,7 +344,7 @@ func TestClient_SitemapNew(t *testing.T) {
 				Type:     "file",
 				Query:    "?test=1&test2=2",
 				Fragment: "#frag",
-				MainID:   base.RandomString(15),
+				Data:     base.RandomString(15),
 			},
 			wantErr: false,
 			wantID:  true,

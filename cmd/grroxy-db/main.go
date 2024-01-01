@@ -121,7 +121,7 @@ func main() {
 
 	pb.App.RootCmd.AddCommand(&cobra.Command{
 		Use: "create",
-		Run	: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 
 			projectName := "Project"
 			if len(args) > 0 && args[0] != "." {

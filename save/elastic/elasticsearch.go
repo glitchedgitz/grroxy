@@ -68,12 +68,12 @@ func (c *Client) Save(data types.OutputData) error {
 	var doc map[string]interface{}
 	if data.Userdata.OriginalRequest.HasResponse {
 		doc = map[string]interface{}{
-			"response":  data.DataString,
+			"resp":      data.DataString,
 			"timestamp": time.Now().Format(time.RFC3339),
 		}
 	} else {
 		doc = map[string]interface{}{
-			"request":   data.DataString,
+			"req":       data.DataString,
 			"timestamp": time.Now().Format(time.RFC3339),
 		}
 	}

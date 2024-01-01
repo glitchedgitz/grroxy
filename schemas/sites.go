@@ -4,12 +4,12 @@ import "github.com/pocketbase/pocketbase/models/schema"
 
 var Sites = schema.NewSchema(
 	&schema.SchemaField{
-		Name:     "site",
+		Name:     "host",
 		Type:     schema.FieldTypeText,
 		Required: true,
 	},
 	&schema.SchemaField{
-		Name: "reverse",
+		Name: "smartsort",
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{

@@ -2,7 +2,7 @@ package schemas
 
 import "github.com/pocketbase/pocketbase/models/schema"
 
-var Extra = schema.NewSchema(
+var Attached = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "label",
 		Type: schema.FieldTypeJson,
@@ -10,5 +10,9 @@ var Extra = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "note",
 		Type: schema.FieldTypeEditor,
+	},
+	&schema.SchemaField{
+		Name: "extra",
+		Type: schema.FieldTypeJson,
 	},
 )
