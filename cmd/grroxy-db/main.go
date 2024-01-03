@@ -49,7 +49,7 @@ func main() {
 	// Create an instance of the app structure
 	pb = endpoints.DatabaseAPI{
 		App: pocketbase.NewWithConfig(
-			&pocketbase.Config{
+			pocketbase.Config{
 				DefaultDataDir: "grroxy",
 				// HideStartBanner:      true,
 				// DefaultEncryptionEnv: "hJH#GRJ#HG$JH$54h5kjhHJG#JHG#*&Y&EG#F&GIG@JKGH$JHRGJ##JKJH#JHG",
@@ -62,7 +62,7 @@ func main() {
 	// pb.CmdChannel
 	go pb.CommandManager()
 
-	migratecmd.MustRegister(pb.App, pb.App.RootCmd, &migratecmd.Options{
+	migratecmd.MustRegister(pb.App, pb.App.RootCmd, migratecmd.Config{
 		// enable auto creation of migration files when making collection changes in the Admin UI
 		// (the isGoRun check is to enable it only during development)
 		// Automigrate: isGoRun,
@@ -111,13 +111,13 @@ func main() {
 		},
 	})
 
-	pb.App.RootCmd.AddCommand(&cobra.Command{
-		Use: "serve",
-		Run: func(cmd *cobra.Command, args []string) {
-			conf.ShowConfig()
-		},
-		// ... rest of the command details
-	})
+	// pb.App.RootCmd.AddCommand(&cobra.Command{
+	// 	Use: "serve",
+	// 	Run: func(cmd *cobra.Command, args []string) {
+	// 		conf.ShowConfig()
+	// 	},
+	// 	// ... rest of the command details
+	// })
 
 	pb.App.RootCmd.AddCommand(&cobra.Command{
 		Use: "create",
