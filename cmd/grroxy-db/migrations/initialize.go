@@ -60,9 +60,9 @@ func init() {
 
 			collection.SetId(db.Name)
 
-			if db.HasIndex {
-				collection.Indexes = pbTypes.JsonArray[string]{db.Index}
-			}
+			// if db.HasIndex {
+			// 	collection.Indexes = pbTypes.JsonArray[string]{db.Index}
+			// }
 
 			if err := dao.SaveCollection(collection); err != nil {
 				log.Println("[migration][init] Error: ", err)
@@ -73,11 +73,11 @@ func init() {
 			log.Println("[migration][init] Creating collection: ", db.Name)
 		}
 
-		// var ind = ""
-		// for _, db := range schemas.Collections {
-		// 	ind += db.Index
-		// }
-		// dao.DB().NewQuery(ind).Execute()
+		var ind = ""
+		for _, db := range schemas.Collections {
+			ind += db.Index
+		}
+		dao.DB().NewQuery(ind).Execute()
 		// sites
 		// dao.DB().NewQuery(`
 		// 	CREATE UNIQUE INDEX idx_hosts_host ON _hosts (host);
