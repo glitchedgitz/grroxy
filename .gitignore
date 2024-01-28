@@ -15,4 +15,4 @@
 # vendor/
 pb_data/
 grroxy_db/
-grroxy/
+./grroxy/
