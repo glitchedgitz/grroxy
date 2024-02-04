@@ -28,7 +28,9 @@ var Collections = []DB{
 		"_data",
 		Rows,
 		false,
-		"",
+		`
+		CREATE UNIQUE INDEX idx_data_index ON _data (index);
+		`,
 	},
 	{
 		"_intercept",

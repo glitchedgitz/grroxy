@@ -7,6 +7,10 @@ import (
 
 var Intercept = schema.NewSchema(
 	&schema.SchemaField{
+		Name: "index",
+		Type: schema.FieldTypeNumber,
+	},
+	&schema.SchemaField{
 		Name: "host",
 		Type: schema.FieldTypeText,
 	},
@@ -15,21 +19,17 @@ var Intercept = schema.NewSchema(
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "index",
-		Type: schema.FieldTypeNumber,
-	},
-	&schema.SchemaField{
 		Name: "req",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
 		Name: "resp",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
@@ -48,14 +48,14 @@ var Intercept = schema.NewSchema(
 		Name: "req_edited",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
 		Name: "resp_edited",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{

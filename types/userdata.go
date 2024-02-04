@@ -36,12 +36,12 @@ type UserData struct {
 	HasResp      bool         `db:"has_resp,omitempty" json:"has_resp,omitempty"`
 	IsReqEdited  bool         `db:"is_req_edited,omitempty" json:"is_req_edited,omitempty"`
 	IsRespEdited bool         `db:"is_resp_edited,omitempty" json:"is_resp_edited,omitempty"`
-	Req          RequestData  `db:"req,omitempty" json:"req,omitempty"`
+	Req          RequestData  `db:"req" json:"req"`
 	Resp         ResponseData `db:"resp" json:"resp"`
 	ReqEdited    RequestData  `db:"req_edited,omitempty" json:"req_edited,omitempty"`
 	RespEdited   ResponseData `db:"resp_edited,omitempty" json:"resp_edited,omitempty"`
 	Raw          string       `db:"raw,omitempty" json:"raw,omitempty"`
-	Attached        string       `db:"attached,omitempty" json:"attached,omitempty"`
+	Attached     string       `db:"attached,omitempty" json:"attached,omitempty"`
 }
 
 type RealtimeRecord struct {
@@ -61,7 +61,7 @@ type RealtimeRecord struct {
 	ReqEdited      interface{} `db:"req_edited" json:"req_edited"`
 	RespEdited     interface{} `db:"resp_edited" json:"resp_edited"`
 	Raw            interface{} `db:"raw,omitempty" json:"raw,omitempty"`
-	Attached        string       `db:"attached,omitempty" json:"attached,omitempty"`
+	Attached       string      `db:"attached,omitempty" json:"attached,omitempty"`
 	Action         string      `db:"action,omitempty" json:"action,omitempty"`
 }
 

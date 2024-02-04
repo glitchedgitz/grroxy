@@ -61,7 +61,7 @@ func init() {
 			collection.SetId(db.Name)
 
 			// if db.HasIndex {
-			// 	collection.Indexes = db.Index
+			// 	collection.Indexes = pbTypes.JsonArray[string]{db.Index}
 			// }
 
 			if err := dao.SaveCollection(collection); err != nil {

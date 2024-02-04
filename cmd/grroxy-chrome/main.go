@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/chromedp/chromedp"
 )
@@ -34,10 +35,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// chromedp.
-	// var wg sync.WaitGroup
-	// wg.Add(1)
-	// wg.Wait()
+	// TODO: Waiting based on close button event
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	wg.Wait()
+
 	// path := filepath.Join(dir, "DevToolsActivePort")
 	// bs, err := os.ReadFile(path)
 	// if err != nil {

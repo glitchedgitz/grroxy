@@ -22,14 +22,14 @@ var Rows = schema.NewSchema(
 		Name: "req",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
 		Name: "resp",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
@@ -48,14 +48,14 @@ var Rows = schema.NewSchema(
 		Name: "req_edited",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
 		Name: "resp_edited",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{

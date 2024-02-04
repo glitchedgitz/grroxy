@@ -12,7 +12,7 @@ var UI = schema.NewSchema(
 		Name: "data",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
-			MaxSize: 2048,
+			MaxSize: 100000,
 		},
 	},
 )

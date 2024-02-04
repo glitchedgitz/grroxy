@@ -3,13 +3,13 @@ package main
 import (
 	"fmt"
 	"log"
-	"os/exec"
 	"strings"
 
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/grroxy-db/api/endpoints"
 	"github.com/glitchedgitz/grroxy-db/config"
+	"github.com/glitchedgitz/grroxy-db/proxy"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
@@ -25,21 +25,11 @@ var noUI bool
 var noProxy bool
 
 func serveAndOpen() {
-	C2 := exec.Command("grroxy-proxy")
 	if !noProxy {
-		C2.Start()
+		go proxy.StartProxy()
+		// C2.Start()
 	}
-	if noUI {
-		pb.Serve()
-	} else {
-		C1 := exec.Command("grroxy-ui")
-		go pb.Serve()
-		C1.Start()
-		C1.Wait()
-	}
-	if !noProxy {
-		C2.Wait()
-	}
+	pb.Serve()
 }
 
 func main() {
@@ -69,6 +59,7 @@ func main() {
 	})
 
 	// Adding custom endpoints
+	pb.App.OnBeforeServe().Add(pb.BindFrontend)
 	pb.App.OnBeforeServe().Add(pb.SitemapNew)
 	pb.App.OnBeforeServe().Add(pb.SitemapFetch)
 	pb.App.OnBeforeServe().Add(pb.RunCommand)

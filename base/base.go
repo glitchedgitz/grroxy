@@ -35,6 +35,19 @@ func CheckErr(msg string, err error) {
 	}
 }
 
+func FormatNumericID(number, width int) string {
+	// Convert the number to a string
+	numStr := fmt.Sprintf("%d", number)
+
+	// Calculate the number of underscores needed for padding
+	underscoreCount := width - len(numStr)
+
+	// Create the padded string with underscores
+	paddedStr := strings.Repeat("_", underscoreCount) + numStr
+
+	return paddedStr
+}
+
 func ParseDatabaseName(site string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(site, "://", "__"), ".", "_")
 }
