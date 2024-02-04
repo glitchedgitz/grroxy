@@ -1,0 +1,49 @@
+@font-face {
+    font-family: 'CascadiaCode';
+    src: local(""), url('../fonts/Cascadia/CascadiaCode.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaCodeItalic';
+    src: local(""), url('../fonts/Cascadia/CascadiaCodeItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaCodePL';
+    src: local(""), url('../fonts/Cascadia/CascadiaCodePL.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaCodePLItalic';
+    src: local(""), url('../fonts/Cascadia/CascadiaCodePLItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMono';
+    src: local(""), url('../fonts/Cascadia/CascadiaMono.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMonoItalic';
+    src: local(""), url('../fonts/Cascadia/CascadiaMonoItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMonoPL';
+    src: local(""), url('../fonts/Cascadia/CascadiaMonoPL.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMonoPLItalic';
+    src: local(""), url('../fonts/Cascadia/CascadiaMonoPLItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Roboto Mono';
+    src: local(""), url('../fonts/RobotoMono/RobotoMono-VariableFont_wght.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: local(""), url('../fonts/Inter-VariableFont.ttf') format('truetype');
+}
