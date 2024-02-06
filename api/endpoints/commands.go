@@ -97,6 +97,14 @@ func (pocketbaseDB *DatabaseAPI) RunCommand(e *core.ServeEvent) error {
 		Method: http.MethodPost,
 		Path:   "/api/runcommand",
 		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
 
 			var data RunCommandData
 			if err := c.Bind(&data); err != nil {

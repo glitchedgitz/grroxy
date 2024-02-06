@@ -18,6 +18,14 @@ func (pocketbaseDB *DatabaseAPI) LabelNew(e *core.ServeEvent) error {
 		Method: http.MethodPost,
 		Path:   "/api/label/new",
 		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
 
 			var data types.Label
 			if err := c.Bind(&data); err != nil {
@@ -52,6 +60,14 @@ func (pocketbaseDB *DatabaseAPI) LabelDelete(e *core.ServeEvent) error {
 		Method: http.MethodPost,
 		Path:   "/api/label/delete",
 		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
 
 			var data types.Label
 			var err error
@@ -110,6 +126,14 @@ func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
 		Method: http.MethodPost,
 		Path:   "/api/label/attach",
 		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
 
 			var data types.Label
 			if err := c.Bind(&data); err != nil {

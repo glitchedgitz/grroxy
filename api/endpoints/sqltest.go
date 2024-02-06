@@ -10,6 +10,7 @@ import (
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/models"
 )
 
 type TEXTSQL struct {
@@ -23,9 +24,16 @@ type CountResult struct {
 func (pocketbaseDB *DatabaseAPI) TextSQL(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: "POST",
-		Path:   "api/sqltest",
+		Path:   "/api/sqltest",
 		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
 
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
 			var data TEXTSQL
 			if err := c.Bind(&data); err != nil {
 				return err

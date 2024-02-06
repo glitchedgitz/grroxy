@@ -156,14 +156,29 @@ func init() {
 
 			for _, val := range defaultLabels {
 				record := models.NewRecord(labelsCollection)
-
-				record.Set("id", val.ID)
+				id := base.RandomString(15)
+				record.Set("id", id)
 				record.Set("name", val.Name)
 				record.Set("color", val.Color)
 				record.Set("type", val.Type)
 
 				if err := dao.SaveRecord(record); err != nil {
 					return err
+				}
+
+				collection := &models.Collection{
+					Name:       "label_" + id,
+					Type:       models.CollectionTypeBase,
+					ListRule:   pbTypes.Pointer(""),
+					ViewRule:   pbTypes.Pointer(""),
+					CreateRule: pbTypes.Pointer(""),
+					UpdateRule: pbTypes.Pointer(""),
+					DeleteRule: nil,
+					Schema:     schemas.LabelCollection,
+				}
+
+				if err := dao.SaveCollection(collection); err != nil {
+					log.Println("[migration][creating label collection] Error: ", err)
 				}
 			}
 			return nil
