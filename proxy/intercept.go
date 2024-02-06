@@ -21,7 +21,7 @@ import (
 
 func (p *Proxy) InterceptManager() {
 
-	p.options.Intercept = true
+	p.options.Intercept = false
 
 	stream, err := sdk.CollectionSet[any](p.grroxydb, "_settings").Subscribe("_settings/" + base.AddUnderscore("INTERCEPT"))
 

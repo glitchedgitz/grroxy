@@ -102,7 +102,7 @@ func init() {
 			{
 				ID:    base.AddUnderscore("INTERCEPT"),
 				Name:  "Intercept",
-				Value: "true",
+				Value: "false",
 			},
 			{
 				ID:    base.AddUnderscore("MAIN_TAB"),
