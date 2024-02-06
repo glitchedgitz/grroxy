@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/models"
 )
 
 func (pocketbaseDB *DatabaseAPI) ReadFile(e *core.ServeEvent) error {
@@ -18,6 +19,14 @@ func (pocketbaseDB *DatabaseAPI) ReadFile(e *core.ServeEvent) error {
 		Method: http.MethodPost,
 		Path:   "/api/readfile",
 		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
 
 			var data map[string]interface{}
 			if err := c.Bind(&data); err != nil {
@@ -60,6 +69,14 @@ func (pocketbaseDB *DatabaseAPI) SaveFile(e *core.ServeEvent) error {
 		Method: http.MethodPost,
 		Path:   "/api/savefile",
 		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
 
 			var data map[string]interface{}
 			if err := c.Bind(&data); err != nil {
