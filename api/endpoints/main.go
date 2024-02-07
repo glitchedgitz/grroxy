@@ -22,19 +22,15 @@ type DatabaseAPI struct {
 func (pocketbaseDB *DatabaseAPI) Serve() {
 	pocketbaseDB.App.Bootstrap()
 
-	// os.Args = []string{"grroxy-db", "serve", "--http", "127.0.0.1:8090"}
+	fmt.Println("Application:        http://127.0.0.1:8090")
+	fmt.Println("Database:           http://127.0.0.1:8090/_/")
+	fmt.Println("API:                http://127.0.0.1:8090/api/")
+	fmt.Println("Cert:               http://127.0.0.1:8090/cacert.crt")
+	fmt.Println()
+	fmt.Println("Proxy Listening On: 8888")
+	fmt.Println()
 
-	// serveCmd := cmd.NewServeCommand(pocketbaseDB.App, true)
-	// serveCmd.
-	// log.Println("Serving: ", os.Args)
-
-	cmd := exec.Command("grroxy-db", "serve", "--http", "127.0.0.1:8090")
-
-	// err := cmd.Run()
-	// log.Println(err)
-	// serveCmd.Execute()
-	// cmd, _, _ := pocketbaseDB.App.RootCmd.Find([]string{"serve"})
-	// cmd.Execute()
+	cmd := exec.Command("grroxy-db", "serve", "--http", "127.0.0.1:8090", "--no-banner")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

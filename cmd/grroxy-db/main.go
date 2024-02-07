@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"strings"
 
 	// "github.com/pocketbase/dbx"
@@ -23,6 +25,8 @@ var conf config.Config
 var pb endpoints.DatabaseAPI
 var noUI bool
 var noProxy bool
+var showLogs bool
+var noBanner bool
 
 func serveAndOpen() {
 	if !noProxy {
@@ -32,16 +36,31 @@ func serveAndOpen() {
 	pb.Serve()
 }
 
-func main() {
+func checkVerbose() {
+	if showLogs {
+		log.SetOutput(os.Stderr)
+	}
+}
 
+func printBanner() {
+	if !noBanner {
+		fmt.Fprint(os.Stderr, banner)
+	}
+}
+
+func init() {
+	log.SetOutput(io.Discard)
+}
+
+func main() {
 	conf.Initiate()
 
 	// Create an instance of the app structure
 	pb = endpoints.DatabaseAPI{
 		App: pocketbase.NewWithConfig(
 			pocketbase.Config{
-				DefaultDataDir: "grroxy",
-				// HideStartBanner:      true,
+				DefaultDataDir:  "grroxy",
+				HideStartBanner: true,
 				// DefaultEncryptionEnv: "hJH#GRJ#HG$JH$54h5kjhHJG#JHG#*&Y&EG#F&GIG@JKGH$JHRGJ##JKJH#JHG",
 			},
 		),
@@ -49,13 +68,9 @@ func main() {
 		CmdChannel: make(chan endpoints.RunCommandData),
 	}
 
-	// pb.CmdChannel
 	go pb.CommandManager()
 
 	migratecmd.MustRegister(pb.App, pb.App.RootCmd, migratecmd.Config{
-		// enable auto creation of migration files when making collection changes in the Admin UI
-		// (the isGoRun check is to enable it only during development)
-		// Automigrate: isGoRun,
 	})
 
 	// Adding custom endpoints
@@ -70,6 +85,7 @@ func main() {
 	pb.App.OnBeforeServe().Add(pb.TextSQL)
 	pb.App.OnBeforeServe().Add(pb.SaveFile)
 	pb.App.OnBeforeServe().Add(pb.ReadFile)
+	pb.App.OnBeforeServe().Add(pb.DownloadCert)
 	pb.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		pb.App.Dao().DB().NewQuery(`
 			DELETE FROM _intercept;
@@ -78,15 +94,21 @@ func main() {
 		return nil
 	})
 
-	pb.App.RootCmd.PersistentFlags().BoolVar(&noUI, "no-ui", false, "A global flag for the application")
-	pb.App.RootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "A global flag for the application")
+	pb.App.RootCmd.SetHelpTemplate(commandsUsage)
+	pb.App.RootCmd.SetUsageTemplate(commandsUsage)
+
+	// pb.App.RootCmd.PersistentFlags().BoolVar(&noUI, "no-ui", false, "A global flag for the application")
+	pb.App.RootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
+	pb.App.RootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
 
 	pb.App.RootCmd.AddCommand(&cobra.Command{
 		Use: "list",
 		Run: func(cmd *cobra.Command, args []string) {
+			printBanner()
 			conf.ListProjects()
 			serveAndOpen()
 			fmt.Println(noUI)
+			checkVerbose()
 		},
 	})
 
@@ -95,6 +117,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			conf.OpenCWD()
 			serveAndOpen()
+			checkVerbose()
 		},
 	})
 
@@ -102,27 +125,21 @@ func main() {
 		Use: "config",
 		Run: func(cmd *cobra.Command, args []string) {
 			conf.ShowConfig()
+			checkVerbose()
 		},
 	})
-
-	// pb.App.RootCmd.AddCommand(&cobra.Command{
-	// 	Use: "serve",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		conf.ShowConfig()
-	// 	},
-	// 	// ... rest of the command details
-	// })
 
 	pb.App.RootCmd.AddCommand(&cobra.Command{
 		Use: "create",
 		Run: func(cmd *cobra.Command, args []string) {
-
+			printBanner()
 			projectName := "Project"
 			if len(args) > 0 && args[0] != "." {
 				projectName = strings.Join([]string(args), " ")
 			}
 			conf.NewProject(projectName)
 			serveAndOpen()
+			checkVerbose()
 		},
 	})
 
