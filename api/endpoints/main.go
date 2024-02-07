@@ -30,7 +30,7 @@ func (pocketbaseDB *DatabaseAPI) Serve() {
 	fmt.Println("Proxy Listening On: 8888")
 	fmt.Println()
 
-	cmd := exec.Command("grroxy-db", "serve", "--http", "127.0.0.1:8090", "--no-banner")
+	cmd := exec.Command("grroxy", "serve", "--http", "127.0.0.1:8090", "--no-banner")
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
