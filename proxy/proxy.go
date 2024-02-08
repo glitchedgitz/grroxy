@@ -173,7 +173,7 @@ func (p *Proxy) Stop() {
 
 func NewProxy(options *Options) (*Proxy, error) {
 
-	os.MkdirAll(options.Directory, os.ModePerm) //nolint
+	os.MkdirAll(options.Directory, 0755) //nolint
 
 	var grroxydb = sdk.NewClient(
 		"http://127.0.0.1:8090",

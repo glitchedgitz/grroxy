@@ -39,40 +39,76 @@ type JSONData struct {
 	Projects []Project `json:"Projects"`
 }
 
+func newTable() *tablewriter.Table {
+	t := tablewriter.NewWriter(os.Stdout)
+	t.SetHeader([]string{"Index", "Name", "Location", "Created", "Updated"})
+	t.SetAutoFormatHeaders(true)
+	t.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+	t.SetAlignment(tablewriter.ALIGN_LEFT)
+	t.SetCenterSeparator("")
+	t.SetColumnSeparator("")
+	t.SetRowSeparator("")
+	t.SetHeaderLine(false)
+	t.SetTablePadding("\t") // pad with tabs
+	t.SetNoWhiteSpace(true)
+	return t
+}
+
 func (c *Config) ListProjects() {
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Index", "Name", "Location", "Created", "Updated"})
-	table.SetAutoFormatHeaders(true)
-	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	table.SetCenterSeparator("")
-	table.SetColumnSeparator("")
-	table.SetRowSeparator("")
-	table.SetHeaderLine(false)
-	table.SetTablePadding("\t") // pad with tabs
-	table.SetNoWhiteSpace(true)
-	for i, project := range c.AppData.Projects {
-		table.Append([]string{fmt.Sprint(i), project.Name, project.Location, project.Created, project.Updated})
+
+	var n int
+	var err error
+	loop := 0
+	total := len(c.AppData.Projects)
+
+	for {
+
+		start := loop * 10
+		end := start + 10
+
+		if total <= start {
+			// Here we reach end
+			os.Exit(0)
+		} else if start < total && total < end {
+			// Here we less than 10 to show
+			end = total
+		}
+
+		// Show Table
+		fmt.Printf("\nProjects [%d-%d]/%d", start, end, total)
+
+		table := newTable()
+		for i, project := range c.AppData.Projects[start:end] {
+			table.Append([]string{fmt.Sprint(start + i), project.Name, project.Location, project.Created, project.Updated})
+		}
+		table.Render()
+		// ==================
+
+		loop += 1
+
+		// Ask for input
+		fmt.Print("\n(n) Enter Project Index / (enter) to Loadmore / (anything else) to close: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+		if choice == "" {
+			continue
+		}
+		n, err = strconv.Atoi(choice)
+		if err == nil {
+			break
+		} else {
+			os.Exit(0)
+		}
 	}
-	table.Render()
-
-	fmt.Print("\n Open project(index): ")
-
-	reader := bufio.NewReader(os.Stdin)
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
-	n, err := strconv.Atoi(choice)
-	if err != nil {
-		os.Exit(0)
-	}
-
 	c.OpenProject(n)
 }
 
 func (c *Config) NewProject(projectName string) {
 	projectId := xid.New().String()
 	projectPath := path.Join(c.ConfigDirectory, projectId)
-	os.MkdirAll(projectPath, 0644)
+	os.MkdirAll(projectPath, 0755)
 
 	currenttime := time.Now().Format(time.DateTime)
 

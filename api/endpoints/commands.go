@@ -18,7 +18,7 @@ import (
 
 // loop over commandChannel
 func (pocketbaseDB *DatabaseAPI) CommandManager() {
-	log.Println("[CommandManager Stared]")
+	// log.Println("[CommandManager Stared]")
 	for c := range pocketbaseDB.CmdChannel {
 		log.Println("Command received: ", c)
 		if c.SaveTo == "collection" {

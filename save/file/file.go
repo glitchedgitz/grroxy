@@ -45,7 +45,7 @@ func (c *Client) Save(data types.OutputData) error {
 
 	var destFolder = path.Join(c.options.OutputFolder, "targets", data.Userdata.Host, data.Userdata.Port, data.Folder)
 
-	os.MkdirAll(destFolder, os.ModePerm)
+	os.MkdirAll(destFolder, 0755)
 	destFile := path.Join(destFolder, data.Userdata.ID)
 
 	log.Println("saving to disk: ", destFile)

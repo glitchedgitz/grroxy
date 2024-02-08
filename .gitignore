@@ -15,8 +15,7 @@
 # vendor/
 pb_data/
 grroxy_db/
-./grroxy/
-
+builds/
 
 frontend/node_modules/
-grroxy/
+
