@@ -26,12 +26,12 @@ func (c *Config) Initiate() {
 
 	c.CacheDirectory, err = os.UserCacheDir()
 	c.CacheDirectory = path.Join(c.CacheDirectory, "grroxy")
-	os.MkdirAll(c.CacheDirectory, 0644)
+	os.MkdirAll(c.CacheDirectory, 0755)
 	base.CheckErr("", err)
 
 	c.ConfigDirectory, err = os.UserConfigDir()
 	c.ConfigDirectory = path.Join(c.ConfigDirectory, "grroxy")
-	os.MkdirAll(c.ConfigDirectory, 0644)
+	os.MkdirAll(c.ConfigDirectory, 0755)
 	base.CheckErr("", err)
 
 	c.ProjectFile = path.Join(c.ConfigDirectory, "projects.json")
