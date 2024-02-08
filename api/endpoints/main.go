@@ -1,13 +1,15 @@
 package endpoints
 
 import (
+	"errors"
 	"fmt"
 	"io"
-	"os/exec"
-	"sync"
+	"log"
+	"net/http"
 
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/models"
 	"github.com/pocketbase/pocketbase/models/schema"
 	pbTypes "github.com/pocketbase/pocketbase/tools/types"
@@ -30,45 +32,70 @@ func (pocketbaseDB *DatabaseAPI) Serve() {
 	fmt.Println("Proxy Listening On: 8888")
 	fmt.Println()
 
-	cmd := exec.Command("grroxy", "serve", "--http", "127.0.0.1:8090", "--no-banner")
+	var httpAddr string
+	// var httpsAddr string
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Println("Error creating StdoutPipe:", err)
-		return
+	httpAddr = "127.0.0.1:8090"
+	log.Println(`
+		_, err := apis.Serve(pocketbaseDB.App, apis.ServeConfig{
+		HttpAddr: httpAddr,
+		// HttpsAddr:          httpsAddr,
+		// ShowStartBanner:    showStartBanner,
+		// AllowedOrigins:     allowedOrigins,
+		// CertificateDomains: args,
+	})
+	`)
+	_, err := apis.Serve(pocketbaseDB.App, apis.ServeConfig{
+		HttpAddr: httpAddr,
+		// HttpsAddr:          httpsAddr,
+		// ShowStartBanner:    showStartBanner,
+		// AllowedOrigins:     allowedOrigins,
+		// CertificateDomains: args,
+	})
+
+	if errors.Is(err, http.ErrServerClosed) {
+		panic(err)
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		fmt.Println("Error creating StderrPipe:", err)
-		return
-	}
+	// cmd := exec.Command("grroxy", "serve", "--http", "127.0.0.1:8090", "--no-banner")
 
-	var wg sync.WaitGroup
-	wg.Add(2)
+	// stdout, err := cmd.StdoutPipe()
+	// if err != nil {
+	// 	fmt.Println("Error creating StdoutPipe:", err)
+	// 	return
+	// }
 
-	go func() {
-		defer wg.Done()
-		printOutput(stdout)
-	}()
+	// stderr, err := cmd.StderrPipe()
+	// if err != nil {
+	// 	fmt.Println("Error creating StderrPipe:", err)
+	// 	return
+	// }
 
-	go func() {
-		defer wg.Done()
-		printOutput(stderr)
-	}()
+	// var wg sync.WaitGroup
+	// wg.Add(2)
 
-	err = cmd.Start()
-	if err != nil {
-		fmt.Println("Error starting command:", err)
-		return
-	}
+	// go func() {
+	// 	defer wg.Done()
+	// 	printOutput(stdout)
+	// }()
 
-	err = cmd.Wait()
-	if err != nil {
-		fmt.Println("Command finished with error:", err)
-	}
+	// go func() {
+	// 	defer wg.Done()
+	// 	printOutput(stderr)
+	// }()
 
-	wg.Wait()
+	// err = cmd.Start()
+	// if err != nil {
+	// 	fmt.Println("Error starting command:", err)
+	// 	return
+	// }
+
+	// err = cmd.Wait()
+	// if err != nil {
+	// 	fmt.Println("Command finished with error:", err)
+	// }
+
+	// wg.Wait()
 }
 
 func printOutput(reader io.Reader) {
