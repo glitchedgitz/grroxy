@@ -90,7 +90,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 		if strings.Contains(lastfile, ".") {
 			l := strings.Split(lastfile, ".")
-			extension = l[len(l)-1]
+			extension = "." + l[len(l)-1]
 		}
 
 		if len(extension) > 10 {
@@ -250,7 +250,7 @@ func (p *Proxy) _requestAddToDB(userdata types.UserData) {
 	}
 
 	if userdata.Req.Ext != "" {
-		ext := "." + userdata.Req.Ext
+		ext := userdata.Req.Ext
 		_, definition := p.detector.GetExtDefinition(ext)
 
 		// Add extension labels
