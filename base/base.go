@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
+	"time"
 )
 
 var Color = struct {
@@ -27,6 +28,39 @@ var Color = struct {
 	White:   "\u001b[38;5;255m",
 	Reset:   "\u001b[0m",
 	Reverse: "\u001b[7m",
+}
+
+func CalculateTime(old, new time.Time) string {
+
+	timeDifference := new.Sub(old)
+
+	days := int(timeDifference.Hours()) / 24
+	hours := int(timeDifference.Hours()) % 24
+	minutes := int(timeDifference.Minutes()) % 60
+	seconds := int(timeDifference.Seconds()) % 60
+	milliseconds := int(timeDifference.Nanoseconds()/1e6) % 1000
+
+	// Construct the formatted string
+	var formattedTime string
+
+	if days > 0 {
+		formattedTime += fmt.Sprintf("%dd ", days)
+	}
+	if hours > 0 {
+		formattedTime += fmt.Sprintf("%dh ", hours)
+	}
+	if minutes > 0 {
+		formattedTime += fmt.Sprintf("%dm ", minutes)
+	}
+	if seconds > 0 {
+		formattedTime += fmt.Sprintf("%ds ", seconds)
+	}
+	if milliseconds > 0 {
+		formattedTime += fmt.Sprintf("%dms", milliseconds)
+	}
+
+	// Print the formatted time difference
+	return formattedTime
 }
 
 func CheckErr(msg string, err error) {

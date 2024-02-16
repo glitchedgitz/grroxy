@@ -314,31 +314,31 @@ func NewProxy(options *Options) (*Proxy, error) {
       "filters": [
         {
           "checked": true,
-          "filter": "req.ext !~ '.jpg' && req.ext !~ '.jpeg' && req.ext !~ '.gif' && req.ext !~ '.png' && req.ext !~ '.png'",
+          "filter": "req.ext !~ 'jpg' && req.ext !~ 'jpeg' && req.ext !~ 'gif' && req.ext !~ 'png' && req.ext !~ 'png' && req.ext !~ 'webp' && req.ext !~ 'ico'",
           "id": "dr95ZHgW",
           "type": "single"
         },
         {
           "checked": true,
-          "filter": "req.ext !~ '.css'",
+          "filter": "req.ext !~ 'css'",
           "id": "sHCDkSIf",
           "type": "single"
         },
         {
           "checked": true,
-          "filter": "req.ext !~ '.ttf' && req.ext !~ '.otf' && req.ext !~ '.woff' && req.ext !~ '.woff2' && req.ext !~ '.eot' && req.ext !~ '.svg' && req.ext !~ '.dfont' && req.ext !~ '.pfa' && req.ext !~ '.pfb' && req.ext !~ '.fon'",
+          "filter": "req.ext !~ 'ttf' && req.ext !~ 'otf' && req.ext !~ 'woff' && req.ext !~ 'woff2' && req.ext !~ 'eot' && req.ext !~ 'svg' && req.ext !~ 'dfont' && req.ext !~ 'pfa' && req.ext !~ 'pfb' && req.ext !~ 'fon'",
           "id": "T3nJMVAg",
           "type": "single"
         },
         {
           "checked": true,
-          "filter": "req.ext !~ '.mp4' && req.ext !~ '.avi' && req.ext !~ '.mkv' && req.ext !~ '.mov' && req.ext !~ '.webm'",
+          "filter": "req.ext !~ 'mp4' && req.ext !~ 'avi' && req.ext !~ 'mkv' && req.ext !~ 'mov' && req.ext !~ 'webm'",
           "id": "CbhXj0aq",
           "type": "single"
         },
         {
           "checked": true,
-          "filter": "req.ext !~ '.mp3' && req.ext !~ '.wav'",
+          "filter": "req.ext !~ 'mp3' && req.ext !~ 'wav'",
           "id": "qQWIr0ID",
           "type": "single"
         }
@@ -349,7 +349,7 @@ func NewProxy(options *Options) (*Proxy, error) {
       "type": "group"
     }
   ],
-  "filterstring": "(req.ext !~ '.jpg' && req.ext !~ '.jpeg' && req.ext !~ '.gif' && req.ext !~ '.png' && req.ext !~ '.png' && req.ext !~ '.css' && req.ext !~ '.ttf' && req.ext !~ '.otf' && req.ext !~ '.woff' && req.ext !~ '.woff2' && req.ext !~ '.eot' && req.ext !~ '.svg' && req.ext !~ '.dfont' && req.ext !~ '.pfa' && req.ext !~ '.pfb' && req.ext !~ '.fon' && req.ext !~ '.mp4' && req.ext !~ '.avi' && req.ext !~ '.mkv' && req.ext !~ '.mov' && req.ext !~ '.webm' && req.ext !~ '.mp3' && req.ext !~ '.wav')",
+  "filterstring": "(req.ext !~ 'jpg' && req.ext !~ 'jpeg' && req.ext !~ 'gif' && req.ext !~ 'png' && req.ext !~ 'png' && req.ext !~ 'css' && req.ext !~ 'ttf' && req.ext !~ 'otf' && req.ext !~ 'woff' && req.ext !~ 'woff2' && req.ext !~ 'eot' && req.ext !~ 'svg' && req.ext !~ 'dfont' && req.ext !~ 'pfa' && req.ext !~ 'pfb' && req.ext !~ 'fon' && req.ext !~ 'mp4' && req.ext !~ 'avi' && req.ext !~ 'mkv' && req.ext !~ 'mov' && req.ext !~ 'webm' && req.ext !~ 'mp3' && req.ext !~ 'wav')",
   "selectedIndex": 0,
   "sort": "created"
 }`,

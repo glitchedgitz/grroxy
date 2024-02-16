@@ -22,7 +22,7 @@ import (
 	"golang.org/x/net/http2"
 )
 
-func SendHTTPRawRequest(data rawhttp.RawRequest) (string, error) {
+func SendHTTPRawRequest(data rawhttp.RawRequest) (string, string, error) {
 	// Connect to the server
 	var host = data.Hostname
 	var port = data.Port
@@ -43,41 +43,55 @@ func SendHTTPRawRequest(data rawhttp.RawRequest) (string, error) {
 
 	var conn net.Conn
 	var err error
+	var timeBefore time.Time
+	var timeAfter time.Time
+	var timeTaken string
+
 	if data.TLS {
+		timeBefore = time.Now()
 		conn, err = tls.DialWithDialer(&net.Dialer{
 			Timeout: data.Timeout,
 		}, "tcp", addr, &tls.Config{
 			InsecureSkipVerify: true,
 		})
+		timeAfter = time.Now()
 	} else {
+		timeBefore = time.Now()
 		conn, err = net.DialTimeout("tcp", addr, data.Timeout)
+		timeAfter = time.Now()
 	}
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
+
+	timeTaken = base.CalculateTime(timeBefore, timeAfter)
+
 	defer conn.Close()
 
 	// Send the raw request
 	_, err = fmt.Fprintf(conn, "%s\r\n\r\n", rawRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to write the request: %w", err)
+		return "", "", fmt.Errorf("failed to write the request: %w", err)
 	}
 
 	// Read the response
 	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to read the response: %w", err)
+		return "", "", fmt.Errorf("failed to read the response: %w", err)
 	}
 	defer resp.Body.Close()
 
-	return grrhttp.DumpResponse(resp), nil
+	return grrhttp.DumpResponse(resp), timeTaken, nil
 }
 
-func SendHTTP2RawRequest(data rawhttp.RawRequest) (string, error) {
+func SendHTTP2RawRequest(data rawhttp.RawRequest) (string, string, error) {
 	// Connect to the server
 	var host = data.Hostname
 	var port = data.Port
 	var rawRequest = data.Request
+	var timeBefore time.Time
+	var timeAfter time.Time
+	var timeTaken string
 
 	r := bufio.NewReader(strings.NewReader(rawRequest))
 	s, err := r.ReadString('\n')
@@ -158,20 +172,25 @@ func SendHTTP2RawRequest(data rawhttp.RawRequest) (string, error) {
 	req.URL.Scheme = "https"
 
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", "", fmt.Errorf("failed to create request: %w", err)
 	}
 	// var client *http.Client
 	for header, value := range Headers {
 		req.Header.Set(header, value)
 	}
 
+	timeBefore = time.Now()
 	resp, err := http.DefaultClient.Do(req)
+	timeAfter = time.Now()
+
+	timeTaken = base.CalculateTime(timeBefore, timeAfter)
+
 	if err != nil {
-		return "", fmt.Errorf("failed to send HTTP/2 request: %w", err)
+		return "", "", fmt.Errorf("failed to send HTTP/2 request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	return grrhttp.DumpResponse(resp), nil
+	return grrhttp.DumpResponse(resp), timeTaken, nil
 }
 
 func (pocketbaseDB *DatabaseAPI) SendRawRequest(e *core.ServeEvent) error {
@@ -223,10 +242,17 @@ func (pocketbaseDB *DatabaseAPI) SendRawRequest(e *core.ServeEvent) error {
 
 			log.Println("httpversion: ", data["httpversion"])
 
+			// Get the current time
+
+			// Create another time instance, for example, 1 hour ahead
+
+			// Calculate the time difference
+			var timeTaken = ""
+
 			if data["httpversion"].(float64) == 1 {
-				respString, err = SendHTTPRawRequest(mappedData)
+				respString, timeTaken, err = SendHTTPRawRequest(mappedData)
 			} else {
-				respString, err = SendHTTP2RawRequest(mappedData)
+				respString, timeTaken, err = SendHTTP2RawRequest(mappedData)
 			}
 
 			if err != nil {
@@ -235,6 +261,7 @@ func (pocketbaseDB *DatabaseAPI) SendRawRequest(e *core.ServeEvent) error {
 
 			response := map[string]interface{}{
 				"resp": respString,
+				"time": timeTaken,
 			}
 
 			return c.JSON(http.StatusOK, response)

@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
-	"strings"
+	"runtime"
 
 	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/labstack/echo/v5"
@@ -137,26 +137,24 @@ func (pocketbaseDB *DatabaseAPI) RunningCommand(id string, command string, filen
 	var cmd *exec.Cmd
 	saveToFile := filename != ""
 
+	var useBash = runtime.GOOS != "windows"
+
 	// if saveToFile {
 	// 	command = command + " > " + c.Filename
 	// }
 	// cmd = exec.Command("cmd", "/C", command)
 
-	if strings.HasPrefix(command, "bash -c") {
-		command := strings.Trim(strings.Trim(strings.TrimLeft(command, "bash -c"), `"`), `'`)
-		if saveToFile {
-			command = command + " > " + filename
-		}
-		// command = `"` + command + `"`
+	if saveToFile {
+		command = command + " > " + filename
+	}
+
+	if useBash {
 		cmd = exec.Command("bash", "-c", command)
 	} else {
-		if saveToFile {
-			command = command + " > " + filename
-		}
 		cmd = exec.Command("cmd", "/C", command)
 	}
 
-	log.Println("RunningCommand: ", cmd)
+	log.Println("[RunningCommand] ", cmd)
 
 	// Create a pipe for the output of the command
 	_, err := cmd.StdoutPipe()
@@ -191,7 +189,15 @@ func (pocketbaseDB *DatabaseAPI) RunningCommandSaveToCollection(id, command, col
 	pocketbaseDB.SetProcess(id, process.running)
 
 	log.Println("RunningCommand: ", command)
-	cmd := exec.Command("cmd", "/C", command)
+	var cmd *exec.Cmd
+
+	var useBash = runtime.GOOS != "windows"
+
+	if useBash {
+		cmd = exec.Command("bash", "-c", command)
+	} else {
+		cmd = exec.Command("cmd", "/C", command)
+	}
 
 	// Create a pipe for the output of the command
 	stdout, err := cmd.StdoutPipe()
