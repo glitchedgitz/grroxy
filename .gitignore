@@ -19,3 +19,4 @@ builds/
 
 frontend/node_modules/
 
+cmd/grroxy/builds*
