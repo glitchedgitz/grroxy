@@ -42,6 +42,9 @@ type UserData struct {
 	RespEdited   ResponseData `db:"resp_edited,omitempty" json:"resp_edited,omitempty"`
 	Raw          string       `db:"raw,omitempty" json:"raw,omitempty"`
 	Attached     string       `db:"attached,omitempty" json:"attached,omitempty"`
+
+	// Action didn't get saved anywhere, it for intercept forward/drop. Although for below {RealtimeRecord} it's saved in `_intercept` collection.
+	Action string `db:"action,omitempty" json:"action,omitempty"`
 }
 
 type RealtimeRecord struct {

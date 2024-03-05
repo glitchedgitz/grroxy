@@ -2,7 +2,9 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -25,6 +27,19 @@ func (p *Proxy) MatchReplaceRequest(req string) string {
 	} else {
 		return fmt.Sprint(v)
 	}
+}
+
+// DropReqResp returns a response with status code 502
+// i.e. Bad Gateway and Terminate the connection
+func DropReqResp(req *http.Request) *http.Response {
+	resp := &http.Response{}
+	resp.Request = req
+	resp.Header = make(http.Header)
+	resp.StatusCode = http.StatusBadGateway
+	resp.Status = http.StatusText(http.StatusBadGateway)
+	buf := bytes.NewBufferString("")
+	resp.Body = io.NopCloser(buf)
+	return resp
 }
 
 type attach = struct {
@@ -156,7 +171,14 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	// Intercept
 	if p.options.Intercept && p.checkFilters(userdata) {
 
-		updatedString, edited := p.interceptWait(userdata, "req", req.ContentLength)
+		updatedString, edited := p.interceptWait(&userdata, "req", req.ContentLength)
+
+		if userdata.Action == "drop" {
+			ctx.UserData = userdata
+
+			log.Printf("[Request][Intercept][%s]: Dropping Request \n", userdata.Host+"/"+userdata.Req.Path)
+			return req, DropReqResp(req)
+		}
 
 		if edited {
 			userdata.IsReqEdited = true

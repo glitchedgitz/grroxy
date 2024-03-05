@@ -11,7 +11,7 @@ import (
 	"github.com/glitchedgitz/grroxy-db/types"
 )
 
-func (p *Proxy) interceptWait(userdata types.UserData, field string, contentLength int64) (string, bool) {
+func (p *Proxy) interceptWait(userdata *types.UserData, field string, contentLength int64) (string, bool) {
 	id := userdata.ID
 
 	originalData := field
@@ -44,7 +44,9 @@ func (p *Proxy) interceptWait(userdata types.UserData, field string, contentLeng
 			break
 		}
 		if ev.Record.Action == "drop" { // GPT4's Idea
+			updatedRow = ev.Record
 			action = "drop"
+			updatedRow.Action = "drop"
 			log.Printf("[WaitData][Intercept][%s]: Drop WaitData\n", id)
 			break
 		}
@@ -56,7 +58,8 @@ func (p *Proxy) interceptWait(userdata types.UserData, field string, contentLeng
 	p.grroxydb.Delete("_intercept", id)
 
 	if action == "drop" {
-		// return goproxy.NewWaitData(ctx.Req, goproxy.ContentTypeText, 444, "")
+		userdata.Action = "drop"
+		return "", false
 	}
 
 	collection := sdk.CollectionSet[any](p.grroxydb, "_raw")

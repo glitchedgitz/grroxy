@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"io"
@@ -109,28 +108,19 @@ func (p *Proxy) RunProxy() error {
 		p.httpproxy.OnRequest().DoFunc(onRequest)
 		p.httpproxy.OnResponse().DoFunc(onResponse)
 
-		// Serve the certificate when the user makes requests to /grroxy
+		// p.httpproxy.OnRequest(goproxy.DstHostIs(p.options.AppAddress)).DoFunc(func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		// 	return r, nil
+		// })
+		// p.httpproxy.OnResponse(goproxy.DstHostIs(p.options.AppAddress)).DoFunc(func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
+		// 	return resp
+
+		// })
 		p.httpproxy.OnRequest(goproxy.DstHostIs("grroxy")).DoFunc(
 			func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-				if r.URL.Path != "/cacert.crt" {
-					return r, goproxy.NewResponse(r, "text/plain", 404, "Invalid path given")
-				}
-
-				_, ca := p.certs.GetCA()
-				reader := bytes.NewReader(ca)
-
-				header := http.Header{}
-				header.Set("Content-Type", "application/pkix-cert")
-				resp := &http.Response{
-					Request:          r,
-					TransferEncoding: r.TransferEncoding,
-					Header:           header,
-					StatusCode:       200,
-					Status:           http.StatusText(200),
-					ContentLength:    int64(reader.Len()),
-					Body:             io.NopCloser(reader),
-				}
-				return r, resp
+				r.URL.Scheme = "http"
+				r.URL.Host = p.options.AppAddress // Change this to your actual Go application address
+				log.Println("Redirecting request to", r.URL.String())
+				return r, nil
 			},
 		)
 
@@ -176,7 +166,7 @@ func NewProxy(options *Options) (*Proxy, error) {
 	os.MkdirAll(options.Directory, 0755) //nolint
 
 	var grroxydb = sdk.NewClient(
-		"http://127.0.0.1:8090",
+		"http://"+options.AppAddress,
 		sdk.WithAdminEmailPassword("new@example.com", "1234567890"))
 
 	certs, err := certs.New(&certs.Options{

@@ -9,6 +9,8 @@ import (
 )
 
 type Config struct {
+	HostAddr        string
+	ProxyAddr        string
 	HomeDirectory   string
 	CWDirectory     string
 	ConfigDirectory string

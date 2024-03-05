@@ -45,7 +45,12 @@ func (p *Proxy) OnResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Res
 
 	log.Print("[OnResponse] Starting OnResponse")
 	userdata := ctx.UserData.(types.UserData)
-	log.Printf("[Response][Intercept][%s]: ResponseUserdata \n", userdata)
+	if userdata.Action == "drop" {
+		log.Printf("[Response][Intercept][%s]: Dropping Response because request dropped \n", userdata.ID)
+		return DropReqResp(ctx.Req)
+	}
+
+	userdata.Action = ""
 
 	id := userdata.ID
 	userdata.HasResp = true
@@ -85,7 +90,13 @@ func (p *Proxy) OnResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Res
 	// Intercept
 	if p.options.Intercept && p.checkFilters(userdata) {
 
-		responseInString, edited = p.interceptWait(userdata, "resp", resp.ContentLength)
+		responseInString, edited = p.interceptWait(&userdata, "resp", resp.ContentLength)
+		
+		if userdata.Action == "drop" {
+			log.Println("[Response][Intercept][%s]: Dropping Response \n", userdata.Host+"/"+userdata.Req.Path)
+			ctx.UserData = userdata
+			return DropReqResp(ctx.Req)
+		}
 
 		if edited {
 			userdata.IsRespEdited = true

@@ -10,6 +10,7 @@ import (
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/grroxy-db/api/endpoints"
+	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/spf13/cobra"
 
@@ -21,6 +22,8 @@ var conf config.Config
 var pb endpoints.DatabaseAPI
 var noUI bool
 var noProxy bool
+var HostAddress string
+var ProxyAddress string
 var showLogs bool
 var noBanner bool
 
@@ -41,6 +44,17 @@ func initialize() {
 	}
 
 	printBanner()
+
+	var err error
+	conf.HostAddr, err = base.CheckAndFindAvailablePort(HostAddress)
+	if err != nil {
+		log.Fatalln(err)
+	} else {
+		if conf.HostAddr != HostAddress {
+			fmt.Println("\nInfo: Host address is already in use. Using ", conf.HostAddr)
+		}
+	}
+	conf.ProxyAddr = ProxyAddress
 	conf.Initiate()
 }
 
@@ -86,6 +100,16 @@ func main() {
 		},
 	})
 
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "resume",
+		Run: func(cmd *cobra.Command, args []string) {
+			initialize()
+			conf.OpenProject(0)
+			serve()
+		}})
+
+	rootCmd.PersistentFlags().StringVar(&HostAddress, "host", "127.0.0.1:8090", "")
+	rootCmd.PersistentFlags().StringVar(&ProxyAddress, "proxy", "127.0.0.1:8888", "")
 	rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
 	rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
 	rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")

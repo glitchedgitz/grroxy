@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"path"
 
 	// "github.com/pocketbase/dbx"
 
@@ -31,7 +32,35 @@ func serve() {
 	}
 
 	if !noProxy {
-		go proxy.StartProxy()
+
+		go proxy.StartProxy(&proxy.Options{
+			Silent:                      false,
+			Directory:                   path.Join(pb.Config.HomeDirectory, ".config", "grroxy"),
+			CertCacheSize:               256,
+			Verbosity:                   false,
+			AppAddress:                  pb.Config.HostAddr,
+			ListenAddrHTTP:              pb.Config.ProxyAddr,
+			ListenAddrSocks5:            "127.0.0.1:10080",
+			OutputDirectory:             "grroxy_test",
+			RequestDSL:                  "",
+			ResponseDSL:                 "",
+			UpstreamHTTPProxies:         []string{},
+			UpstreamSock5Proxies:        []string{},
+			ListenDNSAddr:               "",
+			DNSMapping:                  "",
+			DNSFallbackResolver:         "",
+			RequestMatchReplaceDSL:      "",
+			ResponseMatchReplaceDSL:     "",
+			DumpRequest:                 false,
+			DumpResponse:                false,
+			UpstreamProxyRequestsNumber: 1,
+			// Elastic:                     &Elastic,
+			// Kafka:                       &Kafka,
+			Allow:     []string{},
+			Deny:      []string{},
+			Intercept: true,
+			Waiting:   true,
+		})
 	}
 	go pb.CommandManager()
 
