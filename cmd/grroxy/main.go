@@ -100,6 +100,14 @@ func main() {
 		},
 	})
 
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "resume",
+		Run: func(cmd *cobra.Command, args []string) {
+			initialize()
+			conf.OpenProject(0)
+			serve()
+		}})
+
 	rootCmd.PersistentFlags().StringVar(&HostAddress, "host", "127.0.0.1:8090", "")
 	rootCmd.PersistentFlags().StringVar(&ProxyAddress, "proxy", "127.0.0.1:8888", "")
 	rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
