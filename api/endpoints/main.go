@@ -25,12 +25,13 @@ func (pocketbaseDB *DatabaseAPI) Serve() {
 	pocketbaseDB.App.Bootstrap()
 
 	fmt.Printf(`
-	Application:        %s
-	Database:           %s/_/
-	API:                %s/api/
-	Cert:               %s/cacert.crt
-	
-	Proxy Listening On: %s
+Application:        http://%s
+Database:           http://%s/_/
+API:                http://%s/api/
+Cert:               http://%s/cacert.crt
+
+Proxy Listening On: %s
+
 	`, pocketbaseDB.Config.HostAddr, pocketbaseDB.Config.HostAddr, pocketbaseDB.Config.HostAddr, pocketbaseDB.Config.HostAddr, pocketbaseDB.Config.ProxyAddr)
 
 	// var httpsAddr string

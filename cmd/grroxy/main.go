@@ -10,6 +10,7 @@ import (
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/grroxy-db/api/endpoints"
+	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/spf13/cobra"
 
@@ -43,7 +44,16 @@ func initialize() {
 	}
 
 	printBanner()
-	conf.HostAddr = HostAddress
+
+	var err error
+	conf.HostAddr, err = base.CheckAndFindAvailablePort(HostAddress)
+	if err != nil {
+		log.Fatalln(err)
+	} else {
+		if conf.HostAddr != HostAddress {
+			fmt.Println("\nInfo: Host address is already in use. Using ", conf.HostAddr)
+		}
+	}
 	conf.ProxyAddr = ProxyAddress
 	conf.Initiate()
 }
