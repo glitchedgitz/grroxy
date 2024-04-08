@@ -6,6 +6,7 @@ import (
 
 	// "github.com/pocketbase/dbx"
 
+	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/api"
 	"github.com/glitchedgitz/grroxy-db/proxy"
 	"github.com/pocketbase/pocketbase"
@@ -27,6 +28,7 @@ func serve() {
 				// DefaultEncryptionEnv: "hJH#GRJ#HG$JH$54h5kjhHJG#JHG#*&Y&EG#F&GIG@JKGH$JHRGJ##JKJH#JHG",
 			},
 		),
+		Cook:       cook.NewWithoutConfig(),
 		Config:     &conf,
 		CmdChannel: make(chan api.RunCommandData),
 	}
@@ -79,6 +81,7 @@ func serve() {
 	API.App.OnBeforeServe().Add(API.SaveFile)
 	API.App.OnBeforeServe().Add(API.ReadFile)
 	API.App.OnBeforeServe().Add(API.DownloadCert)
+	API.App.OnBeforeServe().Add(API.CookSearch)
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		API.App.Dao().DB().NewQuery(`
 			DELETE FROM _intercept;

@@ -3,10 +3,9 @@ package api
 import (
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 
+	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -18,6 +17,7 @@ import (
 type Backend struct {
 	App        *pocketbase.PocketBase
 	Config     *config.Config
+	Cook       *cook.COOK
 	CmdChannel chan RunCommandData
 }
 
@@ -37,82 +37,12 @@ Proxy Listening On: %s
 	// var httpsAddr string
 
 	var httpAddr = backend.Config.HostAddr
-	log.Println(`
-		_, err := apis.Serve(backend.App, apis.ServeConfig{
-		HttpAddr: httpAddr,
-		// HttpsAddr:          httpsAddr,
-		// ShowStartBanner:    showStartBanner,
-		// AllowedOrigins:     allowedOrigins,
-		// CertificateDomains: args,
-	})
-	`)
 	_, err := apis.Serve(backend.App, apis.ServeConfig{
 		HttpAddr: httpAddr,
-		// HttpsAddr:          httpsAddr,
-		// ShowStartBanner:    showStartBanner,
-		// AllowedOrigins:     allowedOrigins,
-		// CertificateDomains: args,
 	})
 
 	if errors.Is(err, http.ErrServerClosed) {
 		panic(err)
-	}
-
-	// cmd := exec.Command("grroxy", "serve", "--http", "127.0.0.1:8090", "--no-banner")
-
-	// stdout, err := cmd.StdoutPipe()
-	// if err != nil {
-	// 	fmt.Println("Error creating StdoutPipe:", err)
-	// 	return
-	// }
-
-	// stderr, err := cmd.StderrPipe()
-	// if err != nil {
-	// 	fmt.Println("Error creating StderrPipe:", err)
-	// 	return
-	// }
-
-	// var wg sync.WaitGroup
-	// wg.Add(2)
-
-	// go func() {
-	// 	defer wg.Done()
-	// 	printOutput(stdout)
-	// }()
-
-	// go func() {
-	// 	defer wg.Done()
-	// 	printOutput(stderr)
-	// }()
-
-	// err = cmd.Start()
-	// if err != nil {
-	// 	fmt.Println("Error starting command:", err)
-	// 	return
-	// }
-
-	// err = cmd.Wait()
-	// if err != nil {
-	// 	fmt.Println("Command finished with error:", err)
-	// }
-
-	// wg.Wait()
-}
-
-func printOutput(reader io.Reader) {
-	buf := make([]byte, 1024)
-	for {
-		n, err := reader.Read(buf)
-		if n > 0 {
-			fmt.Print(string(buf[:n]))
-		}
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			fmt.Println("Error reading from pipe:", err)
-			break
-		}
 	}
 }
 
