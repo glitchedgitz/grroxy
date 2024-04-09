@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/schemas"
@@ -58,17 +60,34 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 
 			// New Host
 			go func() {
+
+				log.Println("Checking: new collection for host: ", SitemapCollectionName)
+
 				if !collectionExists {
 					wg.Add(1)
 					defer wg.Done()
-					// Fetch fingerprints
-					resp, err := http.DefaultClient.Get(data.Host)
+
 					var fingerprints map[string]struct{} = make(map[string]struct{})
 					var respData []byte = []byte("0")
 					var jsonBytes []byte = []byte("0")
 					var status int = 0
-					// Fingerprint to json
+
+					log.Println("sending request to: ", SitemapCollectionName)
+					ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) // Timeout after 5 seconds
+					defer cancel()                                                          // Cancel the context to release resources
+
+					// Create an HTTP request
+					req, err := http.NewRequestWithContext(ctx, "GET", data.Host, nil)
+					if err != nil {
+						log.Println(err)
+					}
+
+					// Perform the HTTP request
+					resp, err := http.DefaultClient.Do(req)
+					log.Println("got request to: ", SitemapCollectionName)
 					jsonString := "{}"
+
+					log.Println("Checking: wappalyzer for: ", SitemapCollectionName)
 
 					if err != nil {
 						log.Println("[http.DefaultClient.Get]: ", err)
@@ -96,9 +115,14 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 							}
 						}
 					}
+					log.Println("Checked: wappalyzer for: ", SitemapCollectionName)
 
 					// Insert row in _hosts
-					u, _ := tld.Parse(data.Host)
+					u, err := tld.Parse(data.Host)
+					if err != nil {
+						log.Println(err)
+					}
+
 					// title, _ := "", ""
 					title, _ := base.ExtractTitle(respData)
 
@@ -120,6 +144,8 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 						})
 					}
 				}
+				log.Println("Checked: new collection for host: ", SitemapCollectionName)
+
 			}()
 
 			// Inserting endpoint data
