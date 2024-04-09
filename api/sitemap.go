@@ -135,7 +135,7 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 						"tech":      jsonString,
 					})
 
-					for key, _ := range fingerprints {
+					for key := range fingerprints {
 						backend.SaveRecordToCollection("_tech", map[string]interface{}{
 							"name":     key,
 							"image":    "",

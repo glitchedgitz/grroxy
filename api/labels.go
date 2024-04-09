@@ -205,10 +205,6 @@ func (backend *Backend) LabelAttach(e *core.ServeEvent) error {
 				return err
 			}
 
-			if err != nil {
-				log.Println("[LabelNew] Error: ", err)
-			}
-
 			return c.String(http.StatusOK, "Created")
 		},
 		Middlewares: []echo.MiddlewareFunc{
