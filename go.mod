@@ -1,8 +1,8 @@
 module github.com/glitchedgitz/grroxy-db
 
-go 1.21
+go 1.22.0
 
-toolchain go1.21.5
+toolchain go1.22.2
 
 require (
 	github.com/SierraSoftworks/multicast/v2 v2.0.0
@@ -14,6 +14,7 @@ require (
 	github.com/duke-git/lancet/v2 v2.3.0
 	github.com/elazarl/goproxy v0.0.0-20231117061959-7cc037d33fb5
 	github.com/glitchedgitz/cook/v2 v2.2.0
+	github.com/glitchedgitz/wappalyzergo v0.0.2
 	github.com/go-resty/resty/v2 v2.12.0
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/haxii/fastproxy v0.6.0
@@ -28,7 +29,6 @@ require (
 	github.com/projectdiscovery/gologger v1.1.12
 	github.com/projectdiscovery/roundrobin v0.0.6
 	github.com/projectdiscovery/tinydns v0.0.31
-	github.com/projectdiscovery/wappalyzergo v0.0.116
 	github.com/rs/xid v1.5.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
@@ -185,6 +185,8 @@ require (
 	modernc.org/strutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
 )
+
+// replace github.com/glitchedgitz/wappalyzergo v0.0.116 => github.com/glitchedgitz/wappalyzergo v0.0.1
 
 // replace github.com/glitchedgitz/cook/v2/pkg/cook => ../cook/v2/pkg/cook
 

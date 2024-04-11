@@ -7,6 +7,7 @@ import (
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/config"
+	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/models"
@@ -18,6 +19,7 @@ type Backend struct {
 	App        *pocketbase.PocketBase
 	Config     *config.Config
 	Cook       *cook.COOK
+	Wappalyzer *wappalyzer.Wappalyze
 	CmdChannel chan RunCommandData
 }
 

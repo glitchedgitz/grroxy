@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -15,12 +14,12 @@ import (
 	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/glitchedgitz/grroxy-db/types"
+	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/jpillora/go-tld"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
-	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 )
 
 func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
@@ -67,14 +66,13 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 					wg.Add(1)
 					defer wg.Done()
 
-					var fingerprints map[string]struct{} = make(map[string]struct{})
+					var fingerprints map[string]wappalyzer.LogoAndInfo = make(map[string]wappalyzer.LogoAndInfo)
 					var respData []byte = []byte("0")
-					var jsonBytes []byte = []byte("0")
 					var status int = 0
 
 					log.Println("sending request to: ", SitemapCollectionName)
-					ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second) // Timeout after 5 seconds
-					defer cancel()                                                          // Cancel the context to release resources
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // Timeout after 5 seconds
+					defer cancel()                                                           // Cancel the context to release resources
 
 					// Create an HTTP request
 					req, err := http.NewRequestWithContext(ctx, "GET", data.Host, nil)
@@ -85,7 +83,6 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 					// Perform the HTTP request
 					resp, err := http.DefaultClient.Do(req)
 					log.Println("got request to: ", SitemapCollectionName)
-					jsonString := "{}"
 
 					log.Println("Checking: wappalyzer for: ", SitemapCollectionName)
 
@@ -97,22 +94,10 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 							log.Println(err)
 						} else {
 							status = resp.StatusCode
-							wappalyzerClient, err := wappalyzer.New()
-							if err != nil {
-								log.Println("Wappylyzer Error: ", err)
-							} else {
 
-								// Todo: Create a custom wappylyzer to give back the logo and accent color of tech
+							fingerprints = backend.Wappalyzer.FingerprintWithLogoAndInfo(resp.Header, respData)
 
-								fingerprints = wappalyzerClient.Fingerprint(resp.Header, respData)
-								jsonBytes, err = json.Marshal(fingerprints)
-								if err != nil {
-									log.Println(err)
-								} else {
-									jsonString = string(jsonBytes)
-								}
-								fmt.Printf("Wappylyzer Fingerprints %v\n", fingerprints)
-							}
+							fmt.Printf("Wappylyzer Fingerprints %v\n", fingerprints)
 						}
 					}
 					log.Println("Checked: wappalyzer for: ", SitemapCollectionName)
@@ -126,23 +111,39 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 					// title, _ := "", ""
 					title, _ := base.ExtractTitle(respData)
 
+					recordIDs := []string{}
+
+					// TODO: Having a array of tech and hosts in the sitemap could save quite a lot of requests
+
+					for key, value := range fingerprints {
+						r, err := backend.SaveRecordToCollection("_tech", map[string]interface{}{
+							"name":  key,
+							"image": value.Logo,
+							"extra": map[string]any{
+								"category":    value.Cats,
+								"description": value.Description,
+								"website":     value.Website,
+							},
+						})
+						if err != nil {
+							// Most probably it's a duplicate and we can fetch the ID
+							r, err = backend.GetRecord("_tech", fmt.Sprintf("name = '%s'", key))
+							if err != nil {
+								log.Println(err)
+							}
+						}
+						recordIDs = append(recordIDs, r.Id)
+					}
+
 					backend.SaveRecordToCollection("_hosts", map[string]interface{}{
 						"host":      data.Host,
 						"smartsort": base.SmartSort(data.Host),
 						"domain":    u.Domain + "." + u.TLD,
 						"status":    status,
 						"title":     title,
-						"tech":      jsonString,
+						"tech":      recordIDs,
 					})
 
-					for key := range fingerprints {
-						backend.SaveRecordToCollection("_tech", map[string]interface{}{
-							"name":     key,
-							"image":    "",
-							"category": "",
-							"extra":    "{}",
-						})
-					}
 				}
 				log.Println("Checked: new collection for host: ", SitemapCollectionName)
 

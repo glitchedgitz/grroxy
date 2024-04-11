@@ -94,12 +94,17 @@ var Tech = schema.NewSchema(
 	&schema.SchemaField{
 		Name:     "image",
 		Type:     schema.FieldTypeText,
-		Required: true,
+		Required: false,
+	},
+	&schema.SchemaField{
+		Name:     "color",
+		Type:     schema.FieldTypeText,
+		Required: false,
 	},
 	&schema.SchemaField{
 		Name:     "category",
 		Type:     schema.FieldTypeText,
-		Required: true,
+		Required: false,
 	},
 	&schema.SchemaField{
 		Name: "extra",

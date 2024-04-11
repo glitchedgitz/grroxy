@@ -9,6 +9,7 @@ import (
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/api"
 	"github.com/glitchedgitz/grroxy-db/proxy"
+	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
@@ -18,6 +19,11 @@ import (
 )
 
 func serve() {
+
+	wappalyzerClient, err := wappalyzer.New()
+	if err != nil {
+		log.Println("Wappylyzer Error: ", err)
+	}
 
 	// Create an instance of the app structure
 	API = api.Backend{
@@ -29,6 +35,7 @@ func serve() {
 			},
 		),
 		Cook:       cook.NewWithoutConfig(),
+		Wappalyzer: wappalyzerClient,
 		Config:     &conf,
 		CmdChannel: make(chan api.RunCommandData),
 	}

@@ -6,10 +6,18 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 )
 
-func (backend *Backend) SaveRecordToCollection(collectionName string, data map[string]any) {
+func (backend *Backend) GetRecord(collectionName string, filter string) (*models.Record, error) {
+	r, err := backend.App.Dao().FindFirstRecordByFilter(collectionName, filter)
+	return r, err
+}
+
+func (backend *Backend) SaveRecordToCollection(collectionName string, data map[string]any) (*models.Record, error) {
+
+	log.Println("SaveRecordToCollection: ", collectionName, data)
+
 	collection, err := backend.App.Dao().FindCollectionByNameOrId(collectionName)
 	if err != nil {
-		log.Println("Error: ", err)
+		return nil, err
 	}
 
 	record := models.NewRecord(collection)
@@ -21,6 +29,8 @@ func (backend *Backend) SaveRecordToCollection(collectionName string, data map[s
 	err = backend.App.Dao().Save(record)
 
 	if err != nil {
-		log.Println("Error: ", err)
+		return nil, err
 	}
+
+	return record, nil
 }

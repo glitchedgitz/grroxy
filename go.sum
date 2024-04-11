@@ -150,6 +150,8 @@ github.com/ganigeorgiev/fexpr v0.4.0 h1:ojitI+VMNZX/odeNL1x3RzTTE8qAIVvnSSYPNAnQ
 github.com/ganigeorgiev/fexpr v0.4.0/go.mod h1:RyGiGqmeXhEQ6+mlGdnUleLHgtzzu/VGO2WtJkF5drE=
 github.com/glitchedgitz/cook/v2 v2.2.0 h1:Zclej4WF7zaklE2ewI9sv87a4tfGQPsOQ5MrUkmA+rY=
 github.com/glitchedgitz/cook/v2 v2.2.0/go.mod h1:D1IT4k6xroTdvnn1xQmS9QL8WYNq7jrXgAXtRLv9YwU=
+github.com/glitchedgitz/wappalyzergo v0.0.2 h1:xcb2Pb/Caxdq+6QbDy2zbZNITv43fCp4V7MZuu0Vsr0=
+github.com/glitchedgitz/wappalyzergo v0.0.2/go.mod h1:BKaron6hw6U0zTDtMpYOvDePID2ZkuzLs2l/tfJhJ2o=
 github.com/go-logr/logr v1.4.1 h1:pKouT5E8xu9zeFC39JXRDukb6JFQPXM5p5I91188VAQ=
 github.com/go-logr/logr v1.4.1/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
 github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
@@ -371,13 +373,9 @@ github.com/projectdiscovery/tinydns v0.0.31 h1:iQL1ze2/4PHWH+Nzsxg35kVIWkvEIatAZ
 github.com/projectdiscovery/tinydns v0.0.31/go.mod h1:6rj/dEzXZPn+nLl4O1wUMJdfkdUQ9eCV7NsDWPakYv8=
 github.com/projectdiscovery/utils v0.0.87 h1:9+RiTEhpUB/vk6XJUVpysNWJ2aCTD7WuyoyAcNnbIzk=
 github.com/projectdiscovery/utils v0.0.87/go.mod h1:jGK450sL9AVDTjaPwEs9za8NVeEC9xE97IWNoK138kI=
-github.com/projectdiscovery/wappalyzergo v0.0.116 h1:xy+mBpwbYo/0PSzmJOQ/RXHomEh0D3nDBcbCxsW69m8=
-github.com/projectdiscovery/wappalyzergo v0.0.116/go.mod h1:hc/o+fgM8KtdpFesjfBTmHTwsR+yBd+4kYZW/DGy/x8=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=
 github.com/quic-go/quic-go v0.42.0 h1:uSfdap0eveIl8KXnipv9K7nlwZ5IqLlYOpJ58u5utpM=
 github.com/quic-go/quic-go v0.42.0/go.mod h1:132kz4kL3F9vxhW3CtQJLDVwcFe5wdWeJXXijhsO57M=
-github.com/r--w/pocketbase v0.13.0 h1:QD1wlJkRnbYAshzkW2re60xpICkSi66g6a/X0GEJROg=
-github.com/r--w/pocketbase v0.13.0/go.mod h1:rJe9N3Ybe4hjpEAZ9cQbGl6x741K+GJu7gcXo6i0i+4=
 github.com/refraction-networking/utls v1.6.3 h1:MFOfRN35sSx6K5AZNIoESsBuBxS2LCgRilRIdHb6fDc=
 github.com/refraction-networking/utls v1.6.3/go.mod h1:yil9+7qSl+gBwJqztoQseO6Pr3h62pQoY1lXiNR/FPs=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
