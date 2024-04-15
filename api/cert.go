@@ -1,4 +1,4 @@
-package endpoints
+package api
 
 import (
 	"bufio"
@@ -15,7 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func (pocketbaseDB *DatabaseAPI) DownloadCert(e *core.ServeEvent) error {
+func (backend *Backend) DownloadCert(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodGet,
 		Path:   "/cacert.crt",
@@ -38,7 +38,7 @@ func (pocketbaseDB *DatabaseAPI) DownloadCert(e *core.ServeEvent) error {
 			bf := bufio.NewReader(reader)
 			respbody, err := io.ReadAll(bf)
 
-			filePath := path.Join(pocketbaseDB.Config.ConfigDirectory, "cacert.crt")
+			filePath := path.Join(backend.Config.ConfigDirectory, "cacert.crt")
 			save.WriteFile(filePath, respbody)
 
 			if err != nil {
@@ -49,7 +49,7 @@ func (pocketbaseDB *DatabaseAPI) DownloadCert(e *core.ServeEvent) error {
 
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil

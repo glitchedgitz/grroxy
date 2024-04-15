@@ -1,4 +1,4 @@
-package endpoints
+package api
 
 import (
 	"bufio"
@@ -17,14 +17,14 @@ import (
 )
 
 // loop over commandChannel
-func (pocketbaseDB *DatabaseAPI) CommandManager() {
+func (backend *Backend) CommandManager() {
 	// log.Println("[CommandManager Stared]")
-	for c := range pocketbaseDB.CmdChannel {
+	for c := range backend.CmdChannel {
 		log.Println("Command received: ", c)
 		if c.SaveTo == "collection" {
-			pocketbaseDB.RunningCommandSaveToCollection(c.ID, c.Command, c.Collection)
+			backend.RunningCommandSaveToCollection(c.ID, c.Command, c.Collection)
 		} else {
-			pocketbaseDB.RunningCommand(c.ID, c.Command, c.Filename)
+			backend.RunningCommand(c.ID, c.Command, c.Filename)
 		}
 	}
 }
@@ -41,18 +41,18 @@ var process = struct {
 	killed:    "Killed",
 }
 
-func (pocketbaseDB *DatabaseAPI) SetProcess(id, state string) {
-	record, err := pocketbaseDB.App.Dao().FindRecordById("_processes", id)
+func (backend *Backend) SetProcess(id, state string) {
+	record, err := backend.App.Dao().FindRecordById("_processes", id)
 	base.CheckErr("", err)
 
 	record.Set("state", state)
 
-	err = pocketbaseDB.App.Dao().SaveRecord(record)
+	err = backend.App.Dao().SaveRecord(record)
 	base.CheckErr("[RegisterProcessInDB][SaveRecord]", err)
 }
 
-func (pocketbaseDB *DatabaseAPI) RegisterProcessInDB(data, state string) string {
-	collection, err := pocketbaseDB.App.Dao().FindCollectionByNameOrId("_processes")
+func (backend *Backend) RegisterProcessInDB(data, state string) string {
+	collection, err := backend.App.Dao().FindCollectionByNameOrId("_processes")
 	base.CheckErr("[RunningCommand][FindCollection]:", err)
 
 	record := models.NewRecord(collection)
@@ -63,7 +63,7 @@ func (pocketbaseDB *DatabaseAPI) RegisterProcessInDB(data, state string) string 
 	record.Set("data", data)
 	record.Set("state", state)
 
-	err = pocketbaseDB.App.Dao().SaveRecord(record)
+	err = backend.App.Dao().SaveRecord(record)
 	base.CheckErr("[RegisterProcessInDB][SaveRecord]", err)
 	return id
 }
@@ -92,7 +92,7 @@ func (d *RunCommandData) Scan(value interface{}) error {
 	}
 }
 
-func (pocketbaseDB *DatabaseAPI) RunCommand(e *core.ServeEvent) error {
+func (backend *Backend) RunCommand(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/runcommand",
@@ -113,27 +113,27 @@ func (pocketbaseDB *DatabaseAPI) RunCommand(e *core.ServeEvent) error {
 
 			log.Println("[RunCommand]: ", data)
 
-			id := pocketbaseDB.RegisterProcessInDB(data.Data, process.inqueue)
+			id := backend.RegisterProcessInDB(data.Data, process.inqueue)
 
 			data.ID = id
 
 			// send to channel
-			pocketbaseDB.CmdChannel <- data
+			backend.CmdChannel <- data
 
 			return c.JSON(http.StatusOK, map[string]interface{}{
 				"id": id,
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
 }
 
-func (pocketbaseDB *DatabaseAPI) RunningCommand(id string, command string, filename string) {
+func (backend *Backend) RunningCommand(id string, command string, filename string) {
 
-	pocketbaseDB.SetProcess(id, process.running)
+	backend.SetProcess(id, process.running)
 	var cmd *exec.Cmd
 	saveToFile := filename != ""
 
@@ -160,7 +160,7 @@ func (pocketbaseDB *DatabaseAPI) RunningCommand(id string, command string, filen
 	_, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Println("Error creating stdout pipe:", err)
-		pocketbaseDB.SetProcess(id, fmt.Sprintf("%v error", err))
+		backend.SetProcess(id, fmt.Sprintf("%v error", err))
 		return
 	}
 
@@ -168,7 +168,7 @@ func (pocketbaseDB *DatabaseAPI) RunningCommand(id string, command string, filen
 	err = cmd.Start()
 	if err != nil {
 		log.Println("Error starting command:", err)
-		pocketbaseDB.SetProcess(id, fmt.Sprintf("%v error", err))
+		backend.SetProcess(id, fmt.Sprintf("%v error", err))
 		return
 	}
 
@@ -177,16 +177,16 @@ func (pocketbaseDB *DatabaseAPI) RunningCommand(id string, command string, filen
 
 	if err != nil {
 		log.Println("Error waiting for command:", err)
-		pocketbaseDB.SetProcess(id, fmt.Sprintf("%v error", err))
+		backend.SetProcess(id, fmt.Sprintf("%v error", err))
 		return
 	}
 
-	pocketbaseDB.SetProcess(id, process.completed)
+	backend.SetProcess(id, process.completed)
 }
 
-func (pocketbaseDB *DatabaseAPI) RunningCommandSaveToCollection(id, command, collectionName string) {
+func (backend *Backend) RunningCommandSaveToCollection(id, command, collectionName string) {
 
-	pocketbaseDB.SetProcess(id, process.running)
+	backend.SetProcess(id, process.running)
 
 	log.Println("RunningCommand: ", command)
 	var cmd *exec.Cmd
@@ -203,7 +203,7 @@ func (pocketbaseDB *DatabaseAPI) RunningCommandSaveToCollection(id, command, col
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Println("Error creating stdout pipe:", err)
-		pocketbaseDB.SetProcess(id, fmt.Sprintf("%v error", err))
+		backend.SetProcess(id, fmt.Sprintf("%v error", err))
 		return
 	}
 
@@ -211,14 +211,14 @@ func (pocketbaseDB *DatabaseAPI) RunningCommandSaveToCollection(id, command, col
 	err = cmd.Start()
 	if err != nil {
 		log.Println("Error starting command:", err)
-		pocketbaseDB.SetProcess(id, fmt.Sprintf("%v error", err))
+		backend.SetProcess(id, fmt.Sprintf("%v error", err))
 		return
 	}
 
 	// Create a scanner to read the output line by line
 	scanner := bufio.NewScanner(stdout)
 
-	collection, err := pocketbaseDB.App.Dao().FindCollectionByNameOrId(collectionName)
+	collection, err := backend.App.Dao().FindCollectionByNameOrId(collectionName)
 	base.CheckErr("[RunningCommand][FindCollection]:", err)
 
 	// Read the output in real-time
@@ -228,7 +228,7 @@ func (pocketbaseDB *DatabaseAPI) RunningCommandSaveToCollection(id, command, col
 
 		record := models.NewRecord(collection)
 		record.Set("data", jsonrow)
-		err = pocketbaseDB.App.Dao().SaveRecord(record)
+		err = backend.App.Dao().SaveRecord(record)
 		base.CheckErr("[RunningCommand][SaveRecord]:", err)
 	}
 
@@ -237,10 +237,10 @@ func (pocketbaseDB *DatabaseAPI) RunningCommandSaveToCollection(id, command, col
 
 	if err != nil {
 		log.Println("Error waiting for command:", err)
-		pocketbaseDB.SetProcess(id, fmt.Sprintf("%v error", err))
+		backend.SetProcess(id, fmt.Sprintf("%v error", err))
 		return
 	}
 
-	pocketbaseDB.SetProcess(id, process.completed)
+	backend.SetProcess(id, process.completed)
 
 }

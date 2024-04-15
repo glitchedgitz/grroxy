@@ -40,6 +40,13 @@ var Collections = []DB{
 		`,
 	},
 	{
+		"_tech",
+		Tech,
+		true, `
+		CREATE UNIQUE INDEX idx_techname ON _tech (name);
+		`,
+	},
+	{
 		"_intercept",
 		Intercept,
 		false,

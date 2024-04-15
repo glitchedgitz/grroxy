@@ -1,14 +1,17 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -115,14 +118,39 @@ func (p *Proxy) RunProxy() error {
 		// 	return resp
 
 		// })
+
 		p.httpproxy.OnRequest(goproxy.DstHostIs("grroxy")).DoFunc(
 			func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-				r.URL.Scheme = "http"
-				r.URL.Host = p.options.AppAddress // Change this to your actual Go application address
-				log.Println("Redirecting request to", r.URL.String())
-				return r, nil
+				if r.URL.Path != "/cacert.crt" {
+					return r, goproxy.NewResponse(r, "text/plain", 404, "Invalid path given")
+				}
+
+				_, ca := p.certs.GetCA()
+				reader := bytes.NewReader(ca)
+
+				header := http.Header{}
+				header.Set("Content-Type", "application/pkix-cert")
+				resp := &http.Response{
+					Request:          r,
+					TransferEncoding: r.TransferEncoding,
+					Header:           header,
+					StatusCode:       200,
+					Status:           http.StatusText(200),
+					ContentLength:    int64(reader.Len()),
+					Body:             ioutil.NopCloser(reader),
+				}
+				return r, resp
 			},
 		)
+
+		// p.httpproxy.OnRequest(goproxy.DstHostIs("grroxy")).DoFunc(
+		// 	func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		// 		r.URL.Scheme = "http"
+		// 		r.URL.Host = p.options.AppAddress // Change this to your actual Go application address
+		// 		log.Println("Redirecting request to", r.URL.String())
+		// 		return r, nil
+		// 	},
+		// )
 
 		// p.httpproxy.OnResponse(goproxy.DstHostIs("grroxy")).DoFunc(
 		// 	func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
@@ -169,9 +197,14 @@ func NewProxy(options *Options) (*Proxy, error) {
 		"http://"+options.AppAddress,
 		sdk.WithAdminEmailPassword("new@example.com", "1234567890"))
 
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
 	certs, err := certs.New(&certs.Options{
-		CacheSize: options.CertCacheSize,
-		Directory: options.Directory,
+		CacheSize: 256,
+		Directory: path.Join(homeDir, ".config", "grroxy"),
 	})
 	if err != nil {
 		return nil, err
@@ -207,20 +240,22 @@ func NewProxy(options *Options) (*Proxy, error) {
 	fastdialerOptions.Deny = options.Deny
 	fastdialerOptions.Allow = options.Allow
 	if options.ListenDNSAddr != "" {
-		dnsmapping := make(map[string]string)
+		dnsmapping := make(map[string]*tinydns.DnsRecord)
 		for _, record := range strings.Split(options.DNSMapping, ",") {
 			data := strings.Split(record, ":")
 			if len(data) != 2 {
 				continue
 			}
-			dnsmapping[data[0]] = data[1]
+			dnsmapping[data[0]] = &tinydns.DnsRecord{A: []string{data[1]}}
 		}
-		tdns = tinydns.NewTinyDNS(&tinydns.OptionsTinyDNS{
-			ListenAddress:       options.ListenDNSAddr,
-			Net:                 "udp",
-			FallbackDNSResolver: options.DNSFallbackResolver,
-			DomainToAddress:     dnsmapping,
+
+		tdns, err = tinydns.New(&tinydns.Options{
+			ListenAddress:   options.ListenDNSAddr,
+			Net:             "udp",
+			UpstreamServers: []string{options.DNSFallbackResolver},
+			DnsRecords:      dnsmapping,
 		})
+
 		fastdialerOptions.BaseResolvers = []string{"127.0.0.1" + options.ListenDNSAddr}
 	}
 	dialer, err := fastdialer.NewDialer(fastdialerOptions)

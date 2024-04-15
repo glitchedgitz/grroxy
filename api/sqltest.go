@@ -1,4 +1,4 @@
-package endpoints
+package api
 
 import (
 	"database/sql"
@@ -21,7 +21,7 @@ type CountResult struct {
 	CountOfDistinctRows int `db:"CountOfDistinctRows" json:"CountOfDistinctRows"`
 }
 
-func (pocketbaseDB *DatabaseAPI) TextSQL(e *core.ServeEvent) error {
+func (backend *Backend) TextSQL(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: "POST",
 		Path:   "/api/sqltest",
@@ -41,7 +41,7 @@ func (pocketbaseDB *DatabaseAPI) TextSQL(e *core.ServeEvent) error {
 
 			var results sql.Result
 
-			query := pocketbaseDB.App.Dao().DB().NewQuery(data.SQL)
+			query := backend.App.Dao().DB().NewQuery(data.SQL)
 			log.Println("[TextSQL] ", results)
 
 			// if err != nil {
@@ -62,7 +62,7 @@ func (pocketbaseDB *DatabaseAPI) TextSQL(e *core.ServeEvent) error {
 			return c.JSON(http.StatusOK, resultStr)
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 

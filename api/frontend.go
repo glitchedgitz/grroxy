@@ -1,4 +1,4 @@
-package endpoints
+package api
 
 import (
 	"net/http"
@@ -9,13 +9,13 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func (pocketbaseDB *DatabaseAPI) BindFrontend(e *core.ServeEvent) error {
+func (backend *Backend) BindFrontend(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method:  http.MethodGet,
 		Path:    "/*",
 		Handler: echo.StaticDirectoryHandler(frontend.DistDirFS, false),
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil

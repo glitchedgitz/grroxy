@@ -1,6 +1,8 @@
 package schemas
 
-import "github.com/pocketbase/pocketbase/models/schema"
+import (
+	"github.com/pocketbase/pocketbase/models/schema"
+)
 
 var Sites = schema.NewSchema(
 	&schema.SchemaField{
@@ -35,9 +37,9 @@ var Sites = schema.NewSchema(
 	},
 	&schema.SchemaField{
 		Name: "tech",
-		Type: schema.FieldTypeJson,
-		Options: &schema.JsonOptions{
-			MaxSize: 100000,
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId: "_tech",
 		},
 	},
 	&schema.SchemaField{

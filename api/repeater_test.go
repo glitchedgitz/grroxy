@@ -1,6 +1,6 @@
 // repeater.go
 
-package endpoints
+package api
 
 import (
 	"log"
@@ -38,10 +38,11 @@ Upgrade-Insecure-Requests: 1
 
 	// Test each case
 	for _, tc := range testCases {
-		respString, err := SendHTTP2RawRequest(tc)
+		respString, time, err := SendHTTP2RawRequest(tc)
 		if err != nil {
 			log.Println(err)
 		}
 		log.Println(respString)
+		log.Println(time)
 	}
 }

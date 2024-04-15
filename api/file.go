@@ -1,4 +1,4 @@
-package endpoints
+package api
 
 import (
 	"log"
@@ -14,7 +14,7 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 )
 
-func (pocketbaseDB *DatabaseAPI) ReadFile(e *core.ServeEvent) error {
+func (backend *Backend) ReadFile(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/readfile",
@@ -41,10 +41,10 @@ func (pocketbaseDB *DatabaseAPI) ReadFile(e *core.ServeEvent) error {
 			cwd := ""
 			if from == "cache" {
 				log.Println("cache")
-				filePath = path.Join(pocketbaseDB.Config.CacheDirectory, fileName)
+				filePath = path.Join(backend.Config.CacheDirectory, fileName)
 			} else if from == "config" {
 				log.Println("config")
-				filePath = path.Join(pocketbaseDB.Config.ConfigDirectory, fileName)
+				filePath = path.Join(backend.Config.ConfigDirectory, fileName)
 			} else {
 				log.Println("cwd")
 				cwd, _ = os.Getwd()
@@ -58,13 +58,13 @@ func (pocketbaseDB *DatabaseAPI) ReadFile(e *core.ServeEvent) error {
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
 }
 
-func (pocketbaseDB *DatabaseAPI) SaveFile(e *core.ServeEvent) error {
+func (backend *Backend) SaveFile(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/savefile",
@@ -85,7 +85,7 @@ func (pocketbaseDB *DatabaseAPI) SaveFile(e *core.ServeEvent) error {
 			fileName := data["fileName"].(string)
 			fileData := data["fileData"].(string)
 
-			filePath := path.Join(pocketbaseDB.Config.CacheDirectory, fileName)
+			filePath := path.Join(backend.Config.CacheDirectory, fileName)
 
 			// Save request_id.txt
 			save.WriteFile(filePath, []byte(fileData))
@@ -95,7 +95,7 @@ func (pocketbaseDB *DatabaseAPI) SaveFile(e *core.ServeEvent) error {
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil

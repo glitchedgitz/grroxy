@@ -1,4 +1,4 @@
-package endpoints
+package api
 
 import (
 	"log"
@@ -13,7 +13,7 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 )
 
-func (pocketbaseDB *DatabaseAPI) LabelNew(e *core.ServeEvent) error {
+func (backend *Backend) LabelNew(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/label/new",
@@ -32,7 +32,7 @@ func (pocketbaseDB *DatabaseAPI) LabelNew(e *core.ServeEvent) error {
 				return err
 			}
 
-			mainCollection, err := pocketbaseDB.App.Dao().FindCollectionByNameOrId("_labels")
+			mainCollection, err := backend.App.Dao().FindCollectionByNameOrId("_labels")
 			if err != nil {
 				return err
 			}
@@ -42,20 +42,20 @@ func (pocketbaseDB *DatabaseAPI) LabelNew(e *core.ServeEvent) error {
 			record.Set("color", data.Color)
 			record.Set("type", data.Type)
 
-			if err := pocketbaseDB.App.Dao().SaveRecord(record); err != nil {
+			if err := backend.App.Dao().SaveRecord(record); err != nil {
 				return err
 			}
 
 			return c.String(http.StatusOK, "Created")
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
 }
 
-func (pocketbaseDB *DatabaseAPI) LabelDelete(e *core.ServeEvent) error {
+func (backend *Backend) LabelDelete(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/label/delete",
@@ -80,7 +80,7 @@ func (pocketbaseDB *DatabaseAPI) LabelDelete(e *core.ServeEvent) error {
 			}
 
 			if data.ID != "" {
-				record, err = pocketbaseDB.App.Dao().FindRecordById("_labels", data.ID)
+				record, err = backend.App.Dao().FindRecordById("_labels", data.ID)
 				if err != nil {
 					log.Println("Label Delete: ", err)
 					return err
@@ -88,7 +88,7 @@ func (pocketbaseDB *DatabaseAPI) LabelDelete(e *core.ServeEvent) error {
 			}
 
 			if data.Name != "" {
-				record, err = pocketbaseDB.App.Dao().FindFirstRecordByFilter(
+				record, err = backend.App.Dao().FindFirstRecordByFilter(
 					"_labels", "name = {:name}",
 					dbx.Params{"name": data.Name},
 				)
@@ -98,16 +98,16 @@ func (pocketbaseDB *DatabaseAPI) LabelDelete(e *core.ServeEvent) error {
 				}
 			}
 
-			collection, err = pocketbaseDB.App.Dao().FindCollectionByNameOrId("label_" + record.Id)
+			collection, err = backend.App.Dao().FindCollectionByNameOrId("label_" + record.Id)
 			if err != nil {
 				log.Println("Label Delete: ", err)
 				return err
 			}
-			if err := pocketbaseDB.App.Dao().DeleteCollection(collection); err != nil {
+			if err := backend.App.Dao().DeleteCollection(collection); err != nil {
 				log.Println("Label Delete - Collection: ", err)
 				return err
 			}
-			if err := pocketbaseDB.App.Dao().DeleteRecord(record); err != nil {
+			if err := backend.App.Dao().DeleteRecord(record); err != nil {
 				log.Println("Label Delete: - Record", err)
 				return err
 			}
@@ -115,13 +115,13 @@ func (pocketbaseDB *DatabaseAPI) LabelDelete(e *core.ServeEvent) error {
 			return c.String(http.StatusOK, "Deleted")
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
 }
 
-func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
+func (backend *Backend) LabelAttach(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/label/attach",
@@ -142,7 +142,7 @@ func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
 			}
 
 			// Saving to main collection if doesn't exists
-			mainCollection, err := pocketbaseDB.App.Dao().FindCollectionByNameOrId("_labels")
+			mainCollection, err := backend.App.Dao().FindCollectionByNameOrId("_labels")
 			if err != nil {
 				log.Println("[LabelNew]: ", err)
 				return err
@@ -156,11 +156,11 @@ func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
 			record.Set("color", data.Color)
 			record.Set("type", data.Type)
 
-			err = pocketbaseDB.App.Dao().SaveRecord(record)
+			err = backend.App.Dao().SaveRecord(record)
 			// =====================
 
 			// Fetching ID
-			labelRecord, err2 := pocketbaseDB.App.Dao().FindFirstRecordByData("_labels", "name", data.Name)
+			labelRecord, err2 := backend.App.Dao().FindFirstRecordByData("_labels", "name", data.Name)
 
 			if err2 != nil {
 				log.Println("[LabelNew]: ", err)
@@ -172,7 +172,7 @@ func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
 			if err == nil {
 				// TODO: This is unnecessary todo everytime
 				// Create Collection if not exists
-				err = pocketbaseDB.CreateCollection(collection, schemas.LabelCollection)
+				err = backend.CreateCollection(collection, schemas.LabelCollection)
 				if err != nil {
 					log.Println("[LabelNew]: ", err)
 					return err
@@ -180,7 +180,7 @@ func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
 			}
 
 			// Inserting in the `label_[id]` Collection
-			result2, err := pocketbaseDB.App.Dao().DB().Insert(collection, dbx.Params{
+			result2, err := backend.App.Dao().DB().Insert(collection, dbx.Params{
 				"id":   data.ID,
 				"data": data.ID,
 			}).Execute()
@@ -192,7 +192,7 @@ func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
 			log.Println("[LabelNew]: ", result2)
 
 			// Attaching to the row
-			record3, err := pocketbaseDB.App.Dao().FindRecordById("_attached", data.ID)
+			record3, err := backend.App.Dao().FindRecordById("_attached", data.ID)
 			if err != nil {
 				log.Println("[LabelNew]: ", err)
 				return err
@@ -200,19 +200,15 @@ func (pocketbaseDB *DatabaseAPI) LabelAttach(e *core.ServeEvent) error {
 
 			record3.Set("labels", append(record3.GetStringSlice("labels"), labelRecord.Id))
 
-			if err := pocketbaseDB.App.Dao().SaveRecord(record3); err != nil {
+			if err := backend.App.Dao().SaveRecord(record3); err != nil {
 				log.Println("[LabelNew]: ", err)
 				return err
-			}
-
-			if err != nil {
-				log.Println("[LabelNew] Error: ", err)
 			}
 
 			return c.String(http.StatusOK, "Created")
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil

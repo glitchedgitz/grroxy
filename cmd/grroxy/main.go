@@ -9,7 +9,7 @@ import (
 
 	// "github.com/pocketbase/dbx"
 
-	"github.com/glitchedgitz/grroxy-db/api/endpoints"
+	"github.com/glitchedgitz/grroxy-db/api"
 	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/spf13/cobra"
@@ -19,7 +19,7 @@ import (
 )
 
 var conf config.Config
-var pb endpoints.DatabaseAPI
+var API api.Backend
 var noUI bool
 var noProxy bool
 var HostAddress string

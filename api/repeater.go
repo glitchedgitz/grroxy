@@ -1,4 +1,4 @@
-package endpoints
+package api
 
 import (
 	"bufio"
@@ -193,7 +193,7 @@ func SendHTTP2RawRequest(data rawhttp.RawRequest) (string, string, error) {
 	return grrhttp.DumpResponse(resp), timeTaken, nil
 }
 
-func (pocketbaseDB *DatabaseAPI) SendRawRequest(e *core.ServeEvent) error {
+func (backend *Backend) SendRawRequest(e *core.ServeEvent) error {
 
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
@@ -267,7 +267,7 @@ func (pocketbaseDB *DatabaseAPI) SendRawRequest(e *core.ServeEvent) error {
 			return c.JSON(http.StatusOK, response)
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil

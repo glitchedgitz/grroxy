@@ -85,6 +85,36 @@ var Labels = schema.NewSchema(
 	},
 )
 
+var Tech = schema.NewSchema(
+	&schema.SchemaField{
+		Name:     "name",
+		Type:     schema.FieldTypeText,
+		Required: true,
+	},
+	&schema.SchemaField{
+		Name:     "image",
+		Type:     schema.FieldTypeText,
+		Required: false,
+	},
+	&schema.SchemaField{
+		Name:     "color",
+		Type:     schema.FieldTypeText,
+		Required: false,
+	},
+	&schema.SchemaField{
+		Name:     "category",
+		Type:     schema.FieldTypeText,
+		Required: false,
+	},
+	&schema.SchemaField{
+		Name: "extra",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+)
+
 var LabelCollection = schema.NewSchema(
 	&schema.SchemaField{
 		Name:     "data",

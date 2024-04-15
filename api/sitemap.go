@@ -1,7 +1,7 @@
-package endpoints
+package api
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -9,19 +9,20 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/glitchedgitz/grroxy-db/base"
 	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/glitchedgitz/grroxy-db/types"
+	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/jpillora/go-tld"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
-	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 )
 
-func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
+func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/sitemap/new",
@@ -46,7 +47,7 @@ func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
 			var collectionExists = true
 
 			SitemapCollectionName := base.ParseDatabaseName(data.Host)
-			err := pocketbaseDB.CreateCollection(SitemapCollectionName, schemas.Sitemap)
+			err := backend.CreateCollection(SitemapCollectionName, schemas.Sitemap)
 
 			// Checking error if it is collection already exists
 			// This is the error "constraint failed: UNIQUE constraint failed: collections.name (2067)"
@@ -58,17 +59,32 @@ func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
 
 			// New Host
 			go func() {
+
+				log.Println("Checking: new collection for host: ", SitemapCollectionName)
+
 				if !collectionExists {
 					wg.Add(1)
 					defer wg.Done()
-					// Fetch fingerprints
-					resp, err := http.DefaultClient.Get(data.Host)
-					var fingerprints map[string]struct{} = make(map[string]struct{})
+
+					var fingerprints map[string]wappalyzer.LogoAndInfo = make(map[string]wappalyzer.LogoAndInfo)
 					var respData []byte = []byte("0")
-					var jsonBytes []byte = []byte("0")
 					var status int = 0
-					// Fingerprint to json
-					jsonString := "{}"
+
+					log.Println("sending request to: ", SitemapCollectionName)
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // Timeout after 5 seconds
+					defer cancel()                                                           // Cancel the context to release resources
+
+					// Create an HTTP request
+					req, err := http.NewRequestWithContext(ctx, "GET", data.Host, nil)
+					if err != nil {
+						log.Println(err)
+					}
+
+					// Perform the HTTP request
+					resp, err := http.DefaultClient.Do(req)
+					log.Println("got request to: ", SitemapCollectionName)
+
+					log.Println("Checking: wappalyzer for: ", SitemapCollectionName)
 
 					if err != nil {
 						log.Println("[http.DefaultClient.Get]: ", err)
@@ -78,94 +94,84 @@ func (pocketbaseDB *DatabaseAPI) SitemapNew(e *core.ServeEvent) error {
 							log.Println(err)
 						} else {
 							status = resp.StatusCode
-							wappalyzerClient, err := wappalyzer.New()
-							if err != nil {
-								log.Println("Wappylyzer Error: ", err)
-							} else {
 
-								// Todo: Create a custom wappylyzer to give back the logo and accent color of tech
+							fingerprints = backend.Wappalyzer.FingerprintWithLogoAndInfo(resp.Header, respData)
 
-								fingerprints = wappalyzerClient.Fingerprint(resp.Header, respData)
-								jsonBytes, err = json.Marshal(fingerprints)
-								if err != nil {
-									log.Println(err)
-								} else {
-									jsonString = string(jsonBytes)
-								}
-								fmt.Printf("Wappylyzer Fingerprints %v\n", fingerprints)
-							}
+							fmt.Printf("Wappylyzer Fingerprints %v\n", fingerprints)
 						}
 					}
+					log.Println("Checked: wappalyzer for: ", SitemapCollectionName)
 
 					// Insert row in _hosts
-					u, _ := tld.Parse(data.Host)
+					u, err := tld.Parse(data.Host)
+					if err != nil {
+						log.Println(err)
+					}
+
 					// title, _ := "", ""
 					title, _ := base.ExtractTitle(respData)
 
-					// Instead of searching every time, we might store it in DatabaseAPI
-					collection, err := pocketbaseDB.App.Dao().FindCollectionByNameOrId("_hosts")
-					if err != nil {
-						log.Println("Error: ", err)
+					recordIDs := []string{}
+
+					// TODO: Having a array of tech and hosts in the sitemap could save quite a lot of requests
+
+					for key, value := range fingerprints {
+						r, err := backend.SaveRecordToCollection("_tech", map[string]interface{}{
+							"name":  key,
+							"image": value.Logo,
+							"extra": map[string]any{
+								"category":    value.Cats,
+								"description": value.Description,
+								"website":     value.Website,
+							},
+						})
+						if err != nil {
+							// Most probably it's a duplicate and we can fetch the ID
+							r, err = backend.GetRecord("_tech", fmt.Sprintf("name = '%s'", key))
+							if err != nil {
+								log.Println(err)
+							}
+						}
+						recordIDs = append(recordIDs, r.Id)
 					}
 
-					record := models.NewRecord(collection)
+					backend.SaveRecordToCollection("_hosts", map[string]interface{}{
+						"host":      data.Host,
+						"smartsort": base.SmartSort(data.Host),
+						"domain":    u.Domain + "." + u.TLD,
+						"status":    status,
+						"title":     title,
+						"tech":      recordIDs,
+					})
 
-					record.Set("host", data.Host)
-					record.Set("smartsort", base.SmartSort(data.Host))
-					record.Set("domain", u.Domain+"."+u.TLD)
-					record.Set("status", status)
-					record.Set("title", title)
-					record.Set("tech", jsonString)
-
-					err = pocketbaseDB.App.Dao().Save(record)
-
-					if err != nil {
-						log.Println("Error: ", err)
-					}
 				}
+				log.Println("Checked: new collection for host: ", SitemapCollectionName)
+
 			}()
 
 			// Inserting endpoint data
-			collection, err := pocketbaseDB.App.Dao().FindCollectionByNameOrId(SitemapCollectionName)
-			if err != nil {
-				log.Println("Error: ", err)
-			}
-
-			record := models.NewRecord(collection)
-
-			record.Set("id", data.Data)
-			record.Set("path", data.Path)
-			record.Set("query", data.Query)
-			record.Set("fragment", data.Fragment)
-			record.Set("type", data.Type)
-			record.Set("ext", data.Ext)
-			record.Set("data", data.Data)
-			err = pocketbaseDB.App.Dao().Save(record)
-
-			if err != nil {
-				log.Println("Error: ", err)
-			}
-
-			// log.Println("Executed: ", result)
-
-			if err != nil {
-				// return nil
-				log.Println("Error: ", err)
-				// apis.NewBadRequestError("Failed to create collection", err)
-			}
+			backend.SaveRecordToCollection(SitemapCollectionName, map[string]interface{}{
+				"id":       data.Data,
+				"path":     data.Path,
+				"query":    data.Query,
+				"fragment": data.Fragment,
+				"type":     data.Type,
+				"ext":      data.Ext,
+				"data":     data.Data,
+			})
 
 			wg.Wait()
 
 			return c.String(http.StatusOK, "Created")
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
 }
 
-func (pocketbaseDB *DatabaseAPI) SitemapFetch(e *core.ServeEvent) error {
+func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
 		Path:   "/api/sitemap/fetch",
@@ -199,9 +205,9 @@ func (pocketbaseDB *DatabaseAPI) SitemapFetch(e *core.ServeEvent) error {
 			var err error
 
 			if data.Path == "" {
-				err = pocketbaseDB.App.Dao().DB().NewQuery("SELECT * FROM " + db).All(&result)
+				err = backend.App.Dao().DB().NewQuery("SELECT * FROM " + db).All(&result)
 			} else {
-				err = pocketbaseDB.App.Dao().DB().NewQuery("SELECT * FROM " + db + " WHERE path LIKE '" + regexQuery + "'").All(&result)
+				err = backend.App.Dao().DB().NewQuery("SELECT * FROM " + db + " WHERE path LIKE '" + regexQuery + "'").All(&result)
 			}
 
 			for _, item := range result {
@@ -245,7 +251,7 @@ func (pocketbaseDB *DatabaseAPI) SitemapFetch(e *core.ServeEvent) error {
 			return c.JSON(http.StatusOK, tmpResult2)
 		},
 		Middlewares: []echo.MiddlewareFunc{
-			apis.ActivityLogger(pocketbaseDB.App),
+			apis.ActivityLogger(backend.App),
 		},
 	})
 
