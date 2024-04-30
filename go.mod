@@ -81,7 +81,7 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/ffuf/pencode v0.0.0-20240120104927-07e33ef17d5a // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
-	github.com/ganigeorgiev/fexpr v0.4.0 // indirect
+	github.com/glitchedgitz/filters v0.0.0 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
@@ -188,10 +188,10 @@ require (
 )
 
 // replace github.com/glitchedgitz/wappalyzergo v0.0.116 => github.com/glitchedgitz/wappalyzergo v0.0.1
-
 // replace github.com/glitchedgitz/cook/v2/pkg/cook => ../cook/v2/pkg/cook
 
 replace (
-	github.com/ganigeorgiev/fexpr v0.4.0 => ../grroxy-filters
+	github.com/glitchedgitz/filters v0.0.0 => ../grroxy-filters
 	github.com/pocketbase/pocketbase v0.22.7 => ../grroxy-base
 )
+
