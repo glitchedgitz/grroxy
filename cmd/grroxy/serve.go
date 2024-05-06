@@ -90,6 +90,8 @@ func serve() {
 	API.App.OnBeforeServe().Add(API.ReadFile)
 	API.App.OnBeforeServe().Add(API.DownloadCert)
 	API.App.OnBeforeServe().Add(API.CookSearch)
+	API.App.OnBeforeServe().Add(API.SearchRegex)
+
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		API.App.Dao().DB().NewQuery(`
 			DELETE FROM _intercept;
