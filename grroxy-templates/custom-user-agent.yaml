@@ -1,0 +1,31 @@
+# id: custom-user-agent
+
+# info:
+#   title: Custom User Agent
+#   description: A test template to check replace user-agent
+#   author: Grroxy
+
+# on:
+#   proxy:
+#     - before_request
+
+# actionslist:
+#   - actions:
+#       - action_name: modify
+#         data:
+#           req:
+#             method: GET
+#             port: 443
+#             host: google.com
+#             path: /new_path
+#             query: test=value
+#             headers:
+#               User-Agent: Grroxy v1.6.x Template Test
+#             body: replace()
+#           replace:
+#             - key: req.body
+#               search: "Old"
+#               replace: "New"
+#               regex: true
+#           delete:
+#             - req.headers.Cookie

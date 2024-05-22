@@ -7,6 +7,8 @@ const (
 	CreateLabel = "create_label" // Currently only supported one
 	CreateTech  = "create_tech"
 
+	Modify = "modify" // modify request/response
+
 	SendNotification = "send_notification"
 
 	CreatePlayground             = "create_playground"

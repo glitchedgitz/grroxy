@@ -80,6 +80,7 @@ require (
 	github.com/elazarl/goproxy/ext v0.0.0-20210110162100-a92cc753f88e // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/ffuf/pencode v0.0.0-20240120104927-07e33ef17d5a // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/glitchedgitz/filters v0.0.0 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
@@ -116,6 +117,7 @@ require (
 	github.com/mholt/archiver/v3 v3.5.1 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.26 // indirect
 	github.com/miekg/dns v1.1.58 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
@@ -194,4 +196,3 @@ replace (
 	github.com/glitchedgitz/filters v0.0.0 => ../grroxy-filters
 	github.com/pocketbase/pocketbase v0.22.7 => ../grroxy-base
 )
-

@@ -47,11 +47,13 @@ type Template struct {
 }
 
 type Templates struct {
-	List []*Template
+	Templates map[string]*Template
 }
 
 func Setup() *Templates {
 	var t Templates
+
+	t.Templates = make(map[string]*Template)
 
 	files, err := os.ReadDir(`D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`)
 	if err != nil {
@@ -61,10 +63,13 @@ func Setup() *Templates {
 	log.Println("[Template.Setup]")
 
 	for _, file := range files {
-		l := Read(`D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates\` + file.Name())
-		log.Printf("Template:%v Scan:%v\n", file.Name(), len(l.ActionsList))
-		log.Printf("Template:%v Mode:%v\n", file.Name(), l.Mode)
-		t.List = append(t.List, l)
+		fileName := file.Name()
+		if strings.HasSuffix(fileName, ".yaml") || strings.HasPrefix(fileName, ".yml") {
+			l := Read(`D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates\` + fileName)
+			log.Printf("Template:%v Scan:%v\n", fileName, len(l.ActionsList))
+			log.Printf("Template:%v Mode:%v\n", fileName, l.Mode)
+			t.Templates[l.Id] = l
+		}
 	}
 
 	return &t
@@ -95,7 +100,7 @@ func getParsedValue(data map[string]any, action Action) Action {
 	}
 	for key, str := range action.Data {
 		if strVal, ok := str.(string); ok {
-			parsedValue := ParseVariables(&data, strVal)
+			parsedValue := ParseVariable(&data, strVal)
 			// if err != nil {
 			// 	a.Data[key] = "error"
 			// } else {
@@ -116,7 +121,7 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 
 	hooks := strings.Split(hook, ":")
 
-	for _, template := range t.List {
+	for id, template := range t.Templates {
 
 		var actions []Action
 
@@ -139,7 +144,7 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 			}
 		}
 
-		log.Printf("[Templates.Run] Running template: %s", template.Info.Title)
+		log.Printf("[Templates.Run][%s] Running template: %s", id, template.Info.Title)
 
 		for _, job := range template.ActionsList {
 			check, err := filters.Filter(data, job.Filter)
@@ -180,7 +185,7 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 	return results, nil
 }
 
-func ParseVariables(d *map[string]any, value string) string {
+func ParseVariable(d *map[string]any, value string) string {
 
 	log.Println("[ParseVariables] Using data ", *d)
 
@@ -193,56 +198,10 @@ func ParseVariables(d *map[string]any, value string) string {
 	for _, match := range matches {
 		if len(match) > 1 {
 			field := match[1]
-			if strings.Contains(field, ".") {
-				var left string
-				var dataset map[string]any
-
-				k := strings.Split(field, ".")
-				klen := len(k)
-
-				tmpdata := *d
-
-				for j, key := range k {
-					if j < klen-1 {
-						left = k[j+1]
-						if b, found := tmpdata[key]; found {
-							switch b := b.(type) {
-							case map[string]any:
-								tmpdata = b
-							default:
-								break
-							}
-						}
-					}
-				}
-
-				dataset = tmpdata
-				extracted_value, err := extractValueIfKeyExists(&dataset, left)
-				if err != nil {
-					return "error"
-				}
-				value = strings.ReplaceAll(value, match[0], extracted_value)
-			} else {
-				extracted_value, err := extractValueIfKeyExists(d, field)
-				if err != nil {
-					return "error"
-				}
-				value = strings.ReplaceAll(value, match[0], extracted_value)
-			}
+			fieldValue, _ := base.ExtractValueFromMap(d, field)
+			value = strings.ReplaceAll(value, match[0], fmt.Sprint(fieldValue))
 		}
 	}
 
 	return value
-}
-
-func extractValueIfKeyExists(d *map[string]any, key string) (string, error) {
-	if b, found := (*d)[key]; found {
-		switch b := b.(type) {
-		case string:
-			return b, nil
-		default:
-			return "", fmt.Errorf("not string")
-		}
-	}
-	return "", fmt.Errorf("key '%v' not found", key)
 }

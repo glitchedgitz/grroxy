@@ -40,13 +40,16 @@ func (backend *Backend) ReadFile(e *core.ServeEvent) error {
 			filePath := fileName
 			cwd := ""
 			if from == "cache" {
-				log.Println("cache")
+				// log.Println("cache")
 				filePath = path.Join(backend.Config.CacheDirectory, fileName)
+			} else if from == "path" {
+				// log.Println("path")
+				filePath = fileName
 			} else if from == "config" {
-				log.Println("config")
+				// log.Println("config")
 				filePath = path.Join(backend.Config.ConfigDirectory, fileName)
 			} else {
-				log.Println("cwd")
+				// log.Println("cwd")
 				cwd, _ = os.Getwd()
 				filePath = path.Join(strings.Trim(cwd, " "), fileName)
 			}

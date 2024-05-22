@@ -1,0 +1,22 @@
+# id: replace-cookies
+
+# info:
+#   title: Custom User Agent
+#   description: A test template to check replace user-agent
+#   author: Grroxy
+
+# on:
+#   proxy:
+#     - before_request
+
+# actionslist:
+#   - actions:
+#       - action_name: modify
+#         data:
+#           # req.body: test OLD
+#           # req.headers.Cookie: sb=F-fSZUgrLHn3j_KZrjCXrBSp; datr=F-fSZRi1zPthme1L6vWBtZ4D; ps_l=1; ps_n=1; fr=0ULaUNKV0SkWSugwQ..Bl5x-E..AAA.0.0.BmR0AY.AWXkvtGcLhQ; wd=1536x731; dpr=1.25
+#           replace:
+#             - key: req.headers.User-Agent
+#               search: Mozilla
+#               replace: Grroxy
+#               regex: false

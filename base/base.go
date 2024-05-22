@@ -3,12 +3,14 @@ package base
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -256,6 +258,73 @@ func StructToMapExtact(s any) map[string]any {
 	return result
 }
 
+func extractValueIfKeyExists(d *map[string]any, key string) (any, error) {
+
+	if b, found := (*d)[key]; found {
+		return b, nil
+	}
+	return nil, fmt.Errorf("key '%v' not found in data: \n %v", key, *d)
+}
+
+func ExtractValueFromMap(d *map[string]any, givenKey string) (any, error) {
+	if strings.Contains(givenKey, ".") {
+		parts := strings.Split(givenKey, ".")
+		currentMap := *d
+
+		for i, part := range parts {
+			value, found := currentMap[part]
+			if !found {
+				return nil, fmt.Errorf("key %s not found", part)
+			}
+
+			if i == len(parts)-1 {
+				return value, nil
+			}
+
+			// Check if the next level is also a map
+			switch converted := value.(type) {
+			case map[string]any:
+				currentMap = converted
+			case map[string]string:
+				// Special case to handle map[string]string
+				if i == len(parts)-2 { // Next is the last part
+					lastValue, lastFound := converted[parts[i+1]]
+					if !lastFound {
+						return nil, fmt.Errorf("key %s not found", parts[i+1])
+					}
+					return lastValue, nil
+				}
+				return nil, errors.New("map[string]string encountered before last key part")
+			default:
+				return nil, fmt.Errorf("expected a map at key %s, but found type %T", part, value)
+			}
+		}
+	}
+
+	// If no dots in key, perform a simple lookup
+	value, found := (*d)[givenKey]
+	if !found {
+		return nil, fmt.Errorf("key %s not found", givenKey)
+	}
+	return value, nil
+}
+
+// ReplaceString processes the input `value` string, replacing occurrences of `search` with `replace`.
+// If `regex` is true, `search` is treated as a regular expression.
+func FindAndReplaceAll(value, search, replace string, regex bool) (string, error) {
+	if regex {
+		// Compile the regex pattern from the search string
+		re, err := regexp.Compile(search)
+		if err != nil {
+			return "", fmt.Errorf("[FindAndReplaceAll] invalid regex pattern: %w", err)
+		}
+		// Replace all occurrences using the compiled regex
+		return re.ReplaceAllString(value, replace), nil
+	}
+	// Perform a simple string replacement if regex is not requested
+	return strings.ReplaceAll(value, search, replace), nil
+}
+
 func ArrayContains(slice []string, val string) bool {
 	for _, item := range slice {
 		if item == val {
@@ -263,4 +332,17 @@ func ArrayContains(slice []string, val string) bool {
 		}
 	}
 	return false
+}
+
+func ChangeCase(s string) string {
+	s_array := strings.Split(s, "_")
+	s_array_length := len(s_array)
+	s = ""
+	for i, val := range s_array {
+		s += strings.Title(val)
+		if i < s_array_length-1 {
+			s += "-"
+		}
+	}
+	return s
 }

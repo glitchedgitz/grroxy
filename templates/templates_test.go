@@ -144,6 +144,16 @@ func TestSetup(t *testing.T) {
 			},
 			expextedResults: 1,
 		},
+		{
+			hook: "proxy:before_request",
+			data: map[string]any{
+				"index": 123,
+				"req": map[string]any{
+					"user_agent": "Morzilla",
+				},
+			},
+			expextedResults: 1,
+		},
 	}
 
 	x := templates.Setup()

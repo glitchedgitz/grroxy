@@ -1,0 +1,20 @@
+# id: show-hidden-field
+
+# info:
+#   title: Turn on the hidden field
+#   description: A test template to check replace user-agent
+#   author: Grroxy
+
+# on:
+#   proxy:
+#     - before_request
+
+# actionslist:
+#   - actions:
+#       - action_name: modify
+#         data:
+#           list:
+#             - key: req.method
+#               function: set
+#               set:
+#                 value: POST
