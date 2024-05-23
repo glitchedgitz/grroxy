@@ -14,6 +14,20 @@ import (
 	"github.com/pocketbase/pocketbase/models"
 )
 
+func (backend *Backend) GetFilePath(folder, fileName string) string {
+	switch folder {
+	case "cache":
+		return path.Join(backend.Config.CacheDirectory, fileName)
+	case "config":
+		return path.Join(backend.Config.ConfigDirectory, fileName)
+	case "cwd":
+		cwd, _ := os.Getwd()
+		return path.Join(strings.Trim(cwd, " "), fileName)
+	default:
+		return fileName
+	}
+}
+
 func (backend *Backend) ReadFile(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
@@ -35,26 +49,9 @@ func (backend *Backend) ReadFile(e *core.ServeEvent) error {
 			log.Println("[ReadFile]: ", data)
 			fileName := data["fileName"].(string)
 			fileName = strings.Trim(fileName, " ")
-			from := data["from"].(string)
+			folder := data["folder"].(string)
 
-			filePath := fileName
-			cwd := ""
-			if from == "cache" {
-				// log.Println("cache")
-				filePath = path.Join(backend.Config.CacheDirectory, fileName)
-			} else if from == "path" {
-				// log.Println("path")
-				filePath = fileName
-			} else if from == "config" {
-				// log.Println("config")
-				filePath = path.Join(backend.Config.ConfigDirectory, fileName)
-			} else {
-				// log.Println("cwd")
-				cwd, _ = os.Getwd()
-				filePath = path.Join(strings.Trim(cwd, " "), fileName)
-			}
-
-			content := save.ReadFile(filePath)
+			content := save.ReadFile(backend.GetFilePath(folder, fileName))
 
 			return c.JSON(http.StatusOK, map[string]interface{}{
 				"filecontent": string(content),
@@ -87,14 +84,15 @@ func (backend *Backend) SaveFile(e *core.ServeEvent) error {
 			}
 			fileName := data["fileName"].(string)
 			fileData := data["fileData"].(string)
+			folder := data["folder"].(string)
 
-			filePath := path.Join(backend.Config.CacheDirectory, fileName)
+			filepath := backend.GetFilePath(folder, fileName)
 
 			// Save request_id.txt
-			save.WriteFile(filePath, []byte(fileData))
+			save.WriteFile(filepath, []byte(fileData))
 
 			return c.JSON(http.StatusOK, map[string]interface{}{
-				"filepath": filePath,
+				"filepath": filepath,
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
