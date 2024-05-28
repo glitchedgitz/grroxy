@@ -25,7 +25,7 @@ func ReadFile(filepath string) []byte {
 func WriteFile(filepath string, data []byte) {
 	err := os.WriteFile(filepath, data, 0644)
 	if err != nil {
-		log.Fatalln("Err: Writing File ", filepath, err)
+		log.Println("Err: Writing File ", filepath, err)
 	}
 }
 
