@@ -91,22 +91,18 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	)
 
 	// Set method
-	func() {
-		if req.Method != "" {
-			method = req.Method
-		}
-	}()
+	if req.Method != "" {
+		method = req.Method
+	}
 
 	// Set host and port
-	func() {
-		if strings.Contains(host, ":") {
-			t := strings.Split(host, ":")
-			host = t[0]
-			port = t[1]
-		}
+	if strings.Contains(host, ":") {
+		t := strings.Split(host, ":")
+		host = t[0]
+		port = t[1]
+	}
 
-		host = req.URL.Scheme + "://" + host
-	}()
+	host = req.URL.Scheme + "://" + host
 
 	extension := ""
 
@@ -160,7 +156,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 	tmpdata := types.UserData{
 		Host: userdata.Host,
-		Req: userdata.Req,
+		Req:  userdata.Req,
 	}
 
 	requestJson := base.StructToMap(&tmpdata, "json")
@@ -220,24 +216,17 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	requestInString := string(requestInBytes)
 
 	// Add to database
-	func() {
-		p.DBCreate("_attached", map[string]any{
-			"id":     userdata.ID,
-			"labels": []string{},
-			"note":   "",
-		})
-		// p.DBCreate("_attached", attach{
-		// 	Id:     userdata.ID,
-		// 	Labels: []string{},
-		// 	Note:   "",
-		// })
-		p.DBCreate("_raw", map[string]string{
-			"id":       userdata.ID,
-			"req":      requestInString,
-			"attached": userdata.ID,
-		})
-		// p.grroxydb.Create("data", userdata)
-	}()
+	p.DBCreate("_attached", map[string]any{
+		"id":     userdata.ID,
+		"labels": []string{},
+		"note":   "",
+	})
+
+	p.DBCreate("_raw", map[string]string{
+		"id":       userdata.ID,
+		"req":      requestInString,
+		"attached": userdata.ID,
+	})
 
 	var requestNew *http.Request
 
