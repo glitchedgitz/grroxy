@@ -18,8 +18,8 @@ type Action struct {
 }
 
 type Actions struct {
-	Filter  string   `yaml:"filter"`
-	Actions []Action `yaml:"actions"`
+	Condition string                      `yaml:"condition"`
+	Todo      []map[string]map[string]any `yaml:"todo"`
 }
 
 type Info struct {
@@ -28,22 +28,28 @@ type Info struct {
 	Author      string `yaml:"author,omitempty"`
 }
 
-type Template struct {
-	Id   string `yaml:"id"`
-	Info Info   `yaml:"info"`
+type Config struct {
+	// Actions
+	Type string `yaml:"type,omitempty"`
 
 	// Mode?: By default it's 'all',
 	//        Use 'any' to stop after one match
 	Mode string `yaml:"mode,omitempty"`
 
 	// Hooks: Which templates one should run
-	On map[string][]string `yaml:"on,omitempty"`
+	Hooks map[string][]string `yaml:"hooks,omitempty"`
 
 	// Default?: actions to perform when nothing match
-	Default []Action `yaml:"default,omitempty"`
+	Default []map[string]map[string]any `yaml:"default,omitempty"`
+}
 
-	// ActionsList: List of actions to check
-	ActionsList []Actions `yaml:"actionslist"`
+type Template struct {
+	Id     string `yaml:"id"`
+	Info   Info   `yaml:"info"`
+	Config Config `yaml:"config"`
+
+	// Tasks: List of actions to check
+	Tasks []Actions `yaml:"tasks"`
 }
 
 type Templates struct {
@@ -66,8 +72,8 @@ func Setup() *Templates {
 		fileName := file.Name()
 		if strings.HasSuffix(fileName, ".yaml") || strings.HasPrefix(fileName, ".yml") {
 			l := Read(`D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates\` + fileName)
-			log.Printf("Template:%v Scan:%v\n", fileName, len(l.ActionsList))
-			log.Printf("Template:%v Mode:%v\n", fileName, l.Mode)
+			log.Printf("Template:%v Scan:%v\n", fileName, len(l.Tasks))
+			log.Printf("Template:%v Mode:%v\n", fileName, l.Config.Mode)
 			t.Templates[l.Id] = l
 		}
 	}
@@ -125,12 +131,12 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 
 		var actions []Action
 
-		if len(template.ActionsList) == 0 {
+		if len(template.Tasks) == 0 {
 			log.Println("No actions found") // Fail if no actions are found
 			continue
 		}
 
-		if values, found := template.On[hooks[0]]; !found {
+		if values, found := template.Config.Hooks[hooks[0]]; !found {
 			continue
 		} else {
 			foundAny := false
@@ -146,21 +152,26 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 
 		log.Printf("[Templates.Run][%s] Running template: %s", id, template.Info.Title)
 
-		for _, job := range template.ActionsList {
-			check, err := filters.Filter(data, job.Filter)
+		for _, job := range template.Tasks {
+			check, err := filters.Filter(data, job.Condition)
 			if err != nil {
-				log.Printf("[Templates.Run] Filter parsing: %v", job.Filter)
+				log.Printf("[Templates.Run] Filter parsing: %v", job.Condition)
 				break
 			}
 
 			if check {
-				log.Println("[template.Run] Found with:", job.Filter)
+				log.Println("[template.Run] Found with:", job.Condition)
 
-				for _, action := range job.Actions {
-					actions = append(actions, getParsedValue(data, action))
+				for _, action := range job.Todo {
+					for function, data := range action {
+						actions = append(actions, getParsedValue(data, Action{
+							ActionName: function,
+							Data:       data,
+						}))
+					}
 				}
 
-				if template.Mode == "any" {
+				if template.Config.Mode == "any" {
 					if len(actions) > 0 {
 						break
 					}
@@ -169,12 +180,19 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 		}
 
 		if len(actions) == 0 {
-			if len(template.Default) > 0 {
+			if len(template.Config.Default) > 0 {
 				log.Println("[template.Run] Using default for", data)
 
-				for _, _action := range template.Default {
-					log.Println("Before even sending: ", _action)
-					results = append(results, getParsedValue(data, _action))
+				for _, _action := range template.Config.Default {
+					for actionName, actionData := range _action {
+						a := Action{
+							ActionName: actionName,
+							Data:       actionData,
+						}
+
+						log.Println("Before even sending: ", _action)
+						results = append(results, getParsedValue(data, a))
+					}
 				}
 			}
 		}

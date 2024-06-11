@@ -5,14 +5,12 @@ info:
   description: ""
   author: ""
 
-on:
-  proxy:
-    - before_request
+config:
+  hook:
+    proxy: [before_request]
 
-actionslist:
-  - filter: host ~ 'upwork.com'
-    actions:
-      - action_name: modify
-        data:
+tasks:
+  - condition: host ~ 'upwork.com'
+    todo:
+      - modify:
           req.headers.User-Agent: bugcrowd
- 

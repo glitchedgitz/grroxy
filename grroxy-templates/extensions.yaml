@@ -3,1369 +3,1217 @@ id: create-extension-labels
 info:
   title: Create Extension labels
   author: Grroxy
-  description: Analyse extensions and create labels in organizer
+  description: Analyse requests's extension and create labels in organizer
 
-on:
-  proxy:
-    - request
+config:
+  type: actions
+  hook:
+    proxy: [request]
+  mode: any
+  default:
+    # default: when nothing match, run these todo
+    - create_label:
+        name: "{{req.ext}}"
+        icon: doc
+        type: extension
+        color: ignore
 
-mode: any
-
-default:
-  # default: when nothing match, run these actions
-  - action_name: create_label
-    data:
-      name: "{{req.ext}}"
-      icon: doc
-      type: extension
-      color: ignore
-      
-actionslist:
-  - filter: req.ext = '.js' OR req.ext = '.mjs' OR req.ext = '.js.gz' OR req.ext = '.es5'  OR req.ext = '.es7' OR req.ext = '.es6' OR req.ext = '.js.map' OR req.ext = '.es'
-    actions:
-      - action_name: create_label
-        data:
+tasks:
+  - condition: req.ext = '.js' OR req.ext = '.mjs' OR req.ext = '.js.gz' OR req.ext = '.es5'  OR req.ext = '.es7' OR req.ext = '.es6' OR req.ext = '.js.map' OR req.ext = '.es'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: js
           type: extension
           color: yellow
 
-  - filter: req.ext = '.ts' OR req.ext = '.test.ts' OR req.ext = '.spec.ts'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ts' OR req.ext = '.test.ts' OR req.ext = '.spec.ts'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: typescript
           type: extension
           color: yellow
 
-  - filter: req.ext = '.gif' OR req.ext = '.jpeg' OR req.ext = '.jpg' OR req.ext = '.ico' OR req.ext = '.pxm' OR req.ext = '.png' OR req.ext = '.webp'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.gif' OR req.ext = '.jpeg' OR req.ext = '.jpg' OR req.ext = '.ico' OR req.ext = '.pxm' OR req.ext = '.png' OR req.ext = '.webp'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: image
           type: extension
           color: ignore
 
-  - filter: req.ext = '.webm' OR req.ext = '.mp4' OR req.ext = '.mpg' OR req.ext = '.ogv' OR req.ext = '.avi' OR req.ext = '.mov'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.webm' OR req.ext = '.mp4' OR req.ext = '.mpg' OR req.ext = '.ogv' OR req.ext = '.avi' OR req.ext = '.mov'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: video
           type: extension
           color: pink
 
-  - filter: req.ext = '.css'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.css'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: css
           type: extension
           color: ignore
 
-  - filter: req.ext = '.pdf'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.pdf'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: pdf
           type: extension
           color: red
 
-  - filter: req.ext = '.svg' OR req.ext = '.svgx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.svg' OR req.ext = '.svgx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: svg
           type: extension
           color: ignore
 
-  - filter: req.ext = '.wav' OR req.ext = '.ogg' OR req.ext = '.mp3' OR req.ext = '.flac'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.wav' OR req.ext = '.ogg' OR req.ext = '.mp3' OR req.ext = '.flac'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: audio
           type: extension
           color: purple
 
-  - filter: req.ext = '.cljs' OR req.ext = '.cljc' OR req.ext = '.clj'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cljs' OR req.ext = '.cljc' OR req.ext = '.clj'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: clojure
           type: extension
           color: green
 
-  - filter: req.ext = '.springBeans'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.springBeans'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: spring
           type: extension
           color: green
 
-  - filter: req.ext ~ '.tar%' OR req.ext = '.zip' OR req.ext = '.rar' OR req.ext = '.jar' OR req.ext = '.tgz' OR req.ext = '.gz' OR req.ext = '.7z' OR req.ext = '.backup'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext ~ '.tar%' OR req.ext = '.zip' OR req.ext = '.rar' OR req.ext = '.jar' OR req.ext = '.tgz' OR req.ext = '.gz' OR req.ext = '.7z' OR req.ext = '.backup'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: zip
           type: extension
           color: grey-light
 
-  - filter: req.ext = '.xlsx' OR req.ext = '.xls'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.xlsx' OR req.ext = '.xls'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: xls
           type: extension
           color: green
 
-  - filter: req.ext = '.jinja2' OR req.ext = '.jinja'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.jinja2' OR req.ext = '.jinja'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: jinja
           type: extension
           color: red
 
-  - filter: req.ext ~ '.stylelintrc'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext ~ '.stylelintrc'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: stylelint
           type: extension
           color: white
 
-  - filter: req.ext = '.hx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.hx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: haxe
           type: extension
           color: orange
 
-  - filter: req.ext = '.argdown' OR req.ext = '.ad'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.argdown' OR req.ext = '.ad'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: argdown
           type: extension
           color: blue
 
-  - filter: req.ext = '.bowerrc'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.bowerrc'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: bower
           type: extension
           color: orange
 
-  - filter: req.ext = '.twig'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.twig'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: twig
           type: extension
           color: green
 
-  - filter: req.ext = '.yaml' OR req.ext = '.yml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.yaml' OR req.ext = '.yml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: yml
           type: extension
           color: purple
 
-  - filter: req.ext = '.rs'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.rs'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: rust
           type: extension
           color: grey-light
 
-  - filter: req.ext = '.pddl'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.pddl'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: pddl
           type: extension
           color: purple
 
-  - filter: req.ext = '.DS_Store'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.DS_Store'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: ignored
           type: extension
           color: ignore
 
-  - filter: req.ext = '.mustache' OR req.ext = '.handlebars' OR req.ext = '.stache' OR req.ext = '.hjs' OR req.ext = '.hbs'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.mustache' OR req.ext = '.handlebars' OR req.ext = '.stache' OR req.ext = '.hjs' OR req.ext = '.hbs'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: mustache
           type: extension
           color: orange
 
-  - filter: req.ext = '.pug'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.pug'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: pug
           type: extension
           color: red
 
-  - filter: req.ext = '.pp' OR req.ext = '.epp'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.pp' OR req.ext = '.epp'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: puppet
           type: extension
           color: yellow
 
-  - filter: req.ext = '.xhtml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.xhtml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: html
           type: extension
           color: purple
 
-  - filter: req.ext = '.vue'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.vue'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: vue
           type: extension
           color: green
 
-  - filter: req.ext = '.wat'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.wat'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: wat
           type: extension
           color: purple
 
-  - filter: req.ext = '.ins'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ins'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: tex
           type: extension
           color: white
 
-  - filter: req.ext = '.tex'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.tex'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: tex
           type: extension
           color: blue
 
-  - filter: req.ext = '.R'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.R'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: R
           type: extension
           color: blue
 
-  - filter: req.ext = '.ejs'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ejs'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: ejs
           type: extension
           color: yellow
 
-  - filter: req.ext = '.cs'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cs'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: c-sharp
           type: extension
           color: blue
 
-  - filter: req.ext = '.aspx' OR req.ext = '.ashx' OR req.ext = '.cshtml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.aspx' OR req.ext = '.ashx' OR req.ext = '.cshtml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: html
           type: extension
           color: blue
 
-  - filter: req.ext = '.cshtml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cshtml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: html
           type: extension
           color: blue
 
-  - filter: req.ext = '.eslintignore'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.eslintignore'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: eslint
           type: extension
           color: grey
 
-  - filter: req.ext = '.scala'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.scala'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: scala
           type: extension
           color: red
 
-  - filter: req.ext = '.class' OR req.ext = '.classpath' OR req.ext = '.properties' OR req.ext = '.java'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.class' OR req.ext = '.classpath' OR req.ext = '.properties' OR req.ext = '.java'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: java
           type: extension
           color: red
 
-  - filter: req.ext = '.cpp' OR req.ext = '.c++' OR req.ext = '.cxx' OR req.ext = '.cc'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cpp' OR req.ext = '.c++' OR req.ext = '.cxx' OR req.ext = '.cc'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: cpp
           type: extension
           color: blue
 
-  - filter: req.ext = '.hxs'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.hxs'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: haxe
           type: extension
           color: yellow
 
-  - filter: req.ext = '.cson'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cson'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: json
           type: extension
           color: yellow
 
-  - filter: req.ext = '.spec.tsx' OR req.ext = '.test.tsx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.spec.tsx' OR req.ext = '.test.tsx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: react
           type: extension
           color: yellow
 
-  - filter: req.ext = '.dtx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.dtx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: tex
           type: extension
           color: orange
 
-  - filter: req.ext = '.sql'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.sql'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: db
           type: extension
           color: pink
 
-  - filter: req.ext = '.code-search'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.code-search'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: code-search
           type: extension
           color: purple
 
-  - filter: req.ext = '.kts' OR req.ext = '.kt'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.kts' OR req.ext = '.kt'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: kotlin
           type: extension
           color: orange
 
-  - filter: req.ext = '.hxp'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.hxp'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: haxe
           type: extension
           color: blue
 
-  - filter: req.ext = '.vala' OR req.ext = '.vapi'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.vala' OR req.ext = '.vapi'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: vala
           type: extension
           color: grey-light
 
-  - filter: req.ext = '.h'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.h'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: c
           type: extension
           color: purple
 
-  - filter: req.ext = '.sty'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.sty'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: tex
           type: extension
           color: yellow
 
-  - filter: req.ext = '.octet'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.octet'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: binary
           type: extension
           color: blue
 
-  - filter: req.ext = '.npmignore' OR req.ext = '.npmrc'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.npmignore' OR req.ext = '.npmrc'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: npm
           type: extension
           color: red
 
-  - filter: req.ext = '.doc' OR req.ext = '.docx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.doc' OR req.ext = '.docx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: word
           type: extension
           color: blue
 
-  - filter: req.ext = '.plan'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.plan'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: plan
           type: extension
           color: green
 
-  - filter: req.ext = '.test.js' OR req.ext = '.spec.js'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.test.js' OR req.ext = '.spec.js'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: js
           type: extension
           color: orange
 
-  - filter: req.ext = '.fs' OR req.ext = '.fsx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.fs' OR req.ext = '.fsx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: f-sharp
           type: extension
           color: blue
 
-  - filter: req.ext = '.liquid'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.liquid'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: liquid
           type: extension
           color: green
 
-  - filter: req.ext = '.sublime-workspace' OR req.ext = '.sublime-project'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.sublime-workspace' OR req.ext = '.sublime-project'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: sublime
           type: extension
           color: orange
 
-  - filter: req.ext = '.wgt'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.wgt'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: wgt
           type: extension
           color: blue
 
-  - filter: req.ext = '.tmp'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.tmp'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: clock
           type: extension
           color: grey-light
 
-  - filter: req.ext = '.xsl' OR req.ext = '.xslt' OR req.ext = '.csv'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.xsl' OR req.ext = '.xslt' OR req.ext = '.csv'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: csv
           type: extension
           color: green
 
-  - filter: req.ext = '.ai'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ai'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: illustrator
           type: extension
           color: yellow
 
-  - filter: req.ext = '.wasm'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.wasm'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: wasm
           type: extension
           color: purple
 
-  - filter: req.ext = '.master' OR req.ext = '.asax'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.master' OR req.ext = '.asax'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: html
           type: extension
           color: yellow
 
-  - filter: req.ext = '.jshintrc' OR req.ext = '.jscsrc'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.jshintrc' OR req.ext = '.jscsrc'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: js
           type: extension
           color: blue
 
-  - filter: req.ext = '.cmd' OR req.ext = '.bat'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cmd' OR req.ext = '.bat'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: windows
           type: extension
           color: blue
 
-  - filter: req.ext = '.less'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.less'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: less
           type: extension
           color: blue
 
-  - filter: req.ext = '.lua'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.lua'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: lua
           type: extension
           color: blue
 
-  - filter: req.ext = '.pro'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.pro'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: prolog
           type: extension
           color: orange
 
-  - filter: req.ext = '.s' OR req.ext = '.asm'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.s' OR req.ext = '.asm'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: asm
           type: extension
           color: red
 
-  - filter: req.ext = '.go'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.go'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: go2
           type: extension
           color: blue
 
-  - filter: req.ext = '.odata'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.odata'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: odata
           type: extension
           color: orange
 
-  - filter: req.ext = '.re'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.re'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: reasonml
           type: extension
           color: red
 
-  - filter: req.ext ~ '.erb'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext ~ '.erb'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: html_erb
           type: extension
           color: red
 
-  - filter: req.ext = '.nunj' OR req.ext = '.nunjs' OR req.ext = '.nunjucks' OR req.ext = '.njk' OR req.ext = '.njs' OR req.ext = '.nj'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.nunj' OR req.ext = '.nunjs' OR req.ext = '.nunjucks' OR req.ext = '.njk' OR req.ext = '.njs' OR req.ext = '.nj'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: nunjucks
           type: extension
           color: green
 
-  - filter: req.ext = '.psd1' OR req.ext = '.psm1' OR req.ext = '.ps1'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.psd1' OR req.ext = '.psm1' OR req.ext = '.ps1'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: powershell
           type: extension
           color: blue
 
-  - filter: req.ext = '.swift'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.swift'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: swift
           type: extension
           color: orange
 
-  - filter: req.ext ~ '.eslint'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext ~ '.eslint'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: eslint
           type: extension
           color: purple
 
-  - filter: req.ext = '.log'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.log'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: file-history
           type: extension
           color: ignore
 
-  - filter: req.ext = '.d'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.d'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: d
           type: extension
           color: red
 
-  - filter: req.ext = '.webmanifest'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.webmanifest'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: w3c
           type: extension
           color: blue
 
-  - filter: req.ext = '.hxml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.hxml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: haxe
           type: extension
           color: purple
 
-  - filter: req.ext = '.bsl'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.bsl'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: bsl
           type: extension
           color: red
 
-  - filter: req.ext = '.sbt'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.sbt'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: sbt
           type: extension
           color: blue
 
-  - filter: req.ext = '.jl'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.jl'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: julia
           type: extension
           color: purple
 
-  - filter: req.ext = '.stylelintignore'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.stylelintignore'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: stylelint
           type: extension
           color: grey
 
-  - filter: req.ext = '.text'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.text'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: text
           type: extension
           color: ignore
 
-  - filter: req.ext = '.article' OR req.ext = '.slide'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.article' OR req.ext = '.slide'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: go
           type: extension
           color: blue
 
-  - filter: req.ext = '.py'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.py'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: python
           type: extension
           color: blue
 
-  - filter: req.ext = '.c'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.c'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: c
           type: extension
           color: blue
 
-  - filter: req.ext = '.gql' OR req.ext = '.graphql'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.gql' OR req.ext = '.graphql'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: graphql
           type: extension
           color: pink
 
-  - filter: req.ext = '.gitkeep' OR req.ext = '.gitignore' OR req.ext = '.gitconfig' OR req.ext = '.gitmodules' OR req.ext = '.gitattributes'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.gitkeep' OR req.ext = '.gitignore' OR req.ext = '.gitconfig' OR req.ext = '.gitmodules' OR req.ext = '.gitattributes'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: git
           type: extension
           color: ignore
 
-  - filter: req.ext = '.json'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.json'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: json
           type: extension
           color: lightyellow
 
-  - filter: req.ext = '.smarty.tpl'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.smarty.tpl'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: smarty
           type: extension
           color: yellow
 
-  - filter: req.ext = '.txt'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.txt'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: doc
           type: extension
           color: white
 
-  - filter: req.ext = '.cmx' OR req.ext = '.cmxa' OR req.ext = '.ml' OR req.ext = '.mli'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cmx' OR req.ext = '.cmxa' OR req.ext = '.ml' OR req.ext = '.mli'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: ocaml
           type: extension
           color: orange
 
-  - filter: req.ext = '.dart'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.dart'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: dart
           type: extension
           color: blue
 
-  - filter: req.ext = '.mm'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.mm'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: cpp
           type: extension
           color: yellow
 
-  - filter: req.ext = '.rmd'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.rmd'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: default
           type: extension
           color: blue
 
-  - filter: req.ext = '.cake'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cake'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: cake
           type: extension
           color: red
 
-  - filter: req.ext = '.gradle'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.gradle'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: gradle
           type: extension
           color: green
 
-  - filter: req.ext = '.3ds' OR req.ext = '.dae' OR req.ext = '.obj' OR req.ext = '.stl' OR req.ext = '.3dm'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.3ds' OR req.ext = '.dae' OR req.ext = '.obj' OR req.ext = '.stl' OR req.ext = '.3dm'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: svg
           type: extension
           color: blue
 
-  - filter: req.ext = '.litcoffee' OR req.ext = '.coffee'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.litcoffee' OR req.ext = '.coffee'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: coffee
           type: extension
           color: yellow
 
-  - filter: req.ext = '.ecr' OR req.ext = '.slang'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ecr' OR req.ext = '.slang'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: crystal_embedded
           type: extension
           color: white
 
-  - filter: req.ext = '.jsx' OR req.ext = '.cjsx' OR req.ext = '.tsx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.jsx' OR req.ext = '.cjsx' OR req.ext = '.tsx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: react
           type: extension
           color: blue
 
-  - filter: req.ext = '.lhs' OR req.ext = '.hs'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.lhs' OR req.ext = '.hs'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: haskell
           type: extension
           color: purple
 
-  - filter: req.ext = '.ocsp-response'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ocsp-response'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: binary
           type: extension
           color: ignore
 
-  - filter: req.ext = '.jade'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.jade'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: jade
           type: extension
           color: red
 
-  - filter: req.ext = '.haml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.haml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: haml
           type: extension
           color: red
 
-  - filter: req.ext = '.psd'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.psd'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: photoshop
           type: extension
           color: blue
 
-  - filter: req.ext = '.crt' OR req.ext = '.key' OR req.ext = '.cert'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.crt' OR req.ext = '.key' OR req.ext = '.cert'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: lock
           type: extension
           color: green
 
-  - filter: req.ext = '.toml' OR req.ext = '.static' OR req.ext = '.cfg' OR req.ext = '.htaccess' OR req.ext = '.direnv' OR req.ext = '.config' OR req.ext = '.conf' OR req.ext = '.editorconfig' OR req.ext = '.env' OR req.ext = '.slugignore'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.toml' OR req.ext = '.static' OR req.ext = '.cfg' OR req.ext = '.htaccess' OR req.ext = '.direnv' OR req.ext = '.config' OR req.ext = '.conf' OR req.ext = '.editorconfig' OR req.ext = '.env' OR req.ext = '.slugignore'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: config
           type: extension
           color: grey-light
 
-  - filter: req.ext = '.babelrc.cjs' OR req.ext = '.babelrc.js' OR req.ext = '. '
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.babelrc.cjs' OR req.ext = '.babelrc.js' OR req.ext = '. '
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: babel
           type: extension
           color: yellow
 
-  - filter: req.ext = '.ls'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ls'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: livescript
           type: extension
           color: blue
 
-  - filter: req.ext = '.ascx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ascx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: html
           type: extension
           color: green
 
-  - filter: req.ext = '.sass' OR req.ext = '.scss'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.sass' OR req.ext = '.scss'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: sass
           type: extension
           color: pink
 
-  - filter: req.ext = '.htm' OR req.ext = '.html'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.htm' OR req.ext = '.html'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: html
           type: extension
           color: orange
 
-  - filter: req.ext = '.rb'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.rb'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: ruby
           type: extension
           color: red
 
-  - filter: req.ext = '.slim'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.slim'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: slim
           type: extension
           color: orange
 
-  - filter: req.ext = '.exs'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.exs'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: elixir_script
           type: extension
           color: purple
 
-  - filter: req.ext = '.tf' OR req.ext = '.tf.json' OR req.ext = '.tfvars'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.tf' OR req.ext = '.tf.json' OR req.ext = '.tfvars'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: terraform
           type: extension
           color: purple
 
-  - filter: req.ext = '.spec.jsx' OR req.ext = '.test.jsx'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.spec.jsx' OR req.ext = '.test.jsx'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: react
           type: extension
           color: orange
 
-  - filter: req.ext = '.md' OR req.ext = '.markdown'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.md' OR req.ext = '.markdown'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: markdown
           type: extension
           color: blue
 
-  - filter: req.ext = '.styl'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.styl'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: stylus
           type: extension
           color: green
 
-  - filter: req.ext = '.firebaserc'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.firebaserc'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: firebase
           type: extension
           color: orange
 
-  - filter: req.ext ~ 'bash' OR req.ext = '.sh' OR req.ext = '.zshrc' OR req.ext = '.fish' OR req.ext = '.zsh'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext ~ 'bash' OR req.ext = '.sh' OR req.ext = '.zshrc' OR req.ext = '.fish' OR req.ext = '.zsh'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: shell
           type: extension
           color: grey
 
-  - filter: req.ext = '.ctp'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ctp'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: cake_php
           type: extension
           color: red
 
-  - filter: req.ext = '.hxx' OR req.ext = '.h++' OR req.ext = '.hh' OR req.ext = '.hpp'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.hxx' OR req.ext = '.h++' OR req.ext = '.hh' OR req.ext = '.hpp'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: cpp
           type: extension
           color: purple
 
-  - filter: req.ext = '.pem' OR req.ext = '.binary' OR req.ext = '.bin'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.pem' OR req.ext = '.binary' OR req.ext = '.bin'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: binary
           type: extension
           color: green
 
-  - filter: req.ext = '.eot' OR req.ext = '.woff' OR req.ext = '.ttf' OR req.ext = '.otf' OR req.ext = '.woff2'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.eot' OR req.ext = '.woff' OR req.ext = '.ttf' OR req.ext = '.otf' OR req.ext = '.woff2'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: font
           type: extension
           color: red
 
-  - filter: req.ext = '.gsp' OR req.ext = '.groovy'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.gsp' OR req.ext = '.groovy'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: grails
           type: extension
           color: green
 
-  - filter: req.ext = '.php' OR req.ext = '.php.inc'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.php' OR req.ext = '.php.inc'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: php
           type: extension
           color: violet
 
-  - filter: req.ext = '.mdo'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.mdo'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: mdo
           type: extension
           color: red
 
-  - filter: req.ext = '.ex'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ex'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: elixir
           type: extension
           color: purple
 
-  - filter: req.ext = '.protobuf'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.protobuf'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: protobuf
           type: extension
           color: green
 
-  - filter: req.ext = '.cr'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cr'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: crystal
           type: extension
           color: white
 
-  - filter: req.ext = '.m'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.m'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: c
           type: extension
           color: yellow
 
-  - filter: req.ext = '.cls' OR req.ext = '.component'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cls' OR req.ext = '.component'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: salesforce
           type: extension
           color: blue
 
-  - filter: req.ext = '.pl'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.pl'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: perl
           type: extension
           color: blue
 
-  - filter: req.ext = '.ts'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.ts'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: typescript
           type: extension
           color: blue
 
-  - filter: req.ext = '.elm'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.elm'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: elm
           type: extension
           color: blue
 
-  - filter: req.ext = '.codeclimate.yml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.codeclimate.yml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: code-climate
           type: extension
           color: green
 
-  - filter: req.ext = '.happenings'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.happenings'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: happenings
           type: extension
           color: blue
 
-  - filter: req.ext = '.css.map' OR req.ext = '.sss'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.css.map' OR req.ext = '.sss'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: css
           type: extension
           color: blue
 
-  - filter: req.ext = '.other'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.other'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: doc
           type: extension
           color: grey
 
-  - filter: req.ext = '.cfc' OR req.ext = '.cfm'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.cfc' OR req.ext = '.cfm'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: coldfusion
           type: extension
           color: blue
 
-  - filter: req.ext = '.xml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.xml'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: xml
           type: extension
           color: orange
 
-  - filter: req.ext = '.npm-debug.log'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.npm-debug.log'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: npm
           type: extension
           color: ignore
 
-  - filter: req.ext = '.edn'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.edn'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: clojure
           type: extension
           color: blue
 
-  - filter: req.ext = '.sol'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: req.ext = '.sol'
+    todo:
+      - create_label:
           name: "{{req.ext}}"
           icon: ethereum
           type: extension

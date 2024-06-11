@@ -5,136 +5,120 @@ info:
   author: Grroxy
   description: Analyse mime and create labels in organizer
 
-on:
-  proxy:
-    - response
+config:
+  type: actions
+  mode: any
+  hook:
+    proxy: [response]
+  default:
+    - create_label:
+        name: "{{resp.mime}}"
+        type: mime
+        color: ignore
 
-mode: any
-
-default:
-  - action_name: create_label
-    data:
-      name: "{{resp.mime}}"
-      type: mime
-      color: ignore
-
-actionslist:
-  - filter: resp.mime ~ 'image/svg%'
-    actions:
-      - action_name: create_label
-        data:
+tasks:
+  - condition: resp.mime ~ 'image/svg%'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: ignore
 
-  - filter: resp.mime ~ 'image/'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'image/'
+    todo:
+      - create_label:
           name: images
           type: mime
           color: ignore
 
-  - filter: resp.mime ~ 'audio/'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'audio/'
+    todo:
+      - create_label:
           name: audio
           type: mime
           color: purple
 
-  - filter: resp.mime ~ 'video/'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'video/'
+    todo:
+      - create_label:
           name: video
+          
           type: mime
           color: pink
 
-  - filter: resp.mime ~ 'javascript'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'javascript'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: yellow
 
-  - filter: resp.mime ~ 'json'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'json'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: lightyellow
 
-  - filter: resp.mime ~ 'css'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'css'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: ignore
 
-  - filter: resp.mime ~ 'font'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'font'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: red
 
-  - filter: resp.mime ~ 'html'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'html'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: orange
 
-  - filter: resp.mime ~ 'xml'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'xml'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: orange
 
-  - filter: resp.mime ~ 'ocsp-response'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'ocsp-response'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: ignore
 
-  - filter: resp.mime ~ 'text'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'text'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: ignore
 
-  - filter: resp.mime ~ 'binary'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'binary'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: green
 
-  - filter: resp.mime ~ 'octet'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'octet'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: blue
 
-  - filter: resp.mime ~ 'protobuf'
-    actions:
-      - action_name: create_label
-        data:
+  - condition: resp.mime ~ 'protobuf'
+    todo:
+      - create_label:
           name: "{{resp.mime}}"
           type: mime
           color: green
