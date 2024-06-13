@@ -29,6 +29,13 @@ func WriteFile(filepath string, data []byte) {
 	}
 }
 
+func DeleteFile(filepath string) {
+	err := os.Remove(filepath)
+	if err != nil {
+		log.Println("Err: Delete File ", filepath, err)
+	}
+}
+
 func ReadYaml(filename string, m map[string]map[string][]string) {
 	filepath := path.Join(ConfigFolder, IngredientsFolder, filename)
 

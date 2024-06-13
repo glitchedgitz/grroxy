@@ -92,7 +92,9 @@ func serve() {
 	API.App.OnBeforeServe().Add(API.CookSearch)
 	API.App.OnBeforeServe().Add(API.SearchRegex)
 	API.App.OnBeforeServe().Add(API.FileWatcher)
-	API.App.OnBeforeServe().Add(API.ListTemplates)
+	API.App.OnBeforeServe().Add(API.TemplatesList)
+	API.App.OnBeforeServe().Add(API.TemplatesNew)
+	API.App.OnBeforeServe().Add(API.TemplatesDelete)
 
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		API.App.Dao().DB().NewQuery(`
