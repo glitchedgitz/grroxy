@@ -157,7 +157,7 @@ func TestSetup(t *testing.T) {
 	}
 
 	x := &templates.Templates{
-		TempalteDir: `D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`,
+		TempalteDir: `D:\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`,
 	}
 
 	x.Setup()

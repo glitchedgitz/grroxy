@@ -278,7 +278,7 @@ func NewProxy(options *Options) (*Proxy, error) {
 	}
 
 	t := &templates.Templates{
-		TempalteDir: `D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`,
+		TempalteDir: `D:\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`,
 	}
 
 	t.Setup()

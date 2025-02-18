@@ -21,7 +21,7 @@ func (backend *Backend) FileWatcher(e *core.ServeEvent) error {
 			c.Response().Header().Set(echo.HeaderConnection, "keep-alive")
 
 			updateChan := make(chan fsnotify.Event)
-			settingsFilePath := `D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`
+			settingsFilePath := `D:\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`
 
 			go func() {
 				watcher, err := fsnotify.NewWatcher()

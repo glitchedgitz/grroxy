@@ -57,7 +57,7 @@ func initialize() {
 		}
 	}
 	conf.ProxyAddr = ProxyAddress
-	conf.TemplateDirectory = `D:\sdks\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`
+	conf.TemplateDirectory = `D:\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`
 	conf.Initiate()
 }
 
