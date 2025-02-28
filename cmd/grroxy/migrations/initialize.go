@@ -5,8 +5,6 @@ import (
 	"log"
 
 	"github.com/glitchedgitz/grroxy-db/schemas"
-	"github.com/glitchedgitz/grroxy-db/types"
-	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/daos"
 	m "github.com/pocketbase/pocketbase/migrations"
@@ -47,7 +45,7 @@ func init() {
 		}
 
 		// create collections
-		for _, db := range schemas.Collections {
+		for _, db := range schemas.Main {
 			collection := &models.Collection{
 				Name:       db.Name,
 				Type:       models.CollectionTypeBase,
@@ -75,7 +73,7 @@ func init() {
 		}
 
 		var ind = ""
-		for _, db := range schemas.Collections {
+		for _, db := range schemas.Main {
 			ind += db.Index
 			dao.DB().NewQuery(db.Index).Execute()
 		}
@@ -83,106 +81,52 @@ func init() {
 		log.Println("[migration][init] Creating Indexes: ", ind)
 
 		// Setting Up Default Settings
-		settingsCollection, err := dao.FindCollectionByNameOrId("_settings")
-		if err != nil {
-			return err
-		}
+		// settingsCollection, err := dao.FindCollectionByNameOrId("_settings")
+		// if err != nil {
+		// 	return err
+		// }
 
-		settings := []setting{
-			{
-				ID:    utils.AddUnderscore("PROJECT_NAME"),
-				Name:  "Project Name",
-				Value: "Untitled Project",
-			},
-			{
-				ID:    utils.AddUnderscore("PROXY"),
-				Name:  "Proxy",
-				Value: "127.0.0.1:8080",
-			},
-			{
-				ID:    utils.AddUnderscore("INTERCEPT"),
-				Name:  "Intercept",
-				Value: "false",
-			},
-			{
-				ID:    utils.AddUnderscore("MAIN_TAB"),
-				Name:  "Main Tab",
-				Value: "Sitemaps",
-			},
-		}
+		// settings := []setting{
+		// 	{
+		// 		ID:    utils.AddUnderscore("PROJECT_NAME"),
+		// 		Name:  "Project Name",
+		// 		Value: "Untitled Project",
+		// 	},
+		// 	{
+		// 		ID:    utils.AddUnderscore("PROXY"),
+		// 		Name:  "Proxy",
+		// 		Value: "127.0.0.1:8080",
+		// 	},
+		// 	{
+		// 		ID:    utils.AddUnderscore("INTERCEPT"),
+		// 		Name:  "Intercept",
+		// 		Value: "false",
+		// 	},
+		// 	{
+		// 		ID:    utils.AddUnderscore("MAIN_TAB"),
+		// 		Name:  "Main Tab",
+		// 		Value: "Sitemaps",
+		// 	},
+		// }
 
-		dao.RunInTransaction(func(txDao *daos.Dao) error {
-			if err != nil {
-				return err
-			}
+		// dao.RunInTransaction(func(txDao *daos.Dao) error {
+		// 	if err != nil {
+		// 		return err
+		// 	}
 
-			for _, val := range settings {
-				record := models.NewRecord(settingsCollection)
+		// 	for _, val := range settings {
+		// 		record := models.NewRecord(settingsCollection)
 
-				record.Set("id", val.ID)
-				record.Set("option", val.Name)
-				record.Set("value", val.Value)
+		// 		record.Set("id", val.ID)
+		// 		record.Set("option", val.Name)
+		// 		record.Set("value", val.Value)
 
-				if err := dao.SaveRecord(record); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-		// =================================
-
-		// Setting Up Default Labels
-		labelsCollection, err := dao.FindCollectionByNameOrId("_labels")
-		if err != nil {
-			return err
-		}
-
-		defaultLabels := []types.Label{
-			{Name: "!high", Color: "red", Type: "mark"},
-			{Name: "!medium", Color: "orange", Type: "mark"},
-			{Name: "!low", Color: "yellow", Type: "mark"},
-			{Name: "!info", Color: "ignore", Type: "mark"},
-			{Name: "!leak", Color: "violet", Type: "mark"},
-			{Name: "interesting", Color: "yellow", Type: "custom"},
-			{Name: "weird", Color: "purple", Type: "custom"},
-			{Name: "^dummy/folder", Color: "blue", Type: "folder"},
-			{Name: "^target/reset", Color: "blue", Type: "folder"},
-		}
-
-		dao.RunInTransaction(func(txDao *daos.Dao) error {
-			if err != nil {
-				return err
-			}
-
-			for _, val := range defaultLabels {
-				record := models.NewRecord(labelsCollection)
-				id := utils.RandomString(15)
-				record.Set("id", id)
-				record.Set("name", val.Name)
-				record.Set("color", val.Color)
-				record.Set("type", val.Type)
-
-				if err := dao.SaveRecord(record); err != nil {
-					return err
-				}
-
-				collection := &models.Collection{
-					Name:       "label_" + id,
-					Type:       models.CollectionTypeBase,
-					ListRule:   pbTypes.Pointer(""),
-					ViewRule:   pbTypes.Pointer(""),
-					CreateRule: pbTypes.Pointer(""),
-					UpdateRule: pbTypes.Pointer(""),
-					DeleteRule: nil,
-					Schema:     schemas.LabelCollection,
-				}
-
-				if err := dao.SaveCollection(collection); err != nil {
-					log.Println("[migration][creating label collection] Error: ", err)
-				}
-			}
-			return nil
-		})
+		// 		if err := dao.SaveRecord(record); err != nil {
+		// 			return err
+		// 		}
+		// 	}
+		// 	return nil
+		// })
 
 		return nil
 	}, func(db dbx.Builder) error {

@@ -1,31 +1,37 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"path"
+	"strconv"
+	"strings"
 
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/grroxy-db/api"
-	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/utils"
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/apis"
+	"github.com/pocketbase/pocketbase/plugins/migratecmd"
+	"github.com/spf13/cobra"
 
 	// "github.com/pocketbase/pocketbase/tools/list"
 	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy/migrations"
 )
 
-var conf config.Config
+var App *pocketbase.PocketBase
 var API api.Backend
-
-// var noUI bool
+var noUI bool
 var noProxy bool
-var HostAddress string = "127.0.0.1:8090"
-var ProxyAddress string = "127.0.0.1:8888"
+var MainHostAddress string
+var MainProxyAddress string
 var showLogs bool
-
-// var noBanner bool
+var noBanner bool
 var launchApp bool
 
 // func printBanner() {
@@ -44,102 +50,120 @@ func initialize() {
 		log.SetOutput(io.Discard)
 	}
 
-	// printBanner()
-
 	var err error
-	conf.HostAddr, err = utils.CheckAndFindAvailablePort(HostAddress)
-	if err != nil {
-		log.Fatalln(err)
-	} else {
-		if conf.HostAddr != HostAddress {
-			fmt.Println("\nInfo: Host address is already in use. Using ", conf.HostAddr)
-		}
-	}
-	conf.ProxyAddr = ProxyAddress
-	conf.TemplateDirectory = `D:\go\src\github.com\glitchedgitz\grroxy-db\grroxy-templates`
-	conf.Initiate()
+
+	// Probably not used
+	HomeDirectory, err = os.UserHomeDir()
+	utils.CheckErr("", err)
+
+	CacheDirectory, err = os.UserCacheDir()
+	CacheDirectory = path.Join(CacheDirectory, "grroxy")
+	os.MkdirAll(CacheDirectory, 0755)
+	utils.CheckErr("", err)
+
+	ConfigDirectory, err = os.UserConfigDir()
+	ConfigDirectory = path.Join(ConfigDirectory, "grroxy")
+	os.MkdirAll(ConfigDirectory, 0755)
+	utils.CheckErr("", err)
+
 }
 
 func main() {
 
-	if len(os.Args) > 1 {
-		path := os.Args[1]
-		fmt.Println(path)
+	fmt.Println("Starting grroxyy")
+	go startCore()
 
-		initialize()
-
-		fmt.Println("Initializing done")
-		serve(path)
-	} else {
-		fmt.Println("No project path provided")
+	var rootCmd = &cobra.Command{
+		Use:   "grroxyy",
+		Short: "grroxyy is center of your web hacking operations",
 	}
 
-	// var rootCmd = &cobra.Command{
-	// 	Use:   "grroxy",
-	// 	Short: "grroxy is center of your web hacking operations",
-	// }
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "projects [project index (optional)]",
+		Short: "List all projects or open a specific project by index",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(args) > 0 {
+				projectIndex, err := strconv.Atoi(args[0])
+				if err != nil {
+					fmt.Println("Invalid project index:", err)
+					return
+				}
+				openProject(projectIndex)
+			} else {
+				initialize()
+				listProjects()
+			}
+		},
+	})
 
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use:   "projects [project index (optional)]",
-	// 	Short: "List all projects or open a specific project by index",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		if len(args) > 0 {
-	// 			index, err := strconv.Atoi(args[0])
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "config",
+		Run: func(cmd *cobra.Command, args []string) {
+			initialize()
+		},
+	})
 
-	// 			if err != nil {
-	// 				fmt.Println("Invalid project index:", args[0])
-	// 				return
-	// 			}
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "create [project name]",
+		Run: func(cmd *cobra.Command, args []string) {
+			initialize()
 
-	// 			conf.OpenProject(index)
-	// 		} else {
-	// 			conf.ListProjects()
-	// 		}
-	// 		serve()
-	// 	},
-	// })
+			// printBanner()
+			projectName := "Project"
+			if len(args) > 0 && args[0] != "." {
+				projectName = strings.Join([]string(args), " ")
+			}
+			createNewProject(projectName)
+		},
+	})
 
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "config",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		conf.ShowConfig()
-	// 	},
-	// })
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "resume",
+		Run: func(cmd *cobra.Command, args []string) {
+			initialize()
+			// conf.OpenProject(0)
+		}})
 
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "create [project name]",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
+	rootCmd.PersistentFlags().StringVar(&MainHostAddress, "host", "127.0.0.1:8090", "")
+	rootCmd.PersistentFlags().StringVar(&MainProxyAddress, "proxy", "127.0.0.1:8888", "")
+	rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
+	rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
+	rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
+	rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
 
-	// 		// printBanner()
-	// 		projectName := "Project"
-	// 		if len(args) > 0 && args[0] != "." {
-	// 			projectName = strings.Join([]string(args), " ")
-	// 		}
-	// 		conf.NewProject(projectName)
-	// 		serve()
-	// 	},
-	// })
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
 
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "resume",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		conf.OpenProject(0)
-	// 		serve()
-	// 	}})
+func startCore() {
+	App = pocketbase.NewWithConfig(
+		pocketbase.Config{
+			ProjectDir:      "D:\\test\\main",
+			DefaultDataDir:  "grroxy-main",
+			HideStartBanner: true,
+			// DefaultDev: true,
+			// DefaultEncryptionEnv: "hJH#GRJ#HG$JH$54h5kjhHJG#JHG#*&Y&EG#F&GIG@JKGH$JHRGJ##JKJH#JHG",
+		},
+	)
 
-	// rootCmd.PersistentFlags().StringVar(&HostAddress, "host", "127.0.0.1:8090", "")
-	// rootCmd.PersistentFlags().StringVar(&ProxyAddress, "proxy", "127.0.0.1:8888", "")
-	// rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
+	migratecmd.MustRegister(App, App.RootCmd, migratecmd.Config{})
 
-	// if err := rootCmd.Execute(); err != nil {
-	// 	fmt.Println(err)
-	// 	os.Exit(1)
-	// }
+	App.Bootstrap()
+
+	host, err := utils.CheckAndFindAvailablePort("127.0.0.1:8090")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Starting core at: ", host)
+
+	_, err = apis.Serve(App, apis.ServeConfig{
+		HttpAddr: host,
+	})
+
+	if errors.Is(err, http.ErrServerClosed) {
+		panic(err)
+	}
 }

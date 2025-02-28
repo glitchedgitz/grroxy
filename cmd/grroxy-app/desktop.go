@@ -8,7 +8,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	// "github.com/pocketbase/pocketbase/tools/list"
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy/migrations"
+	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-app/migrations"
 	"github.com/glitchedgitz/grroxy-db/frontend"
 )
 

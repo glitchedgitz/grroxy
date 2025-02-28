@@ -144,12 +144,11 @@ func openProject(projectIndex int) {
 }
 
 func startProject(projectPath string) {
-	cmd := exec.Command("grroxy", projectPath)
+	cmd := exec.Command("grroxy-app", projectPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Error executing grroxy command: %v\n", err)
 		return
 	}
-
 }
