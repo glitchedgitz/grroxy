@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"io"
@@ -85,13 +86,17 @@ func initialize() {
 
 }
 
+//go:embed all:frontend/dist
+var assets embed.FS
+
 func main() {
 
 	var rootCmd = &cobra.Command{
 		Use:   "grroxyy",
 		Short: "grroxyy is center of your web hacking operations",
 		Run: func(cmd *cobra.Command, args []string) {
-			initialize()
+			go initialize()
+			runApp()
 		},
 	}
 
