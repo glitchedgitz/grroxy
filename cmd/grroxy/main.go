@@ -9,31 +9,24 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"strconv"
-	"strings"
-	"sync"
 
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
-	"github.com/glitchedgitz/grroxy-db/api"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/launcher"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
-	"github.com/spf13/cobra"
 
 	// "github.com/pocketbase/pocketbase/tools/list"
 	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy/migrations"
 )
 
-var API api.Backend
-var noUI bool
 var noProxy bool
-var MainHostAddress string
-var MainProxyAddress string
+var MainHostAddress string = "127.0.0.1:8090"
+var MainProxyAddress string = "127.0.0.1:8888"
 var showLogs bool
 var noBanner bool
 var launchApp bool
@@ -50,13 +43,10 @@ func init() {
 
 var launch *launcher.Launcher
 var conf config.Config
-var wg sync.WaitGroup
-var initOnce sync.Once
 
 func initialize() {
 
 	fmt.Println("Starting grroxyy")
-	wg.Add(1)
 
 	if !showLogs {
 		log.SetOutput(io.Discard)
@@ -90,89 +80,90 @@ func initialize() {
 var assets embed.FS
 
 func main() {
+	initialize()
+	// go initialize()
+	// runApp()
 
-	var rootCmd = &cobra.Command{
-		Use:   "grroxyy",
-		Short: "grroxyy is center of your web hacking operations",
-		Run: func(cmd *cobra.Command, args []string) {
-			if launchApp {
-				go initialize()
-				runApp()
-			} else {
-				initialize()
-			}
-		},
-	}
+	// var rootCmd = &cobra.Command{
+	// 	Use:   "grroxyy",
+	// 	Short: "grroxyy is center of your web hacking operations",
+	// 	Run: func(cmd *cobra.Command, args []string) {
+	// 		// if launchApp {
+	// 		// } else {
+	// 		// 	initialize()
+	// 		// }
+	// 	},
+	// }
 
-	rootCmd.AddCommand(&cobra.Command{
-		Use:   "projects [project index (optional)]",
-		Short: "List all projects or open a specific project by index",
-		Run: func(cmd *cobra.Command, args []string) {
-			// Wait for initialization
-			wg.Wait()
+	// rootCmd.AddCommand(&cobra.Command{
+	// 	Use:   "projects [project index (optional)]",
+	// 	Short: "List all projects or open a specific project by index",
+	// 	Run: func(cmd *cobra.Command, args []string) {
+	// 		// Wait for initialization
+	// 		wg.Wait()
 
-			if len(args) > 0 {
-				projectIndex, err := strconv.Atoi(args[0])
-				if err != nil {
-					fmt.Println("Invalid project index:", err)
-					return
-				}
-				launch.OpenProject(projectIndex)
-			} else {
-				initialize()
-				launch.ListProjects()
-			}
-		},
-	})
+	// 		if len(args) > 0 {
+	// 			projectIndex, err := strconv.Atoi(args[0])
+	// 			if err != nil {
+	// 				fmt.Println("Invalid project index:", err)
+	// 				return
+	// 			}
+	// 			launch.OpenProject(projectIndex)
+	// 		} else {
+	// 			initialize()
+	// 			launch.ListProjects()
+	// 		}
+	// 	},
+	// })
 
-	rootCmd.AddCommand(&cobra.Command{
-		Use: "config",
-		Run: func(cmd *cobra.Command, args []string) {
-			initialize()
-		},
-	})
+	// rootCmd.AddCommand(&cobra.Command{
+	// 	Use: "config",
+	// 	Run: func(cmd *cobra.Command, args []string) {
+	// 		initialize()
+	// 	},
+	// })
 
-	rootCmd.AddCommand(&cobra.Command{
-		Use: "create [project name]",
-		Run: func(cmd *cobra.Command, args []string) {
-			initialize()
+	// rootCmd.AddCommand(&cobra.Command{
+	// 	Use: "create [project name]",
+	// 	Run: func(cmd *cobra.Command, args []string) {
+	// 		initialize()
 
-			// printBanner()
-			projectName := "Project"
+	// 		// printBanner()
+	// 		projectName := "Project"
 
-			if len(args) > 0 && args[0] != "." {
-				projectName = strings.Join([]string(args), " ")
-			}
+	// 		if len(args) > 0 && args[0] != "." {
+	// 			projectName = strings.Join([]string(args), " ")
+	// 		}
 
-			projectData, err := launch.CreateNewProject(projectName)
+	// 		projectData, err := launch.CreateNewProject(projectName)
 
-			if err != nil {
-				fmt.Println("Error creating project:", err)
-				return
-			}
+	// 		if err != nil {
+	// 			fmt.Println("Error creating project:", err)
+	// 			return
+	// 		}
 
-			fmt.Println("Project created successfully:", projectData)
-		},
-	})
+	// 		fmt.Println("Project created successfully:", projectData)
+	// 	},
+	// })
 
-	rootCmd.AddCommand(&cobra.Command{
-		Use: "resume",
-		Run: func(cmd *cobra.Command, args []string) {
-			initialize()
-			// conf.OpenProject(0)
-		}})
+	// rootCmd.AddCommand(&cobra.Command{
+	// 	Use: "resume",
+	// 	Run: func(cmd *cobra.Command, args []string) {
+	// 		initialize()
+	// 		// conf.OpenProject(0)
+	// 	}})
 
-	rootCmd.PersistentFlags().StringVar(&MainHostAddress, "host", "127.0.0.1:8090", "")
-	rootCmd.PersistentFlags().StringVar(&MainProxyAddress, "proxy", "127.0.0.1:8888", "")
-	rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
-	rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
-	rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
-	rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
+	// rootCmd.PersistentFlags().StringVar(&MainHostAddress, "host", "127.0.0.1:8090", "")
+	// rootCmd.PersistentFlags().StringVar(&MainProxyAddress, "proxy", "127.0.0.1:8888", "")
+	// rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
+	// rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
+	// rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
+	// rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	// if err := rootCmd.Execute(); err != nil {
+	// 	fmt.Println(err)
+	// 	os.Exit(1)
+	// }
 }
 
 func startCore() {
@@ -226,8 +217,6 @@ func startCore() {
 	}
 
 	// Signal that initialization is complete before starting the server
-	wg.Done()
-
 	fmt.Println("Starting core at: ", host)
 
 	_, err = apis.Serve(launch.App, apis.ServeConfig{
