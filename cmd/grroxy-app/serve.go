@@ -39,6 +39,7 @@ func serve(projectPath string) {
 		Cook:       cook.NewWithoutConfig(),
 		Wappalyzer: wappalyzerClient,
 		Config:     &conf,
+		CmdChannel: make(chan api.RunCommandData),
 	}
 
 	if !noProxy {
@@ -93,6 +94,7 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.TemplatesList)
 	API.App.OnBeforeServe().Add(API.TemplatesNew)
 	API.App.OnBeforeServe().Add(API.TemplatesDelete)
+	API.App.OnBeforeServe().Add(API.RunCommand)
 	API.App.OnBeforeServe().Add(API.Tools)
 
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
