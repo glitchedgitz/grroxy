@@ -7,6 +7,7 @@ import (
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/config"
+	"github.com/glitchedgitz/grroxy-db/process"
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
@@ -20,7 +21,7 @@ type Backend struct {
 	Config     *config.Config
 	Cook       *cook.COOK
 	Wappalyzer *wappalyzer.Wappalyze
-	CmdChannel chan RunCommandData
+	CmdChannel chan process.RunCommandData
 }
 
 func (backend *Backend) Serve() {

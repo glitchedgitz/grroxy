@@ -11,11 +11,12 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 
-	// "github.com/pocketbase/pocketbase/tools/list"
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-tool/migrations"
 	"github.com/glitchedgitz/grroxy-db/cmd/grroxy-tool/tools_api"
 	"github.com/glitchedgitz/grroxy-db/config"
+	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/utils"
+
+	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-tool/migrations"
 )
 
 var conf config.Config
@@ -72,7 +73,7 @@ func main() {
 			},
 		),
 		Config:     &conf,
-		CmdChannel: make(chan tools_api.RunCommandData),
+		CmdChannel: make(chan process.RunCommandData),
 	}
 
 	backend.App.OnBeforeServe().Add(backend.RunCommand)

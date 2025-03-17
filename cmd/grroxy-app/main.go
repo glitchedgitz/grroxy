@@ -7,14 +7,9 @@ import (
 	"log"
 	"os"
 
-	// "github.com/pocketbase/dbx"
-
 	"github.com/glitchedgitz/grroxy-db/api"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/utils"
-
-	// "github.com/pocketbase/pocketbase/tools/list"
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy/migrations"
 )
 
 var conf config.Config

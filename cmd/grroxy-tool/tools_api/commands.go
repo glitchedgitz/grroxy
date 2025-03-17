@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 
+	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/labstack/echo/v5"
@@ -31,33 +32,11 @@ func (backend *Tools) CommandManager() {
 }
 
 func (backend *Tools) SetProcess(id, state string) {
-	record, err := backend.App.Dao().FindRecordById("_processes", id)
-	utils.CheckErr("", err)
-
-	record.Set("state", state)
-
-	err = backend.App.Dao().SaveRecord(record)
-	utils.CheckErr("[RegisterProcessInDB][SaveRecord]", err)
+	process.SetState(backend.App, id, state)
 }
 
 func (backend *Tools) RegisterProcessInDB(input, data any, state string) string {
-	collection, err := backend.App.Dao().FindCollectionByNameOrId("_processes")
-	utils.CheckErr("[RunningCommand][FindCollection]:", err)
-
-	record := models.NewRecord(collection)
-
-	id := utils.RandomString(15)
-
-	record.Set("id", id)
-	record.Set("name", "name") // Use command as name
-	record.Set("input", input) // Store the input data
-	record.Set("data", data)   // Store full command data
-	record.Set("state", state)
-	record.Set("type", "type") // Store whether it saves to file or collection
-
-	err = backend.App.Dao().SaveRecord(record)
-	utils.CheckErr("[RegisterProcessInDB][SaveRecord]", err)
-	return id
+	return process.RegisterInDB(backend.App, input, data, state)
 }
 
 type RunCommandData struct {
@@ -98,7 +77,7 @@ func (backend *Tools) RunCommand(e *core.ServeEvent) error {
 				return c.String(http.StatusForbidden, "")
 			}
 
-			var data RunCommandData
+			var data process.RunCommandData
 			if err := c.Bind(&data); err != nil {
 				return err
 			}

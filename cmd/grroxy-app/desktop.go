@@ -3,13 +3,10 @@ package main
 import (
 	"context"
 
+	"github.com/glitchedgitz/grroxy-db/frontend"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-
-	// "github.com/pocketbase/pocketbase/tools/list"
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-app/migrations"
-	"github.com/glitchedgitz/grroxy-db/frontend"
 )
 
 type App struct {

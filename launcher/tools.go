@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase"
@@ -41,7 +42,7 @@ func (launcher *Launcher) ToolsServer(e *core.ServeEvent) error {
 				return c.String(http.StatusInternalServerError, err.Error())
 			}
 
-			id := launcher.RegisterProcessInDB("grroxy-tool -path "+path+" -host "+hostAddress+" -name "+name, process.inqueue)
+			id := launcher.RegisterProcessInDB("grroxy-tool -path "+path+" -host "+hostAddress+" -name "+name, nil, schemas.ProcessState.Inqueue)
 
 			go launcher.toolsServerStart(hostAddress, path, name, func() {
 				fmt.Println("toolsServerStart closed")

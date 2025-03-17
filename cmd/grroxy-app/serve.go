@@ -8,14 +8,14 @@ import (
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/api"
+	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/proxy"
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
-	// "github.com/pocketbase/pocketbase/tools/list"
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy/migrations"
+	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-app/migrations"
 )
 
 func serve(projectPath string) {
@@ -39,7 +39,7 @@ func serve(projectPath string) {
 		Cook:       cook.NewWithoutConfig(),
 		Wappalyzer: wappalyzerClient,
 		Config:     &conf,
-		CmdChannel: make(chan api.RunCommandData),
+		CmdChannel: make(chan process.RunCommandData),
 	}
 
 	if !noProxy {
