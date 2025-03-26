@@ -34,6 +34,7 @@ require (
 	github.com/projectdiscovery/tinydns v0.0.31
 	github.com/r--w/pocketbase v0.13.0
 	github.com/rs/xid v1.5.0
+	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
 	github.com/tomnomnom/rawhttp v0.0.0-20220611225552-e98e9bba2559
 	github.com/wailsapp/wails/v2 v2.9.2
@@ -151,7 +152,6 @@ require (
 	github.com/sashabaranov/go-openai v1.20.4 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tidwall/btree v1.7.0 // indirect

@@ -18,6 +18,7 @@ import (
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
+	"github.com/spf13/cobra"
 
 	// "github.com/pocketbase/pocketbase/tools/list"
 	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy/migrations"
@@ -43,16 +44,8 @@ func init() {
 var launch *launcher.Launcher
 var conf config.Config
 
-func initialize() {
-
-	fmt.Println("Starting grroxyy")
-
-	// if !showLogs {
-	// 	log.SetOutput(io.Discard)
-	// }
-
+func setConfig() {
 	var err error
-
 	// Probably not used
 	conf.HomeDirectory, err = os.UserHomeDir()
 	utils.CheckErr("", err)
@@ -70,6 +63,15 @@ func initialize() {
 	fmt.Println("Config directory:", conf.ConfigDirectory)
 	fmt.Println("Cache directory:", conf.CacheDirectory)
 	fmt.Println("Home directory:", conf.HomeDirectory)
+}
+
+func initialize() {
+
+	fmt.Println("Starting grroxyy")
+
+	// if !showLogs {
+	// 	log.SetOutput(io.Discard)
+	// }
 
 	startCore()
 
@@ -78,21 +80,36 @@ func initialize() {
 //go:embed all:frontend/dist
 var assets embed.FS
 
+func completionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "completion",
+		Short: "This meant to be hidden",
+	}
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "grroxy",
+	Short: "grroxy is center of your web hacking operations",
+	// Run: func(cmd *cobra.Command, args []string) {
+	// 	if launchApp {
+	// 	} else {
+	// 		initialize()
+	// 	}
+	// },
+}
+
+func init() {
+	completion := completionCommand()
+
+	// mark completion hidden
+	completion.Hidden = true
+	rootCmd.AddCommand(completion)
+}
+
 func main() {
-	initialize()
+	// initialize()
 	// go initialize()
 	// runApp()
-
-	// var rootCmd = &cobra.Command{
-	// 	Use:   "grroxyy",
-	// 	Short: "grroxyy is center of your web hacking operations",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		// if launchApp {
-	// 		// } else {
-	// 		// 	initialize()
-	// 		// }
-	// 	},
-	// }
 
 	// rootCmd.AddCommand(&cobra.Command{
 	// 	Use:   "projects [project index (optional)]",
@@ -115,12 +132,28 @@ func main() {
 	// 	},
 	// })
 
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "config",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 	},
-	// })
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "config",
+		Run: func(cmd *cobra.Command, args []string) {
+			// fmt.Println("Config")
+			setConfig()
+		},
+	})
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "start",
+		Run: func(cmd *cobra.Command, args []string) {
+			initialize()
+		},
+	})
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use: "app",
+		Run: func(cmd *cobra.Command, args []string) {
+			go initialize()
+			runApp()
+		},
+	})
 
 	// rootCmd.AddCommand(&cobra.Command{
 	// 	Use: "create [project name]",
@@ -159,10 +192,10 @@ func main() {
 	// rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
 	// rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
 
-	// if err := rootCmd.Execute(); err != nil {
-	// 	fmt.Println(err)
-	// 	os.Exit(1)
-	// }
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }
 
 func startCore() {
