@@ -29,12 +29,8 @@ function _interop_require_default(obj) {
 let defaults = {
     optimizeUniversalDefaults: false,
     generalizedModifiers: true,
-    get disableColorOpacityUtilitiesByDefault () {
-        return false;
-    },
-    get relativeContentPathsByDefault () {
-        return false;
-    }
+    disableColorOpacityUtilitiesByDefault: false,
+    relativeContentPathsByDefault: false
 };
 let featureFlags = {
     future: [

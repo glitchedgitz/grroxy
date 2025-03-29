@@ -25,8 +25,7 @@ function parseGlob(pattern) {
     }
     if (glob.substr(0, 2) === "./") {
         glob = glob.substr(2);
-    }
-    if (glob.charAt(0) === "/") {
+    } else if (glob.charAt(0) === "/") {
         glob = glob.substr(1);
     }
     return {

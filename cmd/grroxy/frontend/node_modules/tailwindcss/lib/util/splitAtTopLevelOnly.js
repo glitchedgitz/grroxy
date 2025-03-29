@@ -35,11 +35,7 @@ function splitAtTopLevelOnly(input, separator) {
                 lastPos = idx + separator.length;
             }
         }
-        if (isEscaped) {
-            isEscaped = false;
-        } else if (char === "\\") {
-            isEscaped = true;
-        }
+        isEscaped = isEscaped ? false : char === "\\";
         if (char === "(" || char === "[" || char === "{") {
             stack.push(char);
         } else if (char === ")" && stack[stack.length - 1] === "(" || char === "]" && stack[stack.length - 1] === "[" || char === "}" && stack[stack.length - 1] === "{") {

@@ -34,20 +34,12 @@ _export(exports, {
         return resolveDebug;
     }
 });
-const _packagejson = /*#__PURE__*/ _interop_require_default(require("../../package.json"));
-function _interop_require_default(obj) {
-    return obj && obj.__esModule ? obj : {
-        default: obj
-    };
-}
 const env = typeof process !== "undefined" ? {
     NODE_ENV: process.env.NODE_ENV,
-    DEBUG: resolveDebug(process.env.DEBUG),
-    ENGINE: _packagejson.default.tailwindcss.engine
+    DEBUG: resolveDebug(process.env.DEBUG)
 } : {
     NODE_ENV: "production",
-    DEBUG: false,
-    ENGINE: _packagejson.default.tailwindcss.engine
+    DEBUG: false
 };
 const contextMap = new Map();
 const configContextMap = new Map();

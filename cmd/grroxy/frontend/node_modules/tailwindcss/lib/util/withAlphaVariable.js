@@ -44,7 +44,7 @@ function withAlphaVariable({ color , property , variable  }) {
                     p,
                     color({
                         opacityVariable: variable,
-                        opacityValue: `var(${variable})`
+                        opacityValue: `var(${variable}, 1)`
                     })
                 ];
             }))
@@ -71,7 +71,7 @@ function withAlphaVariable({ color , property , variable  }) {
                 p,
                 (0, _color.formatColor)({
                     ...parsed,
-                    alpha: `var(${variable})`
+                    alpha: `var(${variable}, 1)`
                 })
             ];
         }))

@@ -18,9 +18,11 @@ function _interop_require_default(obj) {
 function applyImportantSelector(selector, important) {
     let sel = (0, _postcssselectorparser.default)().astSync(selector);
     sel.each((sel)=>{
-        // Wrap with :is if it's not already wrapped
-        let isWrapped = sel.nodes[0].type === "pseudo" && sel.nodes[0].value === ":is" && sel.nodes.every((node)=>node.type !== "combinator");
-        if (!isWrapped) {
+        // For nesting, we only need to wrap a selector with :is() if it has a top-level combinator,
+        // e.g. `.dark .text-white`, to be independent of DOM order. Any other selector, including
+        // combinators inside of pseudos like `:where()`, are ok to nest.
+        let shouldWrap = sel.nodes.some((node)=>node.type === "combinator");
+        if (shouldWrap) {
             sel.nodes = [
                 _postcssselectorparser.default.pseudo({
                     value: ":is",

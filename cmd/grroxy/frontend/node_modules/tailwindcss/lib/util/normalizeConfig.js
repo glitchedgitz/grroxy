@@ -260,8 +260,7 @@ function normalizeConfig(config) {
             let transformers = {};
             if (typeof transform === "function") {
                 transformers.DEFAULT = transform;
-            }
-            if (typeof transform === "object" && transform !== null) {
+            } else if (typeof transform === "object" && transform !== null) {
                 Object.assign(transformers, transform);
             }
             return transformers;

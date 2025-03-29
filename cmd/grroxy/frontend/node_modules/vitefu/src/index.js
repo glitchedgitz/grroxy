@@ -196,14 +196,16 @@ export async function crawlFrameworkPkgs(options) {
 /** @type {import('..').findDepPkgJsonPath} */
 export async function findDepPkgJsonPath(dep, parent) {
   if (pnp) {
-    const depRoot = pnp.resolveToUnqualified(dep, parent)
-    if (!depRoot) return undefined
-    return path.join(depRoot, 'package.json')
+    try {
+      const depRoot = pnp.resolveToUnqualified(dep, parent)
+      if (!depRoot) return undefined
+      return path.join(depRoot, 'package.json')
+    } catch {
+      return undefined
+    }
   }
 
-  let root = await findClosestPkgJsonPath(parent)
-  if (!root) return undefined
-  root = path.dirname(root)
+  let root = parent
   while (root) {
     const pkg = path.join(root, 'node_modules', dep, 'package.json')
     try {

@@ -111,28 +111,28 @@ function resolveDefaultsAtRules({ tailwindConfig  }) {
                         // we consider them separately because merging the declarations into
                         // a single rule will cause browsers that do not understand the
                         // vendor prefix to throw out the whole rule
-                        let selectorGroupName = selector.includes(":-") || selector.includes("::-") ? selector : "__DEFAULT__";
+                        // Additionally if a selector contains `:has` we also consider
+                        // it separately because FF only recently gained support for it
+                        let selectorGroupName = selector.includes(":-") || selector.includes("::-") || selector.includes(":has") ? selector : "__DEFAULT__";
                         var _selectorGroups_get;
                         let selectors = (_selectorGroups_get = selectorGroups.get(selectorGroupName)) !== null && _selectorGroups_get !== void 0 ? _selectorGroups_get : new Set();
                         selectorGroups.set(selectorGroupName, selectors);
                         selectors.add(selector);
                     }
                 }
-                if ((0, _featureFlags.flagEnabled)(tailwindConfig, "optimizeUniversalDefaults")) {
-                    if (selectorGroups.size === 0) {
-                        universal.remove();
-                        continue;
-                    }
-                    for (let [, selectors] of selectorGroups){
-                        let universalRule = _postcss.default.rule({
-                            source: universal.source
-                        });
-                        universalRule.selectors = [
-                            ...selectors
-                        ];
-                        universalRule.append(universal.nodes.map((node)=>node.clone()));
-                        universal.before(universalRule);
-                    }
+                if (selectorGroups.size === 0) {
+                    universal.remove();
+                    continue;
+                }
+                for (let [, selectors] of selectorGroups){
+                    let universalRule = _postcss.default.rule({
+                        source: universal.source
+                    });
+                    universalRule.selectors = [
+                        ...selectors
+                    ];
+                    universalRule.append(universal.nodes.map((node)=>node.clone()));
+                    universal.before(universalRule);
                 }
                 universal.remove();
             }

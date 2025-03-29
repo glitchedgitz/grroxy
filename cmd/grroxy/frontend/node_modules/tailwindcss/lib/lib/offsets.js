@@ -66,15 +66,19 @@ class Offsets {
             variants: 0n,
             parallelIndex: 0n,
             index: this.offsets[layer]++,
+            propertyOffset: 0n,
+            property: "",
             options: []
         };
     }
     /**
+   * @param {string} name
    * @returns {RuleOffset}
-   */ arbitraryProperty() {
+   */ arbitraryProperty(name) {
         return {
             ...this.create("utilities"),
-            arbitrary: 1n
+            arbitrary: 1n,
+            property: name
         };
     }
     /**
@@ -214,6 +218,10 @@ class Offsets {
         if (a.arbitrary !== b.arbitrary) {
             return a.arbitrary - b.arbitrary;
         }
+        // Always sort arbitrary properties alphabetically
+        if (a.propertyOffset !== b.propertyOffset) {
+            return a.propertyOffset - b.propertyOffset;
+        }
         // Sort utilities, components, etc… in the order they were registered
         return a.index - b.index;
     }
@@ -267,8 +275,49 @@ class Offsets {
    * @template T
    * @param {[RuleOffset, T][]} list
    * @returns {[RuleOffset, T][]}
+   */ sortArbitraryProperties(list) {
+        // Collect all known arbitrary properties
+        let known = new Set();
+        for (let [offset] of list){
+            if (offset.arbitrary === 1n) {
+                known.add(offset.property);
+            }
+        }
+        // No arbitrary properties? Nothing to do.
+        if (known.size === 0) {
+            return list;
+        }
+        // Sort the properties alphabetically
+        let properties = Array.from(known).sort();
+        // Create a map from the property name to its offset
+        let offsets = new Map();
+        let offset = 1n;
+        for (let property of properties){
+            offsets.set(property, offset++);
+        }
+        // Apply the sorted offsets to the list
+        return list.map((item)=>{
+            let [offset, rule] = item;
+            var _offsets_get;
+            offset = {
+                ...offset,
+                propertyOffset: (_offsets_get = offsets.get(offset.property)) !== null && _offsets_get !== void 0 ? _offsets_get : 0n
+            };
+            return [
+                offset,
+                rule
+            ];
+        });
+    }
+    /**
+   * @template T
+   * @param {[RuleOffset, T][]} list
+   * @returns {[RuleOffset, T][]}
    */ sort(list) {
+        // Sort arbitrary variants so they're in alphabetical order
         list = this.remapArbitraryVariantOffsets(list);
+        // Sort arbitrary properties so they're in alphabetical order
+        list = this.sortArbitraryProperties(list);
         return list.sort(([a], [b])=>(0, _bigSign.default)(this.compare(a, b)));
     }
 }

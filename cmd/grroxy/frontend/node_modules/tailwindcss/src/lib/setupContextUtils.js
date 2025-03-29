@@ -24,6 +24,8 @@ import { Offsets } from './offsets.js'
 import { flagEnabled } from '../featureFlags.js'
 import { finalizeSelector, formatVariantSelector } from '../util/formatVariantSelector'
 
+export const INTERNAL_FEATURES = Symbol()
+
 const VARIANT_TYPES = {
   AddVariant: Symbol.for('ADD_VARIANT'),
   MatchVariant: Symbol.for('MATCH_VARIANT'),
@@ -146,43 +148,45 @@ function getClasses(selector, mutate) {
   return parser.transformSync(selector)
 }
 
+/**
+ * Ignore everything inside a :not(...). This allows you to write code like
+ * `div:not(.foo)`. If `.foo` is never found in your code, then we used to
+ * not generated it. But now we will ignore everything inside a `:not`, so
+ * that it still gets generated.
+ *
+ * @param {selectorParser.Root} selectors
+ */
+function ignoreNot(selectors) {
+  selectors.walkPseudos((pseudo) => {
+    if (pseudo.value === ':not') {
+      pseudo.remove()
+    }
+  })
+}
+
 function extractCandidates(node, state = { containsNonOnDemandable: false }, depth = 0) {
   let classes = []
+  let selectors = []
 
-  // Handle normal rules
   if (node.type === 'rule') {
-    // Ignore everything inside a :not(...). This allows you to write code like
-    // `div:not(.foo)`. If `.foo` is never found in your code, then we used to
-    // not generated it. But now we will ignore everything inside a `:not`, so
-    // that it still gets generated.
-    function ignoreNot(selectors) {
-      selectors.walkPseudos((pseudo) => {
-        if (pseudo.value === ':not') {
-          pseudo.remove()
-        }
-      })
-    }
-
-    for (let selector of node.selectors) {
-      let classCandidates = getClasses(selector, ignoreNot)
-      // At least one of the selectors contains non-"on-demandable" candidates.
-      if (classCandidates.length === 0) {
-        state.containsNonOnDemandable = true
-      }
-
-      for (let classCandidate of classCandidates) {
-        classes.push(classCandidate)
-      }
-    }
+    // Handle normal rules
+    selectors.push(...node.selectors)
+  } else if (node.type === 'atrule') {
+    // Handle at-rules (which contains nested rules)
+    node.walkRules((rule) => selectors.push(...rule.selectors))
   }
 
-  // Handle at-rules (which contains nested rules)
-  else if (node.type === 'atrule') {
-    node.walkRules((rule) => {
-      for (let classCandidate of rule.selectors.flatMap((selector) => getClasses(selector))) {
-        classes.push(classCandidate)
-      }
-    })
+  for (let selector of selectors) {
+    let classCandidates = getClasses(selector, ignoreNot)
+
+    // At least one of the selectors contains non-"on-demandable" candidates.
+    if (classCandidates.length === 0) {
+      state.containsNonOnDemandable = true
+    }
+
+    for (let classCandidate of classCandidates) {
+      classes.push(classCandidate)
+    }
   }
 
   if (depth === 0) {
@@ -230,8 +234,8 @@ export function parseVariant(variant) {
         return ({ format }) => format(str)
       }
 
-      let [, name, params] = /@(.*?)( .+|[({].*)/g.exec(str)
-      return ({ wrap }) => wrap(postcss.atRule({ name, params: params.trim() }))
+      let [, name, params] = /@(\S*)( .+|[({].*)?/g.exec(str)
+      return ({ wrap }) => wrap(postcss.atRule({ name, params: params?.trim() ?? '' }))
     })
     .reverse()
 
@@ -752,21 +756,45 @@ function resolvePlugins(context, root) {
   // TODO: This is a workaround for backwards compatibility, since custom variants
   // were historically sorted before screen/stackable variants.
   let beforeVariants = [
+    variantPlugins['childVariant'],
     variantPlugins['pseudoElementVariants'],
     variantPlugins['pseudoClassVariants'],
+    variantPlugins['hasVariants'],
     variantPlugins['ariaVariants'],
     variantPlugins['dataVariants'],
   ]
   let afterVariants = [
     variantPlugins['supportsVariants'],
-    variantPlugins['directionVariants'],
     variantPlugins['reducedMotionVariants'],
     variantPlugins['prefersContrastVariants'],
-    variantPlugins['darkVariants'],
-    variantPlugins['printVariant'],
     variantPlugins['screenVariants'],
     variantPlugins['orientationVariants'],
+    variantPlugins['directionVariants'],
+    variantPlugins['darkVariants'],
+    variantPlugins['forcedColorsVariants'],
+    variantPlugins['printVariant'],
   ]
+
+  // This is a compatibility fix for the pre 3.4 dark mode behavior
+  // `class` retains the old behavior, but `selector` keeps the new behavior
+  let isLegacyDarkMode =
+    context.tailwindConfig.darkMode === 'class' ||
+    (Array.isArray(context.tailwindConfig.darkMode) &&
+      context.tailwindConfig.darkMode[0] === 'class')
+
+  if (isLegacyDarkMode) {
+    afterVariants = [
+      variantPlugins['supportsVariants'],
+      variantPlugins['reducedMotionVariants'],
+      variantPlugins['prefersContrastVariants'],
+      variantPlugins['darkVariants'],
+      variantPlugins['screenVariants'],
+      variantPlugins['orientationVariants'],
+      variantPlugins['directionVariants'],
+      variantPlugins['forcedColorsVariants'],
+      variantPlugins['printVariant'],
+    ]
+  }
 
   return [...corePluginList, ...beforeVariants, ...userPlugins, ...afterVariants, ...layerPlugins]
 }
@@ -943,13 +971,17 @@ function registerPlugins(plugins, context) {
 
     // Sort all classes in order
     // Non-tailwind classes won't be generated and will be left as `null`
-    let rules = generateRules(new Set(sorted), context)
+    let rules = generateRules(new Set(sorted), context, true)
     rules = context.offsets.sort(rules)
 
     let idx = BigInt(parasiteUtilities.length)
 
     for (const [, rule] of rules) {
-      sortedClassNames.set(rule.raws.tailwind.candidate, idx++)
+      let candidate = rule.raws.tailwind.candidate
+
+      // When multiple rules match a candidate
+      // always take the position of the first one
+      sortedClassNames.set(candidate, sortedClassNames.get(candidate) ?? idx++)
     }
 
     return classes.map((className) => {
@@ -1012,6 +1044,11 @@ function registerPlugins(plugins, context) {
 
   // Generate a list of available variants with meta information of the type of variant.
   context.getVariants = function getVariants() {
+    // We use a unique, random ID for candidate names to avoid conflicts
+    // We can't use characters like `_`, `:`, `@` or `.` because they might
+    // be used as a separator
+    let id = Math.random().toString(36).substring(7).toUpperCase()
+
     let result = []
     for (let [name, options] of context.variantOptions.entries()) {
       if (options.variantInfo === VARIANT_INFO.Base) continue
@@ -1022,7 +1059,7 @@ function registerPlugins(plugins, context) {
         values: Object.keys(options.values ?? {}),
         hasDash: name !== '@',
         selectors({ modifier, value } = {}) {
-          let candidate = '__TAILWIND_PLACEHOLDER__'
+          let candidate = `TAILWINDPLACEHOLDER${id}`
 
           let rule = postcss.rule({ selector: `.${candidate}` })
           let container = postcss.root({ nodes: [rule.clone()] })
@@ -1119,17 +1156,24 @@ function registerPlugins(plugins, context) {
           }
 
           let isArbitraryVariant = !(value in (options.values ?? {}))
+          let internalFeatures = options[INTERNAL_FEATURES] ?? {}
+
+          let respectPrefix = (() => {
+            if (isArbitraryVariant) return false
+            if (internalFeatures.respectPrefix === false) return false
+            return true
+          })()
 
           formatStrings = formatStrings.map((format) =>
             format.map((str) => ({
               format: str,
-              isArbitraryVariant,
+              respectPrefix,
             }))
           )
 
           manualFormatStrings = manualFormatStrings.map((format) => ({
             format,
-            isArbitraryVariant,
+            respectPrefix,
           }))
 
           let opts = {
