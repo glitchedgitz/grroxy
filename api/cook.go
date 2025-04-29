@@ -72,7 +72,10 @@ func (backend *Backend) CookApplyMethods(e *core.ServeEvent) error {
 				return err
 			}
 
-			results := backend.Cook.ApplyMethods(data.Strings, data.Methods)
+			results, err := backend.Cook.ApplyMethods(data.Strings, data.Methods)
+			if err != nil {
+				return c.String(http.StatusOK, err.Error())
+			}
 			return c.JSON(http.StatusOK, map[string]any{"results": results})
 		},
 		Middlewares: []echo.MiddlewareFunc{
