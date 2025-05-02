@@ -12,7 +12,7 @@ import (
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/config"
-	"github.com/glitchedgitz/grroxy-db/launcher"
+	"github.com/glitchedgitz/grroxy-db/api/launcher"
 	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/pocketbase/pocketbase"

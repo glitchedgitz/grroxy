@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/glitchedgitz/grroxy-db/api"
+	"github.com/glitchedgitz/grroxy-db/api/app"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/utils"
 )
