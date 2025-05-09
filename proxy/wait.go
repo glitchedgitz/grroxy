@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/glitchedgitz/grroxy-db/sdk"
 	"github.com/glitchedgitz/grroxy-db/types"
+	"github.com/glitchedgitz/grroxy-db/utils"
 )
 
 func (p *Proxy) interceptWait(userdata *types.UserData, field string, contentLength int64) (string, bool) {
@@ -71,7 +71,7 @@ func (p *Proxy) interceptWait(userdata *types.UserData, field string, contentLen
 	var updatedString string
 
 	log.Println("[onWaitData] Edited WaitData is not empty -----------------------")
-	log.Println(updatedData)
+	// log.Println(updatedData)
 
 	upData := updatedData.(map[string]interface{})
 	log.Println("[onWaitData] Updated Data --------------  ", upData)
@@ -87,28 +87,56 @@ func (p *Proxy) interceptWait(userdata *types.UserData, field string, contentLen
 
 	if edited {
 		updatedString = upData[editedData].(string)
-		previousTotalLength := len(upData[originalData].(string))
-		newTotalLength := len(updatedString)
-		diffLength := newTotalLength - previousTotalLength
+		originalString := upData[originalData].(string)
 
-		if diffLength < 0 {
-			diffLength = diffLength * -1
+		// Try different separators for updated string
+		var updatedParts []string
+		var separator string
+
+		// Try \r\n\r\n first
+		updatedParts = strings.SplitN(updatedString, "\r\n\r\n", 2)
+
+		// If not found, try \n\n
+		if len(updatedParts) != 2 {
+			updatedParts = strings.SplitN(updatedString, "\n\n", 2)
+			separator = "\n\n"
+		} else {
+			separator = "\r\n\r\n"
 		}
 
-		log.Println("[previousTotalLength] ", previousTotalLength)
-		log.Println("[newTotalLength] ", newTotalLength)
-		log.Println("[diffLength] ", diffLength)
+		if len(updatedParts) == 2 {
+			// Calculate body length
+			updatedBodyLength := len(updatedParts[1])
+			diffLength := updatedBodyLength - int(contentLength)
 
-		if diffLength != 0 {
-			previousContentHeader := "Content-Length: " + fmt.Sprint(contentLength)
-			newContentHeader := "Content-Length: " + fmt.Sprint(contentLength+int64(diffLength))
-			updatedString = strings.Replace(updatedString, previousContentHeader, newContentHeader, 1)
+			if diffLength != 0 {
+				// Update Content-Length header
+				headers := updatedParts[0]
+				previousContentHeader := "Content-Length: " + fmt.Sprint(contentLength)
+				newContentHeader := "Content-Length: " + fmt.Sprint(contentLength+int64(diffLength))
+				headers = strings.Replace(headers, previousContentHeader, newContentHeader, 1)
 
-			previousContentHeader = "Content-Length:" + fmt.Sprint(contentLength)
-			newContentHeader = "Content-Length:" + fmt.Sprint(contentLength+int64(diffLength))
-			updatedString = strings.Replace(updatedString, previousContentHeader, newContentHeader, 1)
+				previousContentHeader = "Content-Length:" + fmt.Sprint(contentLength)
+				newContentHeader = "Content-Length:" + fmt.Sprint(contentLength+int64(diffLength))
+				headers = strings.Replace(headers, previousContentHeader, newContentHeader, 1)
+
+				// Reconstruct the full request/response using the detected separator
+				updatedString = headers + separator + updatedParts[1]
+			}
+
+			logstatement := ""
+			logstatement += fmt.Sprintf("[previousContentLength] %d\n", contentLength)
+			logstatement += fmt.Sprintf("[newContentLength] %d\n", contentLength+int64(diffLength))
+			logstatement += fmt.Sprintf("[updatedBodyLength] %d\n", updatedBodyLength)
+			logstatement += fmt.Sprintf("[diffLength] %d\n", diffLength)
+			logstatement += fmt.Sprintf("[separator] %q\n", separator)
+			logstatement += "==============================================\n"
+			logstatement += fmt.Sprintf("[originalData] %s\n", originalString)
+			logstatement += "==============================================\n"
+			logstatement += fmt.Sprintf("[editedData] %s\n", updatedString)
+			logstatement += "==============================================\n"
+			log.Println(logstatement)
 		}
-
 	} else {
 		updatedString = upData[originalData].(string)
 	}

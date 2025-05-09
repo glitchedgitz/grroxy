@@ -257,6 +257,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 		req.Header = requestNew.Header
 		req.Body = requestNew.Body
 		req.Host = requestNew.Host
+		req.ContentLength = requestNew.ContentLength
 
 		newURL := requestNew.URL
 		newURL.Host = req.URL.Host
@@ -284,7 +285,7 @@ func (p *Proxy) _requestAddToDB(userdata *types.UserData) {
 		typ = "file"
 	}
 
-	log.Println("[_requestAddToDB]userdata: ", userdata)
+	// log.Println("[_requestAddToDB]userdata: ", userdata)
 	p.grroxydb.Create("_data", userdata)
 
 	s_data := types.SitemapGet{
