@@ -26,11 +26,17 @@ func DecompressResponse(reader io.Reader, contentEncoding string) (io.Reader, er
 
 func DumpResponse(resp *http.Response) string {
 
-	// Check if we should download the resource or not
-	size, err := strconv.Atoi(resp.Header.Get("Content-Length"))
-	utils.CheckErr("[DumpResponse]", err)
-
+	var size = 0
+	var err error
 	var bodyReader io.Reader
+
+	contentLength := resp.Header.Get("Content-Length")
+
+	// Check if we should download the resource or not
+	if contentLength != "" {
+		size, err = strconv.Atoi(contentLength)
+		utils.CheckErr("[DumpResponse]", err)
+	}
 
 	if size > 0 {
 		resp.ContentLength = int64(size)
