@@ -12,7 +12,8 @@ config:
     proxy: [request]
 
 tasks:
-  - condition: req.path ~ 'TODO'
+  - id: todo-label
+    condition: req.path ~ 'TODO'
     todo:
       - create_label:
           name: TODO
@@ -20,7 +21,8 @@ tasks:
           icon: todo
           color: blue
 
-  - condition: req.path ~ 'Procfile'
+  - id: procfile-label
+    condition: req.path ~ 'Procfile'
     todo:
       - create_label:
           name: Procfile
@@ -28,7 +30,8 @@ tasks:
           icon: heroku
           color: purple
 
-  - condition: req.path ~ '%cmakelists.txt'
+  - id: cmakelists-label
+    condition: req.path ~ '%cmakelists.txt'
     todo:
       - create_label:
           name: cmakelists
@@ -36,7 +39,8 @@ tasks:
           icon: makefile
           color: blue
 
-  - condition: req.path ~ 'omakefile'
+  - id: omakefile-label
+    condition: req.path ~ 'omakefile'
     todo:
       - create_label:
           name: omakefile
@@ -44,7 +48,8 @@ tasks:
           icon: makefile
           color: grey-light
 
-  - condition: req.path ~ 'qmakefile'
+  - id: qmakefile-label
+    condition: req.path ~ 'qmakefile'
     todo:
       - create_label:
           name: qmakefile
@@ -52,7 +57,8 @@ tasks:
           icon: makefile
           color: purple
 
-  - condition: req.path ~ 'makefile'
+  - id: makefile-label
+    condition: req.path ~ 'makefile'
     todo:
       - create_label:
           name: makefile
@@ -60,7 +66,8 @@ tasks:
           icon: makefile
           color: orange
 
-  - condition: req.path ~ 'Makefile'
+  - id: Makefile-label
+    condition: req.path ~ 'Makefile'
     todo:
       - create_label:
           name: Makefile
@@ -68,7 +75,8 @@ tasks:
           icon: makefile
           color: orange
 
-  - condition: req.path ~ 'MAKEFILE'
+  - id: MAKEFILE-label
+    condition: req.path ~ 'MAKEFILE'
     todo:
       - create_label:
           name: MAKEFILE
@@ -76,7 +84,8 @@ tasks:
           icon: makefile
           color: orange
 
-  - condition: req.path ~ 'CONTRIBUTING'
+  - id: contributing-label
+    condition: req.path ~ 'CONTRIBUTING'
     todo:
       - create_label:
           name: CONTRIBUTING
@@ -84,7 +93,8 @@ tasks:
           icon: license
           color: red
 
-  - condition: req.path ~ 'COMPILING'
+  - id: compiling-label
+    condition: req.path ~ 'COMPILING'
     todo:
       - create_label:
           name: COMPILING
@@ -92,7 +102,8 @@ tasks:
           icon: license
           color: orange
 
-  - condition: req.path ~ 'COPYING'
+  - id: copying-label
+    condition: req.path ~ 'COPYING'
     todo:
       - create_label:
           name: COPYING
@@ -100,7 +111,8 @@ tasks:
           icon: license
           color: yellow
 
-  - condition: req.path ~ 'LICENCE' OR req.path ~ 'LICENSE'
+  - id: license-label
+    condition: req.path ~ 'LICENCE' OR req.path ~ 'LICENSE'
     todo:
       - create_label:
           name: LICENCE
@@ -108,7 +120,8 @@ tasks:
           icon: license
           color: yellow
 
-  - condition: req.path ~ 'gulpfile'
+  - id: gulpfile-label
+    condition: req.path ~ 'gulpfile'
     todo:
       - create_label:
           name: gulpfile
@@ -116,7 +129,8 @@ tasks:
           icon: gulp
           color: red
 
-  - condition: req.path ~ 'docker-compose.override.yaml' OR  req.path ~ 'docker-compose.override.yml'
+  - id: docker-compose-override-label
+    condition: req.path ~ 'docker-compose.override.yaml' OR  req.path ~ 'docker-compose.override.yml'
     todo:
       - create_label:
           name: docker
@@ -124,7 +138,8 @@ tasks:
           icon: docker
           color: pink
 
-  - condition: req.path ~ 'docker'
+  - id: docker-label
+    condition: req.path ~ 'docker'
     todo:
       - create_label:
           name: docker
@@ -132,7 +147,8 @@ tasks:
           icon: docker
           color: pink
 
-  - condition: req.path ~ 'jquery'
+  - id: jquery-label
+    condition: req.path ~ 'jquery'
     todo:
       - create_label:
           name: jquery
@@ -140,7 +156,8 @@ tasks:
           icon: jquery
           color: blue
 
-  - condition: req.path ~ '/graphql'
+  - id: graphql-label
+    condition: req.path ~ '/graphql'
     todo:
       - create_label:
           name: graphql
@@ -148,7 +165,8 @@ tasks:
           icon: graphql
           color: red
 
-  - condition: req.path ~ '/_next'
+  - id: next-label
+    condition: req.path ~ '/_next'
     todo:
       - create_label:
           name: _next
@@ -156,7 +174,8 @@ tasks:
           icon: next
           color: ivory
 
-  - condition: req.path ~ '/oauth'
+  - id: oauth-label
+    condition: req.path ~ '/oauth'
     todo:
       - create_label:
           name: oauth
@@ -164,7 +183,8 @@ tasks:
           icon: oauth
           color: purple
 
-  - condition: req.path ~ '/api'
+  - id: api-label
+    condition: req.path ~ '/api'
     todo:
       - create_label:
           name: api
@@ -172,7 +192,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v1'
+  - id: v1-label
+    condition: req.path ~ '/v1'
     todo:
       - create_label:
           name: v1
@@ -180,7 +201,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v2'
+  - id: v2-label
+    condition: req.path ~ '/v2'
     todo:
       - create_label:
           name: v2
@@ -188,7 +210,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v3'
+  - id: v3-label
+    condition: req.path ~ '/v3'
     todo:
       - create_label:
           name: v3
@@ -196,7 +219,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v4'
+  - id: v4-label
+    condition: req.path ~ '/v4'
     todo:
       - create_label:
           name: v4
@@ -204,7 +228,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v5'
+  - id: v5-label
+    condition: req.path ~ '/v5'
     todo:
       - create_label:
           name: v5
@@ -212,7 +237,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v6'
+  - id: v6-label
+    condition: req.path ~ '/v6'
     todo:
       - create_label:
           name: v6
@@ -220,7 +246,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v7'
+  - id: v7-label
+    condition: req.path ~ '/v7'
     todo:
       - create_label:
           name: v7
@@ -228,7 +255,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '/v8'
+  - id: v8-label
+    condition: req.path ~ '/v8'
     todo:
       - create_label:
           name: v8
@@ -236,7 +264,8 @@ tasks:
           icon: json
           color: orange
 
-  - condition: req.path ~ '%karma.conf'
+  - id: karma-label
+    condition: req.path ~ '%karma.conf'
     todo:
       - create_label:
           name: karma
@@ -244,7 +273,8 @@ tasks:
           icon: karma
           color: green
 
-  - condition: req.path ~ '%README.md'
+  - id: readme-label
+    condition: req.path ~ '%README.md'
     todo:
       - create_label:
           name: README
@@ -252,7 +282,8 @@ tasks:
           icon: info
           color: blue
 
-  - condition: req.path ~ 'CHANGELOG' OR req.path ~ '%CHANGES.md'
+  - id: changelog-label
+    condition: req.path ~ 'CHANGELOG' OR req.path ~ '%CHANGES.md'
     todo:
       - create_label:
           name: CHANGELOG
@@ -260,7 +291,8 @@ tasks:
           icon: clock
           color: blue
 
-  - condition: req.path ~ '%VERSION.md' OR req.path ~ '%VERSION'
+  - id: version-label
+    condition: req.path ~ '%VERSION.md' OR req.path ~ '%VERSION'
     todo:
       - create_label:
           name: VERSION
@@ -268,7 +300,8 @@ tasks:
           icon: clock
           color: blue
 
-  - condition: req.path ~ '%mvnw'
+  - id: mvnw-label
+    condition: req.path ~ '%mvnw'
     todo:
       - create_label:
           name: mvnw
@@ -276,7 +309,8 @@ tasks:
           icon: maven
           color: red
 
-  - condition: req.path ~ '%tsconfig.json'
+  - id: tsconfig-label
+    condition: req.path ~ '%tsconfig.json'
     todo:
       - create_label:
           name: tsconfig
@@ -284,7 +318,8 @@ tasks:
           icon: tsconfig
           color: blue
 
-  - condition: req.path ~ '/swagger'
+  - id: swagger-label
+    condition: req.path ~ '/swagger'
     todo:
       - create_label:
           name: swagger
@@ -292,7 +327,8 @@ tasks:
           icon: json
           color: green
 
-  - condition: req.path ~ '%mime.types'
+  - id: mime-label
+    condition: req.path ~ '%mime.types'
     todo:
       - create_label:
           name: mime
@@ -300,7 +336,8 @@ tasks:
           icon: config
           color: grey-light
 
-  - condition: req.path ~ '%Jenkinsfile'
+  - id: jenkinsfile-label
+    condition: req.path ~ '%Jenkinsfile'
     todo:
       - create_label:
           name: Jenkinsfile
@@ -308,7 +345,8 @@ tasks:
           icon: jenkins
           color: red
 
-  - condition: req.path ~ 'babel.config'
+  - id: babel-label
+    condition: req.path ~ 'babel.config'
     todo:
       - create_label:
           name: babel
@@ -316,7 +354,8 @@ tasks:
           icon: babel
           color: yellow
 
-  - condition: req.path ~ '%bower.json' OR req.path ~ '%bower.text'
+  - id: bower-label
+    condition: req.path ~ '%bower.json' OR req.path ~ '%bower.text'
     todo:
       - create_label:
           name: bower
@@ -324,7 +363,8 @@ tasks:
           icon: bower
           color: orange
 
-  - condition: req.path ~ '%fireutils.json'
+  - id: firebase-label
+    condition: req.path ~ '%fireutils.json'
     todo:
       - create_label:
           name: firebase
@@ -332,7 +372,8 @@ tasks:
           icon: firebase
           color: orange
 
-  - condition: req.path ~ '%geckodriver'
+  - id: geckodriver-label
+    condition: req.path ~ '%geckodriver'
     todo:
       - create_label:
           name: geckodriver
@@ -340,7 +381,8 @@ tasks:
           icon: firefox
           color: orange
 
-  - condition: req.path ~ 'gruntfile'
+  - id: gruntfile-label
+    condition: req.path ~ 'gruntfile'
     todo:
       - create_label:
           name: Gruntfile
@@ -348,7 +390,8 @@ tasks:
           icon: grunt
           color: orange
 
-  - condition: req.path ~ 'ionic'
+  - id: ionic-label
+    condition: req.path ~ 'ionic'
     todo:
       - create_label:
           name: Ionic
@@ -356,7 +399,8 @@ tasks:
           icon: ionic
           color: blue
 
-  - condition: req.path ~ '%platformio.ini'
+  - id: platformio-label
+    condition: req.path ~ '%platformio.ini'
     todo:
       - create_label:
           name: platformio
@@ -364,7 +408,8 @@ tasks:
           icon: platformio
           color: orange
 
-  - condition: req.path ~ '%rollup.config.js'
+  - id: rollup-label
+    condition: req.path ~ '%rollup.config.js'
     todo:
       - create_label:
           name: rollup
@@ -372,7 +417,8 @@ tasks:
           icon: rollup
           color: red
 
-  - condition: req.path ~ '%sass-lint.yml'
+  - id: sass-label
+    condition: req.path ~ '%sass-lint.yml'
     todo:
       - create_label:
           name: sass
@@ -380,7 +426,8 @@ tasks:
           icon: sass
           color: pink
 
-  - condition: req.path ~ '%stylelint.config.js'
+  - id: stylelint-label
+    condition: req.path ~ '%stylelint.config.js'
     todo:
       - create_label:
           name: stylelint
@@ -388,7 +435,8 @@ tasks:
           icon: stylelint
           color: white
 
-  - condition: req.path ~ 'yarn'
+  - id: yarn-label
+    condition: req.path ~ 'yarn'
     todo:
       - create_label:
           name: yarn
@@ -396,7 +444,8 @@ tasks:
           icon: yarn
           color: blue
 
-  - condition: req.path ~ 'webpack'
+  - id: webpack-label
+    condition: req.path ~ 'webpack'
     todo:
       - create_label:
           name: webpack
@@ -404,7 +453,8 @@ tasks:
           icon: webpack
           color: blue
 
-  - condition: req.path ~ '%npm-debug.log'
+  - id: npm-debug-label
+    condition: req.path ~ '%npm-debug.log'
     todo:
       - create_label:
           name: npm
@@ -413,7 +463,8 @@ tasks:
           color: ignore
 
   # Wordpress
-  - condition: req.path ~ '/wp-' OR req.path ~ '/wordpress/'
+  - id: wordpress-label
+    condition: req.path ~ '/wp-' OR req.path ~ '/wordpress/'
     todo:
       - create_label:
           name: wordpress
@@ -422,7 +473,8 @@ tasks:
           color: ignore
 
   # WEB-INF
-  - condition: req.path ~ '/WEB-INF'
+  - id: web-inf-label
+    condition: req.path ~ '/WEB-INF'
     todo:
       - create_label:
           name: WEB-INF
@@ -431,7 +483,8 @@ tasks:
           color: ignore
 
   # WEB-INF
-  - condition: req.path ~ '/META-INF'
+  - id: meta-inf-label
+    condition: req.path ~ '/META-INF'
     todo:
       - create_label:
           name: META-INF
@@ -440,7 +493,8 @@ tasks:
           color: ignore
 
   # servlet
-  - condition: req.path ~ '/servlet/'
+  - id: servlet-label
+    condition: req.path ~ '/servlet/'
     todo:
       - create_label:
           name: servlet
@@ -449,7 +503,8 @@ tasks:
           color: ignore
 
   # cgi
-  - condition: req.path ~ '/cgi/' OR  req.path ~ '/cgi-'
+  - id: cgi-label
+    condition: req.path ~ '/cgi/' OR  req.path ~ '/cgi-'
     todo:
       - create_label:
           name: cgi
@@ -458,7 +513,8 @@ tasks:
           color: ignore
 
   # typo
-  - condition: req.path ~ '/typo3'
+  - id: typo3-label
+    condition: req.path ~ '/typo3'
     todo:
       - create_label:
           name: typo3
@@ -467,7 +523,8 @@ tasks:
           color: ignore
 
   # tmp
-  - condition: req.path ~ '/tmp/'
+  - id: tmp-label
+    condition: req.path ~ '/tmp/'
     todo:
       - create_label:
           name: tmp
@@ -476,7 +533,8 @@ tasks:
           color: ignore
 
   # ckeditor
-  - condition: req.path ~ '/ckeditor/'
+  - id: ckeditor-label
+    condition: req.path ~ '/ckeditor/'
     todo:
       - create_label:
           name: ckeditor
@@ -485,7 +543,8 @@ tasks:
           color: ignore
 
   # phpMyAdmin
-  - condition: req.path ~ '/phpMyAdmin/'
+  - id: phpmyadmin-label
+    condition: req.path ~ '/phpMyAdmin/'
     todo:
       - create_label:
           name: phpMyAdmin
@@ -494,7 +553,8 @@ tasks:
           color: ignore
 
   # MANIFEST
-  - condition: req.path ~ '/manifest'
+  - id: manifest-label
+    condition: req.path ~ '/manifest'
     todo:
       - create_label:
           name: manifest
@@ -503,7 +563,8 @@ tasks:
           color: ignore
 
   # ht
-  - condition: req.path ~ '.htaccess'
+  - id: htaccess-label
+    condition: req.path ~ '.htaccess'
     todo:
       - create_label:
           name: .htaccess
@@ -512,7 +573,8 @@ tasks:
           color: ignore
 
   # ht
-  - condition: req.path ~ '.htpasswd'
+  - id: htpasswd-label
+    condition: req.path ~ '.htpasswd'
     todo:
       - create_label:
           name: .htpasswd

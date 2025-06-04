@@ -1,16 +1,14 @@
 id: create-extension-labels
-
 info:
   title: Create Extension labels
   author: Grroxy
   description: Analyse requests's extension and create labels in organizer
-
 config:
   type: actions
   hooks:
-    proxy: [request]
+    proxy:
+      - request
   mode: any
-
 tasks:
   - id: default
     todo:
@@ -19,16 +17,16 @@ tasks:
           icon: doc
           type: extension
           color: ignore
-
   - id: task-js-ext
-    condition: req.ext = '.js' OR req.ext = '.mjs' OR req.ext = '.js.gz' OR req.ext = '.es5'  OR req.ext = '.es7' OR req.ext = '.es6' OR req.ext = '.js.map' OR req.ext = '.es'
+    condition: req.ext = '.js' OR req.ext = '.mjs' OR req.ext = '.js.gz' OR req.ext
+      = '.es5'  OR req.ext = '.es7' OR req.ext = '.es6' OR req.ext = '.js.map'
+      OR req.ext = '.es'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: js
           type: extension
           color: yellow
-
   - id: task-ts-ext
     condition: req.ext = '.ts' OR req.ext = '.test.ts' OR req.ext = '.spec.ts'
     todo:
@@ -37,25 +35,24 @@ tasks:
           icon: typescript
           type: extension
           color: yellow
-
   - id: task-image-ext
-    condition: req.ext = '.gif' OR req.ext = '.jpeg' OR req.ext = '.jpg' OR req.ext = '.ico' OR req.ext = '.pxm' OR req.ext = '.png' OR req.ext = '.webp'
+    condition: req.ext = '.gif' OR req.ext = '.jpeg' OR req.ext = '.jpg' OR req.ext
+      = '.ico' OR req.ext = '.pxm' OR req.ext = '.png' OR req.ext = '.webp'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: image
           type: extension
           color: ignore
-
   - id: task-video-ext
-    condition: req.ext = '.webm' OR req.ext = '.mp4' OR req.ext = '.mpg' OR req.ext = '.ogv' OR req.ext = '.avi' OR req.ext = '.mov'
+    condition: req.ext = '.webm' OR req.ext = '.mp4' OR req.ext = '.mpg' OR req.ext
+      = '.ogv' OR req.ext = '.avi' OR req.ext = '.mov'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: video
           type: extension
           color: pink
-
   - id: task-css-ext
     condition: req.ext = '.css'
     todo:
@@ -64,7 +61,6 @@ tasks:
           icon: css
           type: extension
           color: ignore
-
   - id: task-pdf-ext
     condition: req.ext = '.pdf'
     todo:
@@ -73,7 +69,6 @@ tasks:
           icon: pdf
           type: extension
           color: red
-
   - id: task-svg-ext
     condition: req.ext = '.svg' OR req.ext = '.svgx'
     todo:
@@ -82,16 +77,15 @@ tasks:
           icon: svg
           type: extension
           color: ignore
-
   - id: task-audio-ext
-    condition: req.ext = '.wav' OR req.ext = '.ogg' OR req.ext = '.mp3' OR req.ext = '.flac'
+    condition: req.ext = '.wav' OR req.ext = '.ogg' OR req.ext = '.mp3' OR req.ext =
+      '.flac'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: audio
           type: extension
           color: purple
-
   - id: task-clojure-ext
     condition: req.ext = '.cljs' OR req.ext = '.cljc' OR req.ext = '.clj'
     todo:
@@ -100,7 +94,6 @@ tasks:
           icon: clojure
           type: extension
           color: green
-
   - id: task-spring-ext
     condition: req.ext = '.springBeans'
     todo:
@@ -109,16 +102,16 @@ tasks:
           icon: spring
           type: extension
           color: green
-
   - id: task-archive-ext
-    condition: req.ext ~ '.tar%' OR req.ext = '.zip' OR req.ext = '.rar' OR req.ext = '.jar' OR req.ext = '.tgz' OR req.ext = '.gz' OR req.ext = '.7z' OR req.ext = '.backup'
+    condition: req.ext ~ '.tar%' OR req.ext = '.zip' OR req.ext = '.rar' OR req.ext
+      = '.jar' OR req.ext = '.tgz' OR req.ext = '.gz' OR req.ext = '.7z' OR
+      req.ext = '.backup'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: zip
           type: extension
           color: grey-light
-
   - id: task-excel-ext
     condition: req.ext = '.xlsx' OR req.ext = '.xls'
     todo:
@@ -127,7 +120,6 @@ tasks:
           icon: xls
           type: extension
           color: green
-
   - id: task-jinja-ext
     condition: req.ext = '.jinja2' OR req.ext = '.jinja'
     todo:
@@ -136,7 +128,6 @@ tasks:
           icon: jinja
           type: extension
           color: red
-
   - id: task-stylelint-ext
     condition: req.ext ~ '.stylelintrc'
     todo:
@@ -145,7 +136,6 @@ tasks:
           icon: stylelint
           type: extension
           color: white
-
   - id: task-haxe-ext
     condition: req.ext = '.hx'
     todo:
@@ -154,7 +144,6 @@ tasks:
           icon: haxe
           type: extension
           color: orange
-
   - id: task-argdown-ext
     condition: req.ext = '.argdown' OR req.ext = '.ad'
     todo:
@@ -163,7 +152,6 @@ tasks:
           icon: argdown
           type: extension
           color: blue
-
   - id: task-bower-ext
     condition: req.ext = '.bowerrc'
     todo:
@@ -172,7 +160,6 @@ tasks:
           icon: bower
           type: extension
           color: orange
-
   - id: task-twig-ext
     condition: req.ext = '.twig'
     todo:
@@ -181,7 +168,6 @@ tasks:
           icon: twig
           type: extension
           color: green
-
   - id: task-yaml-ext
     condition: req.ext = '.yaml' OR req.ext = '.yml'
     todo:
@@ -190,7 +176,6 @@ tasks:
           icon: yml
           type: extension
           color: purple
-
   - id: task-rust-ext
     condition: req.ext = '.rs'
     todo:
@@ -199,7 +184,6 @@ tasks:
           icon: rust
           type: extension
           color: grey-light
-
   - id: task-pddl-ext
     condition: req.ext = '.pddl'
     todo:
@@ -208,7 +192,6 @@ tasks:
           icon: pddl
           type: extension
           color: purple
-
   - id: task-dsstore-ext
     condition: req.ext = '.DS_Store'
     todo:
@@ -217,16 +200,15 @@ tasks:
           icon: ignored
           type: extension
           color: ignore
-
   - id: task-mustache-ext
-    condition: req.ext = '.mustache' OR req.ext = '.handlebars' OR req.ext = '.stache' OR req.ext = '.hjs' OR req.ext = '.hbs'
+    condition: req.ext = '.mustache' OR req.ext = '.handlebars' OR req.ext =
+      '.stache' OR req.ext = '.hjs' OR req.ext = '.hbs'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: mustache
           type: extension
           color: orange
-
   - id: task-pug-ext
     condition: req.ext = '.pug'
     todo:
@@ -235,7 +217,6 @@ tasks:
           icon: pug
           type: extension
           color: red
-
   - id: task-puppet-ext
     condition: req.ext = '.pp' OR req.ext = '.epp'
     todo:
@@ -244,7 +225,6 @@ tasks:
           icon: puppet
           type: extension
           color: yellow
-
   - id: task-xhtml-ext
     condition: req.ext = '.xhtml'
     todo:
@@ -253,7 +233,6 @@ tasks:
           icon: html
           type: extension
           color: purple
-
   - id: task-vue-ext
     condition: req.ext = '.vue'
     todo:
@@ -262,7 +241,6 @@ tasks:
           icon: vue
           type: extension
           color: green
-
   - id: task-wat-ext
     condition: req.ext = '.wat'
     todo:
@@ -271,7 +249,6 @@ tasks:
           icon: wat
           type: extension
           color: purple
-
   - id: task-tex-ext
     condition: req.ext = '.ins'
     todo:
@@ -280,7 +257,6 @@ tasks:
           icon: tex
           type: extension
           color: white
-
   - id: task-tex-main-ext
     condition: req.ext = '.tex'
     todo:
@@ -289,7 +265,6 @@ tasks:
           icon: tex
           type: extension
           color: blue
-
   - id: task-r-ext
     condition: req.ext = '.R'
     todo:
@@ -298,7 +273,6 @@ tasks:
           icon: R
           type: extension
           color: blue
-
   - id: task-ejs-ext
     condition: req.ext = '.ejs'
     todo:
@@ -307,7 +281,6 @@ tasks:
           icon: ejs
           type: extension
           color: yellow
-
   - id: task-csharp-ext
     condition: req.ext = '.cs'
     todo:
@@ -316,7 +289,6 @@ tasks:
           icon: c-sharp
           type: extension
           color: blue
-
   - id: task-asp-ext
     condition: req.ext = '.aspx' OR req.ext = '.ashx' OR req.ext = '.cshtml'
     todo:
@@ -325,7 +297,6 @@ tasks:
           icon: html
           type: extension
           color: blue
-
   - id: task-cshtml-ext
     condition: req.ext = '.cshtml'
     todo:
@@ -334,7 +305,6 @@ tasks:
           icon: html
           type: extension
           color: blue
-
   - id: task-eslintignore-ext
     condition: req.ext = '.eslintignore'
     todo:
@@ -343,7 +313,6 @@ tasks:
           icon: eslint
           type: extension
           color: grey
-
   - id: task-scala-ext
     condition: req.ext = '.scala'
     todo:
@@ -352,16 +321,15 @@ tasks:
           icon: scala
           type: extension
           color: red
-
   - id: task-java-ext
-    condition: req.ext = '.class' OR req.ext = '.classpath' OR req.ext = '.properties' OR req.ext = '.java'
+    condition: req.ext = '.class' OR req.ext = '.classpath' OR req.ext =
+      '.properties' OR req.ext = '.java'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: java
           type: extension
           color: red
-
   - id: task-cpp-ext
     condition: req.ext = '.cpp' OR req.ext = '.c++' OR req.ext = '.cxx' OR req.ext = '.cc'
     todo:
@@ -370,7 +338,6 @@ tasks:
           icon: cpp
           type: extension
           color: blue
-
   - id: task-hxs-ext
     condition: req.ext = '.hxs'
     todo:
@@ -379,7 +346,6 @@ tasks:
           icon: haxe
           type: extension
           color: yellow
-
   - id: task-cson-ext
     condition: req.ext = '.cson'
     todo:
@@ -388,7 +354,6 @@ tasks:
           icon: json
           type: extension
           color: yellow
-
   - id: task-tsx-test-ext
     condition: req.ext = '.spec.tsx' OR req.ext = '.test.tsx'
     todo:
@@ -397,7 +362,6 @@ tasks:
           icon: react
           type: extension
           color: yellow
-
   - id: task-dtx-ext
     condition: req.ext = '.dtx'
     todo:
@@ -406,7 +370,6 @@ tasks:
           icon: tex
           type: extension
           color: orange
-
   - id: task-sql-ext
     condition: req.ext = '.sql'
     todo:
@@ -415,7 +378,6 @@ tasks:
           icon: db
           type: extension
           color: pink
-
   - id: task-code-search-ext
     condition: req.ext = '.code-search'
     todo:
@@ -424,7 +386,6 @@ tasks:
           icon: code-search
           type: extension
           color: purple
-
   - id: task-kotlin-ext
     condition: req.ext = '.kts' OR req.ext = '.kt'
     todo:
@@ -433,7 +394,6 @@ tasks:
           icon: kotlin
           type: extension
           color: orange
-
   - id: task-hxp-ext
     condition: req.ext = '.hxp'
     todo:
@@ -442,7 +402,6 @@ tasks:
           icon: haxe
           type: extension
           color: blue
-
   - id: task-vala-ext
     condition: req.ext = '.vala' OR req.ext = '.vapi'
     todo:
@@ -451,7 +410,6 @@ tasks:
           icon: vala
           type: extension
           color: grey-light
-
   - id: task-h-ext
     condition: req.ext = '.h'
     todo:
@@ -460,7 +418,6 @@ tasks:
           icon: c
           type: extension
           color: purple
-
   - id: task-sty-ext
     condition: req.ext = '.sty'
     todo:
@@ -469,7 +426,6 @@ tasks:
           icon: tex
           type: extension
           color: yellow
-
   - id: task-octet-ext
     condition: req.ext = '.octet'
     todo:
@@ -478,7 +434,6 @@ tasks:
           icon: binary
           type: extension
           color: blue
-
   - id: task-npm-ext
     condition: req.ext = '.npmignore' OR req.ext = '.npmrc'
     todo:
@@ -487,7 +442,6 @@ tasks:
           icon: npm
           type: extension
           color: red
-
   - id: task-word-ext
     condition: req.ext = '.doc' OR req.ext = '.docx'
     todo:
@@ -496,7 +450,6 @@ tasks:
           icon: word
           type: extension
           color: blue
-
   - id: task-plan-ext
     condition: req.ext = '.plan'
     todo:
@@ -505,7 +458,6 @@ tasks:
           icon: plan
           type: extension
           color: green
-
   - id: task-js-test-ext
     condition: req.ext = '.test.js' OR req.ext = '.spec.js'
     todo:
@@ -514,7 +466,6 @@ tasks:
           icon: js
           type: extension
           color: orange
-
   - id: task-fsharp-ext
     condition: req.ext = '.fs' OR req.ext = '.fsx'
     todo:
@@ -523,7 +474,6 @@ tasks:
           icon: f-sharp
           type: extension
           color: blue
-
   - id: task-liquid-ext
     condition: req.ext = '.liquid'
     todo:
@@ -532,7 +482,6 @@ tasks:
           icon: liquid
           type: extension
           color: green
-
   - id: task-sublime-ext
     condition: req.ext = '.sublime-workspace' OR req.ext = '.sublime-project'
     todo:
@@ -541,7 +490,6 @@ tasks:
           icon: sublime
           type: extension
           color: orange
-
   - id: task-wgt-ext
     condition: req.ext = '.wgt'
     todo:
@@ -550,7 +498,6 @@ tasks:
           icon: wgt
           type: extension
           color: blue
-
   - id: task-tmp-ext
     condition: req.ext = '.tmp'
     todo:
@@ -559,7 +506,6 @@ tasks:
           icon: clock
           type: extension
           color: grey-light
-
   - id: task-csv-ext
     condition: req.ext = '.xsl' OR req.ext = '.xslt' OR req.ext = '.csv'
     todo:
@@ -568,7 +514,6 @@ tasks:
           icon: csv
           type: extension
           color: green
-
   - id: task-ai-ext
     condition: req.ext = '.ai'
     todo:
@@ -577,7 +522,6 @@ tasks:
           icon: illustrator
           type: extension
           color: yellow
-
   - id: task-wasm-ext
     condition: req.ext = '.wasm'
     todo:
@@ -586,7 +530,6 @@ tasks:
           icon: wasm
           type: extension
           color: purple
-
   - id: task-master-ext
     condition: req.ext = '.master' OR req.ext = '.asax'
     todo:
@@ -595,7 +538,6 @@ tasks:
           icon: html
           type: extension
           color: yellow
-
   - id: task-jshint-ext
     condition: req.ext = '.jshintrc' OR req.ext = '.jscsrc'
     todo:
@@ -604,7 +546,6 @@ tasks:
           icon: js
           type: extension
           color: blue
-
   - id: task-windows-ext
     condition: req.ext = '.cmd' OR req.ext = '.bat'
     todo:
@@ -613,7 +554,6 @@ tasks:
           icon: windows
           type: extension
           color: blue
-
   - id: task-less-ext
     condition: req.ext = '.less'
     todo:
@@ -622,7 +562,6 @@ tasks:
           icon: less
           type: extension
           color: blue
-
   - id: task-lua-ext
     condition: req.ext = '.lua'
     todo:
@@ -631,7 +570,6 @@ tasks:
           icon: lua
           type: extension
           color: blue
-
   - id: task-prolog-ext
     condition: req.ext = '.pro'
     todo:
@@ -640,7 +578,6 @@ tasks:
           icon: prolog
           type: extension
           color: orange
-
   - id: task-asm-ext
     condition: req.ext = '.s' OR req.ext = '.asm'
     todo:
@@ -649,7 +586,6 @@ tasks:
           icon: asm
           type: extension
           color: red
-
   - id: task-go-ext
     condition: req.ext = '.go'
     todo:
@@ -658,7 +594,6 @@ tasks:
           icon: go2
           type: extension
           color: blue
-
   - id: task-odata-ext
     condition: req.ext = '.odata'
     todo:
@@ -667,7 +602,6 @@ tasks:
           icon: odata
           type: extension
           color: orange
-
   - id: task-reasonml-ext
     condition: req.ext = '.re'
     todo:
@@ -676,7 +610,6 @@ tasks:
           icon: reasonml
           type: extension
           color: red
-
   - id: task-erb-ext
     condition: req.ext ~ '.erb'
     todo:
@@ -685,16 +618,15 @@ tasks:
           icon: html_erb
           type: extension
           color: red
-
   - id: task-nunjucks-ext
-    condition: req.ext = '.nunj' OR req.ext = '.nunjs' OR req.ext = '.nunjucks' OR req.ext = '.njk' OR req.ext = '.njs' OR req.ext = '.nj'
+    condition: req.ext = '.nunj' OR req.ext = '.nunjs' OR req.ext = '.nunjucks' OR
+      req.ext = '.njk' OR req.ext = '.njs' OR req.ext = '.nj'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: nunjucks
           type: extension
           color: green
-
   - id: task-powershell-ext
     condition: req.ext = '.psd1' OR req.ext = '.psm1' OR req.ext = '.ps1'
     todo:
@@ -703,7 +635,6 @@ tasks:
           icon: powershell
           type: extension
           color: blue
-
   - id: task-swift-ext
     condition: req.ext = '.swift'
     todo:
@@ -712,7 +643,6 @@ tasks:
           icon: swift
           type: extension
           color: orange
-
   - id: task-eslint-ext
     condition: req.ext ~ '.eslint'
     todo:
@@ -721,7 +651,6 @@ tasks:
           icon: eslint
           type: extension
           color: purple
-
   - id: task-log-ext
     condition: req.ext = '.log'
     todo:
@@ -730,7 +659,6 @@ tasks:
           icon: file-history
           type: extension
           color: ignore
-
   - id: task-d-ext
     condition: req.ext = '.d'
     todo:
@@ -739,7 +667,6 @@ tasks:
           icon: d
           type: extension
           color: red
-
   - id: task-webmanifest-ext
     condition: req.ext = '.webmanifest'
     todo:
@@ -748,7 +675,6 @@ tasks:
           icon: w3c
           type: extension
           color: blue
-
   - id: task-hxml-ext
     condition: req.ext = '.hxml'
     todo:
@@ -757,7 +683,6 @@ tasks:
           icon: haxe
           type: extension
           color: purple
-
   - id: task-bsl-ext
     condition: req.ext = '.bsl'
     todo:
@@ -766,7 +691,6 @@ tasks:
           icon: bsl
           type: extension
           color: red
-
   - id: task-sbt-ext
     condition: req.ext = '.sbt'
     todo:
@@ -775,7 +699,6 @@ tasks:
           icon: sbt
           type: extension
           color: blue
-
   - id: task-julia-ext
     condition: req.ext = '.jl'
     todo:
@@ -784,7 +707,6 @@ tasks:
           icon: julia
           type: extension
           color: purple
-
   - id: task-stylelintignore-ext
     condition: req.ext = '.stylelintignore'
     todo:
@@ -793,7 +715,6 @@ tasks:
           icon: stylelint
           type: extension
           color: grey
-
   - id: task-text-ext
     condition: req.ext = '.text'
     todo:
@@ -802,7 +723,6 @@ tasks:
           icon: text
           type: extension
           color: ignore
-
   - id: task-article-ext
     condition: req.ext = '.article' OR req.ext = '.slide'
     todo:
@@ -811,7 +731,6 @@ tasks:
           icon: go
           type: extension
           color: blue
-
   - id: task-python-ext
     condition: req.ext = '.py'
     todo:
@@ -820,7 +739,6 @@ tasks:
           icon: python
           type: extension
           color: blue
-
   - id: task-c-ext
     condition: req.ext = '.c'
     todo:
@@ -829,7 +747,6 @@ tasks:
           icon: c
           type: extension
           color: blue
-
   - id: task-graphql-ext
     condition: req.ext = '.gql' OR req.ext = '.graphql'
     todo:
@@ -838,16 +755,15 @@ tasks:
           icon: graphql
           type: extension
           color: pink
-
   - id: task-git-ext
-    condition: req.ext = '.gitkeep' OR req.ext = '.gitignore' OR req.ext = '.gitconfig' OR req.ext = '.gitmodules' OR req.ext = '.gitattributes'
+    condition: req.ext = '.gitkeep' OR req.ext = '.gitignore' OR req.ext =
+      '.gitconfig' OR req.ext = '.gitmodules' OR req.ext = '.gitattributes'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: git
           type: extension
           color: ignore
-
   - id: task-json-ext
     condition: req.ext = '.json'
     todo:
@@ -856,7 +772,6 @@ tasks:
           icon: json
           type: extension
           color: lightyellow
-
   - id: task-smarty-ext
     condition: req.ext = '.smarty.tpl'
     todo:
@@ -865,7 +780,6 @@ tasks:
           icon: smarty
           type: extension
           color: yellow
-
   - id: task-txt-ext
     condition: req.ext = '.txt'
     todo:
@@ -874,16 +788,15 @@ tasks:
           icon: doc
           type: extension
           color: white
-
   - id: task-ocaml-ext
-    condition: req.ext = '.cmx' OR req.ext = '.cmxa' OR req.ext = '.ml' OR req.ext = '.mli'
+    condition: req.ext = '.cmx' OR req.ext = '.cmxa' OR req.ext = '.ml' OR req.ext =
+      '.mli'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: ocaml
           type: extension
           color: orange
-
   - id: task-dart-ext
     condition: req.ext = '.dart'
     todo:
@@ -892,7 +805,6 @@ tasks:
           icon: dart
           type: extension
           color: blue
-
   - id: task-mm-ext
     condition: req.ext = '.mm'
     todo:
@@ -901,7 +813,6 @@ tasks:
           icon: cpp
           type: extension
           color: yellow
-
   - id: task-rmd-ext
     condition: req.ext = '.rmd'
     todo:
@@ -910,7 +821,6 @@ tasks:
           icon: default
           type: extension
           color: blue
-
   - id: task-cake-ext
     condition: req.ext = '.cake'
     todo:
@@ -919,7 +829,6 @@ tasks:
           icon: cake
           type: extension
           color: red
-
   - id: task-gradle-ext
     condition: req.ext = '.gradle'
     todo:
@@ -928,16 +837,15 @@ tasks:
           icon: gradle
           type: extension
           color: green
-
   - id: task-3d-ext
-    condition: req.ext = '.3ds' OR req.ext = '.dae' OR req.ext = '.obj' OR req.ext = '.stl' OR req.ext = '.3dm'
+    condition: req.ext = '.3ds' OR req.ext = '.dae' OR req.ext = '.obj' OR req.ext =
+      '.stl' OR req.ext = '.3dm'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: svg
           type: extension
           color: blue
-
   - id: task-coffee-ext
     condition: req.ext = '.litcoffee' OR req.ext = '.coffee'
     todo:
@@ -946,7 +854,6 @@ tasks:
           icon: coffee
           type: extension
           color: yellow
-
   - id: task-crystal-ext
     condition: req.ext = '.ecr' OR req.ext = '.slang'
     todo:
@@ -955,7 +862,6 @@ tasks:
           icon: crystal_embedded
           type: extension
           color: white
-
   - id: task-react-ext
     condition: req.ext = '.jsx' OR req.ext = '.cjsx' OR req.ext = '.tsx'
     todo:
@@ -964,7 +870,6 @@ tasks:
           icon: react
           type: extension
           color: blue
-
   - id: task-haskell-ext
     condition: req.ext = '.lhs' OR req.ext = '.hs'
     todo:
@@ -973,7 +878,6 @@ tasks:
           icon: haskell
           type: extension
           color: purple
-
   - id: task-ocsp-ext
     condition: req.ext = '.ocsp-response'
     todo:
@@ -982,7 +886,6 @@ tasks:
           icon: binary
           type: extension
           color: ignore
-
   - id: task-jade-ext
     condition: req.ext = '.jade'
     todo:
@@ -991,7 +894,6 @@ tasks:
           icon: jade
           type: extension
           color: red
-
   - id: task-haml-ext
     condition: req.ext = '.haml'
     todo:
@@ -1000,7 +902,6 @@ tasks:
           icon: haml
           type: extension
           color: red
-
   - id: task-photoshop-ext
     condition: req.ext = '.psd'
     todo:
@@ -1009,7 +910,6 @@ tasks:
           icon: photoshop
           type: extension
           color: blue
-
   - id: task-cert-ext
     condition: req.ext = '.crt' OR req.ext = '.key' OR req.ext = '.cert'
     todo:
@@ -1018,16 +918,17 @@ tasks:
           icon: lock
           type: extension
           color: green
-
   - id: task-config-ext
-    condition: req.ext = '.toml' OR req.ext = '.static' OR req.ext = '.cfg' OR req.ext = '.htaccess' OR req.ext = '.direnv' OR req.ext = '.config' OR req.ext = '.conf' OR req.ext = '.editorconfig' OR req.ext = '.env' OR req.ext = '.slugignore'
+    condition: req.ext = '.toml' OR req.ext = '.static' OR req.ext = '.cfg' OR
+      req.ext = '.htaccess' OR req.ext = '.direnv' OR req.ext = '.config' OR
+      req.ext = '.conf' OR req.ext = '.editorconfig' OR req.ext = '.env' OR
+      req.ext = '.slugignore'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: config
           type: extension
           color: grey-light
-
   - id: task-babelrc-ext
     condition: req.ext = '.babelrc.cjs' OR req.ext = '.babelrc.js' OR req.ext = '. '
     todo:
@@ -1036,7 +937,6 @@ tasks:
           icon: babel
           type: extension
           color: yellow
-
   - id: task-livescript-ext
     condition: req.ext = '.ls'
     todo:
@@ -1045,7 +945,6 @@ tasks:
           icon: livescript
           type: extension
           color: blue
-
   - id: task-ascx-ext
     condition: req.ext = '.ascx'
     todo:
@@ -1054,7 +953,6 @@ tasks:
           icon: html
           type: extension
           color: green
-
   - id: task-sass-ext
     condition: req.ext = '.sass' OR req.ext = '.scss'
     todo:
@@ -1063,7 +961,6 @@ tasks:
           icon: sass
           type: extension
           color: pink
-
   - id: task-html-ext
     condition: req.ext = '.htm' OR req.ext = '.html'
     todo:
@@ -1072,7 +969,6 @@ tasks:
           icon: html
           type: extension
           color: orange
-
   - id: task-ruby-ext
     condition: req.ext = '.rb'
     todo:
@@ -1081,7 +977,6 @@ tasks:
           icon: ruby
           type: extension
           color: red
-
   - id: task-slim-ext
     condition: req.ext = '.slim'
     todo:
@@ -1090,7 +985,6 @@ tasks:
           icon: slim
           type: extension
           color: orange
-
   - id: task-elixir-ext
     condition: req.ext = '.exs'
     todo:
@@ -1099,7 +993,6 @@ tasks:
           icon: elixir_script
           type: extension
           color: purple
-
   - id: task-terraform-ext
     condition: req.ext = '.tf' OR req.ext = '.tf.json' OR req.ext = '.tfvars'
     todo:
@@ -1108,7 +1001,6 @@ tasks:
           icon: terraform
           type: extension
           color: purple
-
   - id: task-react-test-ext
     condition: req.ext = '.spec.jsx' OR req.ext = '.test.jsx'
     todo:
@@ -1117,7 +1009,6 @@ tasks:
           icon: react
           type: extension
           color: orange
-
   - id: task-markdown-ext
     condition: req.ext = '.md' OR req.ext = '.markdown'
     todo:
@@ -1126,7 +1017,6 @@ tasks:
           icon: markdown
           type: extension
           color: blue
-
   - id: task-stylus-ext
     condition: req.ext = '.styl'
     todo:
@@ -1135,7 +1025,6 @@ tasks:
           icon: stylus
           type: extension
           color: green
-
   - id: task-firebase-ext
     condition: req.ext = '.firebaserc'
     todo:
@@ -1144,16 +1033,15 @@ tasks:
           icon: firebase
           type: extension
           color: orange
-
   - id: task-shell-ext
-    condition: req.ext ~ 'bash' OR req.ext = '.sh' OR req.ext = '.zshrc' OR req.ext = '.fish' OR req.ext = '.zsh'
+    condition: req.ext ~ 'bash' OR req.ext = '.sh' OR req.ext = '.zshrc' OR req.ext
+      = '.fish' OR req.ext = '.zsh'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: shell
           type: extension
           color: grey
-
   - id: task-cakephp-ext
     condition: req.ext = '.ctp'
     todo:
@@ -1162,7 +1050,6 @@ tasks:
           icon: cake_php
           type: extension
           color: red
-
   - id: task-cpp-header-ext
     condition: req.ext = '.hxx' OR req.ext = '.h++' OR req.ext = '.hh' OR req.ext = '.hpp'
     todo:
@@ -1171,7 +1058,6 @@ tasks:
           icon: cpp
           type: extension
           color: purple
-
   - id: task-binary-ext
     condition: req.ext = '.pem' OR req.ext = '.binary' OR req.ext = '.bin'
     todo:
@@ -1180,16 +1066,15 @@ tasks:
           icon: binary
           type: extension
           color: green
-
   - id: task-font-ext
-    condition: req.ext = '.eot' OR req.ext = '.woff' OR req.ext = '.ttf' OR req.ext = '.otf' OR req.ext = '.woff2'
+    condition: req.ext = '.eot' OR req.ext = '.woff' OR req.ext = '.ttf' OR req.ext
+      = '.otf' OR req.ext = '.woff2'
     todo:
       - create_label:
           name: "{{req.ext}}"
           icon: font
           type: extension
           color: red
-
   - id: task-grails-ext
     condition: req.ext = '.gsp' OR req.ext = '.groovy'
     todo:
@@ -1198,7 +1083,6 @@ tasks:
           icon: grails
           type: extension
           color: green
-
   - id: task-php-ext
     condition: req.ext = '.php' OR req.ext = '.php.inc'
     todo:
@@ -1207,7 +1091,6 @@ tasks:
           icon: php
           type: extension
           color: violet
-
   - id: task-mdo-ext
     condition: req.ext = '.mdo'
     todo:
@@ -1216,7 +1099,6 @@ tasks:
           icon: mdo
           type: extension
           color: red
-
   - id: task-elixir-main-ext
     condition: req.ext = '.ex'
     todo:
@@ -1225,7 +1107,6 @@ tasks:
           icon: elixir
           type: extension
           color: purple
-
   - id: task-protobuf-ext
     condition: req.ext = '.protobuf'
     todo:
@@ -1234,7 +1115,6 @@ tasks:
           icon: protobuf
           type: extension
           color: green
-
   - id: task-crystal-main-ext
     condition: req.ext = '.cr'
     todo:
@@ -1243,7 +1123,6 @@ tasks:
           icon: crystal
           type: extension
           color: white
-
   - id: task-m-ext
     condition: req.ext = '.m'
     todo:
@@ -1252,7 +1131,6 @@ tasks:
           icon: c
           type: extension
           color: yellow
-
   - id: task-salesforce-ext
     condition: req.ext = '.cls' OR req.ext = '.component'
     todo:
@@ -1261,7 +1139,6 @@ tasks:
           icon: salesforce
           type: extension
           color: blue
-
   - id: task-perl-ext
     condition: req.ext = '.pl'
     todo:
@@ -1270,7 +1147,6 @@ tasks:
           icon: perl
           type: extension
           color: blue
-
   - id: task-typescript-ext
     condition: req.ext = '.ts'
     todo:
@@ -1279,7 +1155,6 @@ tasks:
           icon: typescript
           type: extension
           color: blue
-
   - id: task-elm-ext
     condition: req.ext = '.elm'
     todo:
@@ -1288,7 +1163,6 @@ tasks:
           icon: elm
           type: extension
           color: blue
-
   - id: task-codeclimate-ext
     condition: req.ext = '.codeclimate.yml'
     todo:
@@ -1297,7 +1171,6 @@ tasks:
           icon: code-climate
           type: extension
           color: green
-
   - id: task-happenings-ext
     condition: req.ext = '.happenings'
     todo:
@@ -1306,7 +1179,6 @@ tasks:
           icon: happenings
           type: extension
           color: blue
-
   - id: task-css-map-ext
     condition: req.ext = '.css.map' OR req.ext = '.sss'
     todo:
@@ -1315,7 +1187,6 @@ tasks:
           icon: css
           type: extension
           color: blue
-
   - id: task-other-ext
     condition: req.ext = '.other'
     todo:
@@ -1324,7 +1195,6 @@ tasks:
           icon: doc
           type: extension
           color: grey
-
   - id: task-coldfusion-ext
     condition: req.ext = '.cfc' OR req.ext = '.cfm'
     todo:
@@ -1333,7 +1203,6 @@ tasks:
           icon: coldfusion
           type: extension
           color: blue
-
   - id: task-xml-ext
     condition: req.ext = '.xml'
     todo:
@@ -1342,7 +1211,6 @@ tasks:
           icon: xml
           type: extension
           color: orange
-
   - id: task-npm-debug-ext
     condition: req.ext = '.npm-debug.log'
     todo:
@@ -1351,7 +1219,6 @@ tasks:
           icon: npm
           type: extension
           color: ignore
-
   - id: task-edn-ext
     condition: req.ext = '.edn'
     todo:
@@ -1360,7 +1227,6 @@ tasks:
           icon: clojure
           type: extension
           color: blue
-
   - id: task-sol-ext
     condition: req.ext = '.sol'
     todo:
