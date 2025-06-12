@@ -71,12 +71,6 @@ var Main = []DB{
 		"",
 	},
 	{
-		"_store",
-		Store,
-		false,
-		"",
-	},
-	{
 		"_settings",
 		Settings,
 		false,
@@ -96,7 +90,7 @@ var Tools = []DB{
 var Collections = []DB{
 	{
 		"_raw",
-		Store,
+		Raw,
 		true,
 		`
 		CREATE UNIQUE INDEX idx_hosts_host ON _hosts (host);

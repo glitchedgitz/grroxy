@@ -5,7 +5,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
-var Store = schema.NewSchema(
+var Raw = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "req",
 		Type: schema.FieldTypeText,
