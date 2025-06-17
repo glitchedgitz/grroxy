@@ -5,9 +5,6 @@ export default {
     './src/**/*.{html,js,svelte,ts}',
     "./node_modules/cybernetic-ui/dist/**/*.{svelte,html}",
   ],
-  theme: {
-    extend: {},
-  },
   plugins: [
     require('cybernetic-ui/tailwindplugin'),
     require("@tailwindcss/forms")
