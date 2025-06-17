@@ -6,7 +6,9 @@ find . -type d -name "frontend" | while read -r frontend_dir; do
     
     # Change to the frontend directory and run npm install
     cd "$frontend_dir"
+    rm -r dist
     npm install
+    npm link cybernetic-ui
+    npm run build
     cd - > /dev/null  # Return to the original directory
-    echo "----------------------------------------"
 done 
