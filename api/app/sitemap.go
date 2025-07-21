@@ -206,7 +206,7 @@ func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 			// regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
 
 			// Simplier for noeWHERE path LIKE '/s/%'
-			regexQuery := data.Path + `/%`
+			path := data.Path + `/%`
 
 			var result []types.SitemapGet
 			// var tmpResult []map[string]interface{}
@@ -215,9 +215,9 @@ func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 			var err error
 
 			if data.Path == "" {
-				err = backend.App.Dao().DB().NewQuery("SELECT * FROM " + db).All(&result)
+				err = backend.App.Dao().DB().NewQuery("SELECT * FROM \"" + db + "\"").All(&result)
 			} else {
-				err = backend.App.Dao().DB().NewQuery("SELECT * FROM " + db + " WHERE path LIKE '" + regexQuery + "'").All(&result)
+				err = backend.App.Dao().DB().NewQuery("SELECT * FROM \"" + db + "\" WHERE path LIKE \"" + path + "\"").All(&result)
 			}
 
 			for _, item := range result {
