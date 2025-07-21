@@ -6,6 +6,7 @@ function createWindow() {
     const win = new BrowserWindow({
         width: 1080,
         height: 720,
+        fullscreen: true,
 
         /* ------------- title-bar flags ------------- */
         titleBarStyle: 'hiddenInset',        // same “inset” look Wails uses
