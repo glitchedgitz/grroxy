@@ -179,7 +179,7 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 		return ProjectData{}, err
 	}
 
-	ProjectIP, err := utils.CheckAndFindAvailablePort("127.0.0.1:8500")
+	ProjectIP, err := utils.CheckAndFindAvailablePort("127.0.0.1:8091")
 	if err != nil {
 		fmt.Println("Error fetching project IP:", err)
 		return ProjectData{}, err

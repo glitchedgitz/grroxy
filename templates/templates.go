@@ -218,18 +218,19 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 				continue
 			}
 
-			log.Println("Tasks: jobs: ", job)
+			log.Println("[Templates.Run] Tasks: jobs: ", job)
 
+			// check condition
 			check, err := dadql.Filter(data, job.Condition)
 			if err != nil {
 				log.Printf("[Templates.Run] Filter parsing: %v", job.Condition)
 				break
 			}
 
-			log.Println("Filter: ", check)
+			log.Println("[Templates.Run] Filter: ", check)
 
 			if check {
-				log.Println("[template.Run] Found with:", job.Condition)
+				log.Println("[Templates.Run] Found with:", job.Condition)
 
 				for _, action := range job.Todo {
 					for function, d := range action {

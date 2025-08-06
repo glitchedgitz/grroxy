@@ -304,7 +304,8 @@ func (p *Proxy) _requestAddToDB(userdata *types.UserData) {
 
 func (p *Proxy) runReqTemplates(userdata *types.UserData) {
 	tmpdata := types.UserData{
-		Req: userdata.Req,
+		Host: userdata.Host,
+		Req:  userdata.Req,
 	}
 
 	d := utils.StructToMap(&tmpdata, "json")
@@ -324,8 +325,11 @@ func (p *Proxy) runReqTemplates(userdata *types.UserData) {
 			Name:  name,
 			Color: y.Data["color"].(string),
 			Type:  y.Data["type"].(string),
-			Icon:  y.Data["icon"].(string),
 			ID:    userdata.ID,
+		}
+
+		if y.Data["icon"] != nil {
+			l_data.Icon = y.Data["icon"].(string)
 		}
 
 		switch y.ActionName {
