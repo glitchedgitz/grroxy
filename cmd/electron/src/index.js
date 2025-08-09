@@ -1,6 +1,7 @@
 // This file is the entry point for the Electron application.
 
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, ipcMain } = require('electron')
+const path = require('path')
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -14,12 +15,18 @@ function createWindow() {
         title: 'Grroxy',
 
         /* ------------- transparent overlay -------- */
-        titleBarOverlay: {                   // this draws the bar that slides in
+        titleBarOverlay: {                     // this draws the bar that slides in
             color: '#00000000',                // fully transparent (ARGB = 0×00)
             symbolColor: '#FFFFFF',            // traffic-light glyph colour
         },
 
-        vibrancy: 'under-window'    // optional acrylic behind the whole win
+        vibrancy: 'under-window',    // optional acrylic behind the whole win
+
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.ts'),
+            contextIsolation: true,
+            nodeIntegration: false,
+        }
     })
 
     // win.setWindowButtonVisibility(false)
@@ -38,6 +45,31 @@ function createWindow() {
     // setTimeout(() => {
     //     win.webContents.openDevTools()
     // }, 5000)
+
+
+    // Send fullscreen change to renderer
+    // const sendFullscreenState = () => {
+    //     win.webContents.send('fullscreen-changed', win.isFullScreen());
+    // };
+
+    // win.on('enter-full-screen', sendFullscreenState);
+    // win.on('leave-full-screen', sendFullscreenState);
+    win.on('enter-full-screen', () => {
+        console.log('[main] Entered fullscreen');
+        win.webContents.send('fullscreen-changed', true);
+    });
+
+    win.on('leave-full-screen', () => {
+        console.log('[main] Left fullscreen');
+        win.webContents.send('fullscreen-changed', false);
+    });
+
+    // Handler for isFullscreen
+    ipcMain.handle('check-fullscreen', (event) => {
+        const isFs = win.isFullScreen();
+        console.log('[main] check-fullscreen →', isFs);
+        return isFs;
+    });
 }
 
 app.whenReady()
@@ -47,8 +79,13 @@ app.whenReady()
         app.on('activate', function () {
             if (BrowserWindow.getAllWindows().length === 0) createWindow()
         })
+
+
     })
 
 app.on('window-all-closed', function () {
     if (process.platform !== 'darwin') app.quit()
 })
+
+
+
