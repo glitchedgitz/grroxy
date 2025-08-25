@@ -17,6 +17,7 @@ import (
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/jpillora/go-tld"
 	"github.com/labstack/echo/v5"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
@@ -221,9 +222,9 @@ func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 			var err error
 
 			if data.Path == "" {
-				err = backend.App.Dao().DB().NewQuery("SELECT * FROM \"" + db + "\"").All(&result)
+				err = backend.App.Dao().DB().Select("*").From(db).All(&result)
 			} else {
-				err = backend.App.Dao().DB().NewQuery("SELECT * FROM \"" + db + "\" WHERE path LIKE \"" + path + "\"").All(&result)
+				err = backend.App.Dao().DB().Select("*").From(db).Where(dbx.Like("path", path)).All(&result)
 			}
 
 			for _, item := range result {
