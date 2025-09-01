@@ -1,6 +1,6 @@
 // This file is the entry point for the Electron application.
 
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, nativeImage } = require('electron')
 const path = require('path')
 
 function createWindow() {
@@ -8,6 +8,8 @@ function createWindow() {
         width: 1080,
         height: 720,
         fullscreen: true,
+
+        icon: __dirname + "/icons/grroxy.png",
 
         /* ------------- title-bar flags ------------- */
         titleBarStyle: 'hiddenInset',        // same “inset” look Wails uses
@@ -70,6 +72,10 @@ function createWindow() {
         console.log('[main] check-fullscreen →', isFs);
         return isFs;
     });
+
+    app.dock.setIcon(nativeImage.createFromPath(__dirname + "/icons/grroxy.png"))
+
+
 }
 
 app.whenReady()
@@ -79,6 +85,8 @@ app.whenReady()
         app.on('activate', function () {
             if (BrowserWindow.getAllWindows().length === 0) createWindow()
         })
+
+
 
 
     })
