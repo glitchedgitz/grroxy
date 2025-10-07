@@ -188,7 +188,7 @@ func ResponseToByte(resp *http.Response) ([]byte, error) {
 
 	// Remove Content-Encoding header only if we successfully decompressed
 	if decompressed {
-		newResp.Header.Del("Content-Encoding")
+		// newResp.Header.Del("Content-Encoding")
 	}
 
 	respBytes, err := httputil.DumpResponse(newResp, true)
