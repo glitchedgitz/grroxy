@@ -18,7 +18,9 @@ grroxy_db/
 builds*/
 build/
 
+# Node.js dependencies
 node_modules/
+**/node_modules/
 */electron/dist/
 
 cmd/grroxy/builds*
