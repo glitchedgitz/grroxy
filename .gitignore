@@ -24,3 +24,7 @@ node_modules/
 */electron/dist/
 
 cmd/grroxy/builds*
+
+# macOS system files
+.DS_Store
+**/.DS_Store
