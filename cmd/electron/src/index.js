@@ -4,12 +4,14 @@ const { app, BrowserWindow, ipcMain, nativeImage } = require('electron')
 const path = require('path')
 
 function createWindow() {
+    const iconPath = path.resolve(__dirname, "icons", "grroxy.png")
+
     const win = new BrowserWindow({
         width: 1080,
         height: 720,
         fullscreen: true,
 
-        icon: __dirname + "/icons/grroxy.png",
+        icon: iconPath,
 
         /* ------------- title-bar flags ------------- */
         titleBarStyle: 'hiddenInset',        // same “inset” look Wails uses
@@ -73,7 +75,7 @@ function createWindow() {
         return isFs;
     });
 
-    app.dock.setIcon(nativeImage.createFromPath(__dirname + "/icons/grroxy.png"))
+    app.dock.setIcon(nativeImage.createFromPath(iconPath))
 
 
 }
