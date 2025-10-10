@@ -13,3 +13,18 @@ var Settings = schema.NewSchema(
 		Type: schema.FieldTypeText,
 	},
 )
+
+var ConfigSchema = schema.NewSchema(
+	&schema.SchemaField{
+		Name: "key",
+		Type: schema.FieldTypeText,
+		Required: true,
+	},
+	&schema.SchemaField{
+		Name: "data",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+)
