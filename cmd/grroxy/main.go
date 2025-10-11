@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"errors"
 	"fmt"
 	"net/http"
@@ -78,9 +77,6 @@ func initialize() {
 
 }
 
-//go:embed all:frontend/dist
-var assets embed.FS
-
 func completionCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "completion",
@@ -149,51 +145,6 @@ func main() {
 			initialize()
 		},
 	})
-
-	rootCmd.AddCommand(&cobra.Command{
-		Use: "app",
-		Run: func(cmd *cobra.Command, args []string) {
-			go initialize()
-			runApp()
-		},
-	})
-
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "create [project name]",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-
-	// 		// printBanner()
-	// 		projectName := "Project"
-
-	// 		if len(args) > 0 && args[0] != "." {
-	// 			projectName = strings.Join([]string(args), " ")
-	// 		}
-
-	// 		projectData, err := launch.CreateNewProject(projectName)
-
-	// 		if err != nil {
-	// 			fmt.Println("Error creating project:", err)
-	// 			return
-	// 		}
-
-	// 		fmt.Println("Project created successfully:", projectData)
-	// 	},
-	// })
-
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "resume",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		// conf.OpenProject(0)
-	// 	}})
-
-	// rootCmd.PersistentFlags().StringVar(&MainHostAddress, "host", "127.0.0.1:8090", "")
-	// rootCmd.PersistentFlags().StringVar(&MainProxyAddress, "proxy", "127.0.0.1:8888", "")
-	// rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
