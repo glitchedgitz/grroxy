@@ -3,23 +3,23 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 
-	"github.com/glitchedgitz/grroxy-db/api"
+	api "github.com/glitchedgitz/grroxy-db/api/app"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/utils"
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/plugins/migratecmd"
+	"github.com/spf13/cobra"
 )
 
 var conf config.Config
 var API api.Backend
 
-// var noUI bool
-var noProxy bool
 var HostAddress string
 var ProjectPath string
-var ProxyAddress string
+var ProxyAddress string // removed, we use api now
 var showLogs bool
 
 // var noBanner bool
@@ -38,7 +38,7 @@ func init() {
 func initialize() {
 
 	if !showLogs {
-		log.SetOutput(io.Discard)
+		// log.SetOutput(io.Discard)
 	}
 
 	// printBanner()
@@ -53,17 +53,28 @@ func initialize() {
 		}
 	}
 	conf.ProxyAddr = ProxyAddress
-	
+
 	if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {
 		panic("GRROXY_TEMPLATE_DIR environment variable is not set")
 	}
 	conf.TemplateDirectory = os.Getenv("GRROXY_TEMPLATE_DIR")
-	
+
 	conf.Initiate()
 }
 
+// while migration we need to trun this on
+const MIGRATION_MODE = false
+
 func main() {
 
+	if MIGRATION_MODE {
+		pocketbaseApp()
+	} else {
+		prodApp()
+	}
+}
+
+func prodApp() {
 	flag.StringVar(&HostAddress, "host", "127.0.0.1:8090", "Host address to listen on")
 	flag.StringVar(&ProxyAddress, "proxy", "127.0.0.1:8888", "Proxy address to listen on")
 	flag.StringVar(&ProjectPath, "path", "", "Project directory path")
@@ -79,73 +90,31 @@ func main() {
 	} else {
 		fmt.Println("No project path provided")
 	}
+}
 
-	// var rootCmd = &cobra.Command{
-	// 	Use:   "grroxy",
-	// 	Short: "grroxy is center of your web hacking operations",
-	// }
+// while migration we need to use this function
+func pocketbaseApp() {
+	app := pocketbase.New()
 
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use:   "projects [project index (optional)]",
-	// 	Short: "List all projects or open a specific project by index",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		if len(args) > 0 {
-	// 			index, err := strconv.Atoi(args[0])
+	app.RootCmd.AddCommand(&cobra.Command{
+		Use: "hello",
+		Run: func(cmd *cobra.Command, args []string) {
+			log.Println("Hello world!")
+		},
+	})
 
-	// 			if err != nil {
-	// 				fmt.Println("Invalid project index:", args[0])
-	// 				return
-	// 			}
+	app.RootCmd.PersistentFlags().StringVar(&HostAddress, "host", "127.0.0.1:8090", "")
+	app.RootCmd.PersistentFlags().StringVar(&ProxyAddress, "proxy", "127.0.0.1:8888", "")
+	app.RootCmd.PersistentFlags().StringVar(&ProjectPath, "path", "", "")
+	app.RootCmd.PersistentFlags().BoolVar(&showLogs, "log", false, "")
 
-	// 			conf.OpenProject(index)
-	// 		} else {
-	// 			conf.ListProjects()
-	// 		}
-	// 		serve()
-	// 	},
-	// })
+	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{
+		// enable auto creation of migration files when making collection changes in the Admin UI
+		// (the isGoRun check is to enable it only during development)
+		Automigrate: true,
+	})
 
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "config",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		conf.ShowConfig()
-	// 	},
-	// })
-
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "create [project name]",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-
-	// 		// printBanner()
-	// 		projectName := "Project"
-	// 		if len(args) > 0 && args[0] != "." {
-	// 			projectName = strings.Join([]string(args), " ")
-	// 		}
-	// 		conf.NewProject(projectName)
-	// 		serve()
-	// 	},
-	// })
-
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "resume",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		conf.OpenProject(0)
-	// 		serve()
-	// 	}})
-
-	// rootCmd.PersistentFlags().StringVar(&HostAddress, "host", "127.0.0.1:8090", "")
-	// rootCmd.PersistentFlags().StringVar(&ProxyAddress, "proxy", "127.0.0.1:8888", "")
-	// rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
-
-	// if err := rootCmd.Execute(); err != nil {
-	// 	fmt.Println(err)
-	// 	os.Exit(1)
-	// }
+	if err := app.Start(); err != nil {
+		log.Fatal(err)
+	}
 }

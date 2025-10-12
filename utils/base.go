@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/jpillora/go-tld"
 	"golang.org/x/net/html"
 )
@@ -75,15 +77,26 @@ func CheckErr(msg string, err error) {
 	}
 }
 
-func FormatNumericID(number, width int) string {
+func FormatNumericID(number float64, width int) string {
 	// Convert the number to a string
-	numStr := fmt.Sprintf("%d", number)
+	numStr := fmt.Sprintf("%g", number)
 
 	// Calculate the number of underscores needed for padding
 	underscoreCount := width - len(numStr)
 
 	// Create the padded string with underscores
 	paddedStr := strings.Repeat("_", underscoreCount) + numStr
+
+	return paddedStr
+}
+
+func FormatStringID(str string, width int) string {
+
+	// Calculate the number of underscores needed for padding
+	underscoreCount := width - len(str)
+
+	// Create the padded string with underscores
+	paddedStr := strings.Repeat("_", underscoreCount) + str
 
 	return paddedStr
 }
@@ -123,11 +136,41 @@ func ParseDataFromFrontend[T interface{}](results []interface{}) T {
 
 func ResponseToByte(resp *http.Response) ([]byte, error) {
 
-	body, err := io.ReadAll(resp.Body)
-	// resp.Body.Close()
-
+	// Read the body once first
+	originalBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return []byte(""), fmt.Errorf("failed to read the response body: %w", err)
+	}
+
+	// Check for compression and decompress if needed
+	contentEncoding := resp.Header.Get("Content-Encoding")
+	var bodyReader io.Reader
+	var decompressed bool
+
+	switch strings.ToLower(contentEncoding) {
+	case "gzip", "x-gzip":
+		gzReader, err := gzip.NewReader(bytes.NewReader(originalBody))
+		if err != nil {
+			// If decompression fails, use original body
+			bodyReader = bytes.NewReader(originalBody)
+			decompressed = false
+		} else {
+			bodyReader = gzReader
+			decompressed = true
+		}
+	case "br", "brotli":
+		bodyReader = brotli.NewReader(bytes.NewReader(originalBody))
+		decompressed = true
+	default:
+		bodyReader = bytes.NewReader(originalBody)
+		decompressed = false
+	}
+
+	body, err := io.ReadAll(bodyReader)
+	if err != nil {
+		// If reading decompressed data fails, fall back to original
+		body = originalBody
+		decompressed = false
 	}
 
 	// Create a new response without the chunked encoding information
@@ -141,6 +184,11 @@ func ResponseToByte(resp *http.Response) ([]byte, error) {
 		ContentLength: int64(len(body)),
 		Body:          io.NopCloser(bytes.NewReader(body)),
 		Request:       resp.Request,
+	}
+
+	// Remove Content-Encoding header only if we successfully decompressed
+	if decompressed {
+		// newResp.Header.Del("Content-Encoding")
 	}
 
 	respBytes, err := httputil.DumpResponse(newResp, true)
@@ -161,7 +209,11 @@ func ResponseToString(resp *http.Response) (string, error) {
 }
 
 func SmartSort(s string) string {
-	u, _ := tld.Parse(s)
+	u, err := tld.Parse(s)
+	if err != nil {
+		log.Println(err)
+		return strings.TrimPrefix(strings.TrimPrefix(s, "https://"), "http://")
+	}
 	arr := strings.Split(u.Subdomain, ".")
 	arr = append(arr, u.TLD)
 	arr = append(arr, u.Domain)
@@ -208,9 +260,16 @@ func ExtractTitle(respByte []byte) (string, string) {
 }
 
 func StructToMap(s any, tag string) map[string]any {
+
+	log.Println("[StructToMap] s:", s)
+	log.Println("[StructToMap] tag:", tag)
+
 	result := make(map[string]any)
 	val := reflect.ValueOf(s).Elem() // Get the value of the struct
 	typ := val.Type()                // Get the type of the struct
+
+	log.Println("[StructToMap] val:", val)
+	log.Println("[StructToMap] typ:", typ)
 
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
@@ -221,9 +280,10 @@ func StructToMap(s any, tag string) map[string]any {
 		} else {
 			result[fieldTag] = field.Interface()
 		}
+		log.Println("[StructToMap] key:", fieldTag, "value:", result[fieldTag])
 	}
 
-	fmt.Println("result:", result)
+	log.Println("[StructToMap] result:", result)
 	return result
 }
 
@@ -256,14 +316,6 @@ func StructToMapExtact(s any) map[string]any {
 	}
 
 	return result
-}
-
-func extractValueIfKeyExists(d *map[string]any, key string) (any, error) {
-
-	if b, found := (*d)[key]; found {
-		return b, nil
-	}
-	return nil, fmt.Errorf("key '%v' not found in data: \n %v", key, *d)
 }
 
 func ExtractValueFromMap(d *map[string]any, givenKey string) (any, error) {

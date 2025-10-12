@@ -40,6 +40,7 @@ require (
 	github.com/wailsapp/wails/v2 v2.10.1
 	golang.org/x/net v0.35.0
 	golang.org/x/sync v0.11.0
+	gopkg.in/fsnotify.v1 v1.4.7
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -204,10 +205,8 @@ require (
 	modernc.org/token v1.1.0 // indirect
 )
 
-// replace github.com/glitchedgitz/wappalyzergo v0.0.116 => github.com/glitchedgitz/wappalyzergo v0.0.1
-// replace github.com/glitchedgitz/cook/v2/pkg/cook => ../cook/v2/pkg/cook
-
 replace (
+	github.com/glitchedgitz/cook/v2 v2.2.0 => /Users/shreysharma/Documents/GitHub/cook/v2
 	github.com/glitchedgitz/dadql v0.0.0 => ../dadql
 	github.com/pocketbase/pocketbase v0.22.7 => ../grroxy-base
 )

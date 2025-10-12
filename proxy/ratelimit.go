@@ -7,7 +7,7 @@ import (
 )
 
 var requestRateLimit = make(chan (int), 500)
-var generateIndex = make(chan (int))
+var generateIndex = make(chan (float64))
 var total = 0
 
 func (p *Proxy) RateLimitManager() {
@@ -25,6 +25,6 @@ func (p *Proxy) RateLimitManager() {
 	for {
 		<-requestRateLimit
 		total += 1
-		generateIndex <- total
+		generateIndex <- float64(total)
 	}
 }

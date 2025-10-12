@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -38,7 +39,8 @@ type ResponseData struct {
 type UserData struct {
 	ID           string       `db:"id,omitempty" json:"id,omitempty"`
 	Host         string       `db:"host,omitempty" json:"host,omitempty"`
-	Index        int          `db:"index,omitempty" json:"index,omitempty"`
+	Index        float64      `db:"index,omitempty" json:"index,omitempty"`
+	IndexMinor   float64      `db:"index_minor,omitempty" json:"index_minor,omitempty"`
 	Port         string       `db:"port,omitempty" json:"port,omitempty"`
 	HasResp      bool         `db:"has_resp,omitempty" json:"has_resp,omitempty"`
 	IsReqEdited  bool         `db:"is_req_edited,omitempty" json:"is_req_edited,omitempty"`
@@ -55,6 +57,7 @@ type UserData struct {
 }
 
 func (userdata *UserData) RequestUpdateKey(req *http.Request, key string, value any) {
+	log.Println("[RequestUpdateKey] key: '", key, "' value: '", value, "'")
 	if key == "req.method" {
 		req.Method = value.(string)
 		userdata.Req.Method = value.(string)
@@ -76,6 +79,8 @@ func (userdata *UserData) RequestUpdateKey(req *http.Request, key string, value 
 		req.URL.RawQuery = params.Encode()
 
 	} else if strings.HasPrefix(key, "req.headers") {
+		log.Println("[RequestUpdateKey] req.headers: ", key, value)
+
 		header := strings.TrimPrefix(key, "req.headers")[1:]
 		req.Header.Set(header, value.(string))
 		userdata.Req.Headers[header] = value.(string)

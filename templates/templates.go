@@ -10,6 +10,7 @@ import (
 
 	"github.com/glitchedgitz/dadql/dadql"
 	"github.com/glitchedgitz/grroxy-db/utils"
+	"gopkg.in/fsnotify.v1"
 	"gopkg.in/yaml.v2"
 )
 
@@ -19,6 +20,7 @@ type Action struct {
 }
 
 type Actions struct {
+	Id        string                      `yaml:"id"`
 	Condition string                      `yaml:"condition"`
 	Todo      []map[string]map[string]any `yaml:"todo"`
 }
@@ -39,9 +41,6 @@ type Config struct {
 
 	// Hooks: Which templates one should run
 	Hooks map[string][]string `yaml:"hooks,omitempty"`
-
-	// Default?: actions to perform when nothing match
-	Default []map[string]map[string]any `yaml:"default,omitempty"`
 }
 
 type Template struct {
@@ -56,11 +55,21 @@ type Template struct {
 type Templates struct {
 	TempalteDir string
 	Templates   map[string]*Template
+	watcher     *fsnotify.Watcher
 }
 
 func (t *Templates) Setup() {
-
 	t.Templates = make(map[string]*Template)
+
+	// Initialize the watcher
+	var err error
+	t.watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatalln("Error creating watcher:", err)
+	}
+
+	// Start watching for file changes
+	go t.watchFiles()
 
 	files, err := os.ReadDir(t.TempalteDir)
 	if err != nil {
@@ -71,12 +80,50 @@ func (t *Templates) Setup() {
 
 	for _, file := range files {
 		fileName := file.Name()
-		if strings.HasSuffix(fileName, ".yaml") || strings.HasPrefix(fileName, ".yml") {
+		if strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml") {
 			l := Read(path.Join(t.TempalteDir, fileName))
 			log.Printf("Template:%v Scan:%v\n", fileName, len(l.Tasks))
 			log.Printf("Template:%v Mode:%v\n", fileName, l.Config.Mode)
 			t.Templates[l.Id] = l
 		}
+	}
+
+	// Add the template directory to the watcher
+	err = t.watcher.Add(t.TempalteDir)
+	if err != nil {
+		log.Fatalln("Error adding directory to watcher:", err)
+	}
+}
+
+func (t *Templates) watchFiles() {
+	for {
+		select {
+		case event, ok := <-t.watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create {
+				fileName := path.Base(event.Name)
+				if strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml") {
+					log.Printf("Template file changed: %s\n", fileName)
+					l := Read(event.Name)
+					t.Templates[l.Id] = l
+					log.Printf("Template:%v Scan:%v\n", fileName, len(l.Tasks))
+					log.Printf("Template:%v Mode:%v\n", fileName, l.Config.Mode)
+				}
+			}
+		case err, ok := <-t.watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Println("Error watching files:", err)
+		}
+	}
+}
+
+func (t *Templates) Close() {
+	if t.watcher != nil {
+		t.watcher.Close()
 	}
 }
 
@@ -129,17 +176,21 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 
 	for id, template := range t.Templates {
 
+		log.Println("Template: ", template.Id)
+
 		var actions []Action
+		var defaultActions []Action
 
 		if len(template.Tasks) == 0 {
-			log.Println("No actions found") // Fail if no actions are found
+			log.Println("[Templates.Run][", template.Id, "] No actions found in the template") // Fail if no actions are found
 			continue
 		}
 
 		if values, found := template.Config.Hooks[hooks[0]]; !found {
-			log.Println("[Templates.Run] Hook", template.Config.Hooks)
+			log.Println("[Templates.Run][", template.Id, "] Hook not found", template.Config.Hooks, hooks)
 			continue
 		} else {
+			log.Println("[Templates.Run][", template.Id, "] Hook found", template.Config.Hooks, hooks)
 			foundAny := false
 			for _, hook := range hooks[1:] {
 				if utils.ArrayContains(values, hook) {
@@ -154,17 +205,32 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 		log.Printf("[Templates.Run][%s] Running template: %s", id, template.Info.Title)
 
 		for _, job := range template.Tasks {
+			// Collect default actions separately
+			if job.Id == "default" {
+				for _, action := range job.Todo {
+					for function, d := range action {
+						defaultActions = append(defaultActions, getParsedValue(data, Action{
+							ActionName: function,
+							Data:       d,
+						}))
+					}
+				}
+				continue
+			}
 
-			// log.Println("Tasks: jobs: ", job)
+			log.Println("[Templates.Run] Tasks: jobs: ", job)
 
+			// check condition
 			check, err := dadql.Filter(data, job.Condition)
 			if err != nil {
 				log.Printf("[Templates.Run] Filter parsing: %v", job.Condition)
 				break
 			}
 
+			log.Println("[Templates.Run] Filter: ", check)
+
 			if check {
-				log.Println("[template.Run] Found with:", job.Condition)
+				log.Println("[Templates.Run] Found with:", job.Condition)
 
 				for _, action := range job.Todo {
 					for function, d := range action {
@@ -183,26 +249,9 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 			}
 		}
 
+		// If no regular actions were found, use default actions
 		if len(actions) == 0 {
-			if len(template.Config.Default) > 0 {
-				log.Println("[template.Run] Using default for", data)
-
-				for _, _action := range template.Config.Default {
-					for actionName, actionData := range _action {
-						a := Action{
-							ActionName: actionName,
-							Data:       actionData,
-						}
-
-						log.Println("Before even sending: ", _action)
-
-						p := getParsedValue(data, a)
-						log.Println("After parsing: ", p)
-
-						results = append(results, p)
-					}
-				}
-			}
+			actions = defaultActions
 		}
 
 		results = append(results, actions...)

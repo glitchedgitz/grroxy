@@ -3,10 +3,14 @@ package actions
 import "github.com/glitchedgitz/grroxy-db/types"
 
 type ModifierReplace struct {
-	Key     string `yaml:"key"`
 	Search  string `yaml:"search"`
-	Replace string `yaml:"replace"`
+	Value   string `yaml:"value"`
 	Regex   bool   `yaml:"regex"`
+}
+
+type ModifierSet struct {
+	Key   string `yaml:"key"`
+	Value string `yaml:"value"`
 }
 
 type Modifier struct {

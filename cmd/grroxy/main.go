@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,8 +10,8 @@ import (
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
+	"github.com/glitchedgitz/grroxy-db/api/launcher"
 	"github.com/glitchedgitz/grroxy-db/config"
-	"github.com/glitchedgitz/grroxy-db/launcher"
 	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/pocketbase/pocketbase"
@@ -77,9 +76,6 @@ func initialize() {
 	startCore()
 
 }
-
-//go:embed all:frontend/dist
-var assets embed.FS
 
 func completionCommand() *cobra.Command {
 	return &cobra.Command{
@@ -150,51 +146,6 @@ func main() {
 		},
 	})
 
-	rootCmd.AddCommand(&cobra.Command{
-		Use: "app",
-		Run: func(cmd *cobra.Command, args []string) {
-			go initialize()
-			runApp()
-		},
-	})
-
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "create [project name]",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-
-	// 		// printBanner()
-	// 		projectName := "Project"
-
-	// 		if len(args) > 0 && args[0] != "." {
-	// 			projectName = strings.Join([]string(args), " ")
-	// 		}
-
-	// 		projectData, err := launch.CreateNewProject(projectName)
-
-	// 		if err != nil {
-	// 			fmt.Println("Error creating project:", err)
-	// 			return
-	// 		}
-
-	// 		fmt.Println("Project created successfully:", projectData)
-	// 	},
-	// })
-
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use: "resume",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		initialize()
-	// 		// conf.OpenProject(0)
-	// 	}})
-
-	// rootCmd.PersistentFlags().StringVar(&MainHostAddress, "host", "127.0.0.1:8090", "")
-	// rootCmd.PersistentFlags().StringVar(&MainProxyAddress, "proxy", "127.0.0.1:8888", "")
-	// rootCmd.PersistentFlags().BoolVar(&noProxy, "no-proxy", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&noBanner, "no-banner", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&showLogs, "verbose", false, "")
-	// rootCmd.PersistentFlags().BoolVar(&launchApp, "app", false, "")
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -215,7 +166,7 @@ func startCore() {
 				// DefaultEncryptionEnv: "hJH#GRJ#HG$JH$54h5kjhHJG#JHG#*&Y&EG#F&GIG@JKGH$JHRGJ##JKJH#JHG",
 			},
 		),
-		Cook:       cook.NewWithoutConfig(),
+		Cook:       cook.NewGenerator(),
 		Config:     &conf,
 		CmdChannel: make(chan process.RunCommandData),
 	}
@@ -227,6 +178,7 @@ func startCore() {
 
 	// Reset project states when the app is terminated
 	launch.App.OnBeforeServe().Add(launch.ResetProjectStates)
+	launch.App.OnBeforeServe().Add(launch.ResetToolsStates)
 
 	// Adding custom endpoints
 	launch.App.OnBeforeServe().Add(launch.API_ListProjects)
@@ -234,7 +186,6 @@ func startCore() {
 	launch.App.OnBeforeServe().Add(launch.API_OpenProject)
 	launch.App.OnBeforeServe().Add(launch.BindFrontend)
 	launch.App.OnBeforeServe().Add(launch.RunCommand)
-	launch.App.OnBeforeServe().Add(launch.SendRawRequest)
 	launch.App.OnBeforeServe().Add(launch.TextSQL)
 	launch.App.OnBeforeServe().Add(launch.SaveFile)
 	launch.App.OnBeforeServe().Add(launch.ReadFile)

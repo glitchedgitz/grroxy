@@ -10,8 +10,8 @@ import (
 
 type Config struct {
 	HostAddr          string
-	ProxyAddr         string
-	HomeDirectory     string
+	ProxyAddr         string // Deprecated: Use the API to start the proxy instead
+	HomeDirectory     string 
 	CWDirectory       string
 	ConfigDirectory   string
 	CacheDirectory    string

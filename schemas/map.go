@@ -29,6 +29,12 @@ var Main = []DB{
 		"",
 	},
 	{
+		"_tools",
+		ToolsSchema,
+		false,
+		"",
+	},
+	{
 		"_labels",
 		Labels,
 		false,
@@ -37,18 +43,30 @@ var Main = []DB{
 	{
 		"_searches",
 		Searches,
-		false,
-		"",
+		true,
+		`
+		CREATE UNIQUE INDEX idx_searches_name ON _searches (name);
+		`,
+	},
+	{
+		"_wordlists",
+		Wordlists,
+		true,
+		`
+		CREATE UNIQUE INDEX idx_wordlists_name ON _wordlists (name);
+		`,
+	},
+	{
+		"_filters",
+		Filters,
+		true,
+		`
+		CREATE UNIQUE INDEX idx_filters_name ON _filters (name);
+		`,
 	},
 	{
 		"_payloads",
 		Payloads,
-		false,
-		"",
-	},
-	{
-		"_store",
-		Store,
 		false,
 		"",
 	},
@@ -72,7 +90,7 @@ var Tools = []DB{
 var Collections = []DB{
 	{
 		"_raw",
-		Store,
+		Raw,
 		true,
 		`
 		CREATE UNIQUE INDEX idx_hosts_host ON _hosts (host);
@@ -92,6 +110,36 @@ var Collections = []DB{
 		true, `
 		CREATE UNIQUE INDEX idx_labelsname ON _labels (name);
 		`,
+	},
+	{
+		"_searches",
+		Searches,
+		true,
+		`
+		CREATE UNIQUE INDEX idx_searches_name ON _searches (name);
+		`,
+	},
+	{
+		"_filters",
+		Filters,
+		true,
+		`
+		CREATE UNIQUE INDEX idx_filters_name ON _filters (name);
+		`,
+	},
+	{
+		"_wordlists",
+		Wordlists,
+		true,
+		`
+		CREATE UNIQUE INDEX idx_wordlists_name ON _wordlists (name);
+		`,
+	},
+	{
+		"_playground",
+		Playground,
+		false,
+		"",
 	},
 	{
 		"_tech",

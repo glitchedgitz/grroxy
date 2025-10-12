@@ -11,9 +11,10 @@ import (
 	"strings"
 
 	"github.com/elazarl/goproxy"
-	"github.com/glitchedgitz/grroxy-db/utils"
+	"github.com/glitchedgitz/grroxy-db/grrhttp"
 	"github.com/glitchedgitz/grroxy-db/templates/actions"
 	"github.com/glitchedgitz/grroxy-db/types"
+	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/projectdiscovery/dsl"
 	"gopkg.in/yaml.v2"
 )
@@ -49,15 +50,7 @@ type attach = struct {
 	Note   string   `db:"note" json:"note"`
 }
 
-func getHeaders(h http.Header) map[string]string {
-	headers := map[string]string{}
-	for header, value := range h {
-		// header = strings.ReplaceAll(header, "-", "_")
-		// header = strings.ToLower(header)
-		headers[header] = strings.Join(value, " ///// ")
-	}
-	return headers
-}
+
 
 func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 	// rateLimit <- ""
@@ -83,7 +76,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 	// Initiate variables
 	var (
 		index   = <-generateIndex
-		id      = utils.FormatNumericID(index, 15)
+		id      = utils.FormatNumericID(float64(index), 15)
 		method  = http.MethodGet
 		host    = req.URL.Host
 		port    = ""
@@ -133,7 +126,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 			HasCookies: len(req.Cookies()) > 0,
 			HasParams:  len(req.URL.Query()) > 0,
 			Length:     req.ContentLength,
-			Headers:    getHeaders(req.Header),
+			Headers:    grrhttp.GetHeaders(req.Header),
 			IsHTTPS:    isHttps,
 			Url:        req.URL.RequestURI(),
 			Path:       req.URL.Path,
@@ -170,39 +163,42 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 
 		for _, action := range results {
 			switch action.ActionName {
-			case actions.Modify:
-
+			case actions.Set:
+				log.Println("[OnRequest] Set: ", action.Data)
 				for key, value := range action.Data {
-					if key == "replace" {
-						for _, replace := range value.([]any) {
-							var r actions.ModifierReplace
-							intermediate, err := yaml.Marshal(replace)
-							if err != nil {
-								panic(err)
-							}
-
-							err = yaml.Unmarshal(intermediate, &r)
-							if err != nil {
-								log.Println("Error: Template replace", err)
-							}
-
-							extractedValue, err := utils.ExtractValueFromMap(&requestJson, r.Key)
-							if err != nil {
-								log.Println("Error: Extracting value", err)
-							}
-
-							updatedValue, err := utils.FindAndReplaceAll(fmt.Sprint(extractedValue), r.Search, r.Replace, r.Regex)
-							if err != nil {
-								log.Println(err)
-								continue
-							}
-							userdata.RequestUpdateKey(req, r.Key, updatedValue)
-
+					userdata.RequestUpdateKey(req, key, value)
+				}
+			case actions.Delete:
+				log.Println("[OnRequest] Delete: ", action.Data)
+				for key := range action.Data {
+					userdata.RequestDeleteKey(req, key)
+				}
+			case actions.Replace:
+				log.Println("[OnRequest] Replace: ", action.Data)
+				for key, replaces := range action.Data {
+					for _, replace := range replaces.([]any) {
+						var r actions.ModifierReplace
+						intermediate, err := yaml.Marshal(replace)
+						if err != nil {
+							log.Println("Error: Template replace 1", err)
 						}
-					} else if key == "delete" {
-						userdata.RequestDeleteKey(req, key)
-					} else if strings.HasPrefix(key, "req.") {
-						userdata.RequestUpdateKey(req, key, value)
+
+						err = yaml.Unmarshal(intermediate, &r)
+						if err != nil {
+							log.Println("Error: Template replace 2", err)
+						}
+
+						extractedValue, err := utils.ExtractValueFromMap(&requestJson, key)
+						if err != nil {
+							log.Println("Error: Extracting value", err)
+						}
+
+						updatedValue, err := utils.FindAndReplaceAll(fmt.Sprint(extractedValue), r.Search, r.Value, r.Regex)
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+						userdata.RequestUpdateKey(req, key, updatedValue)
 					}
 				}
 
@@ -257,6 +253,7 @@ func (p *Proxy) OnRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Reque
 		req.Header = requestNew.Header
 		req.Body = requestNew.Body
 		req.Host = requestNew.Host
+		req.ContentLength = requestNew.ContentLength
 
 		newURL := requestNew.URL
 		newURL.Host = req.URL.Host
@@ -284,7 +281,7 @@ func (p *Proxy) _requestAddToDB(userdata *types.UserData) {
 		typ = "file"
 	}
 
-	log.Println("[_requestAddToDB]userdata: ", userdata)
+	// log.Println("[_requestAddToDB]userdata: ", userdata)
 	p.grroxydb.Create("_data", userdata)
 
 	s_data := types.SitemapGet{
@@ -307,7 +304,8 @@ func (p *Proxy) _requestAddToDB(userdata *types.UserData) {
 
 func (p *Proxy) runReqTemplates(userdata *types.UserData) {
 	tmpdata := types.UserData{
-		Req: userdata.Req,
+		Host: userdata.Host,
+		Req:  userdata.Req,
 	}
 
 	d := utils.StructToMap(&tmpdata, "json")
@@ -327,8 +325,11 @@ func (p *Proxy) runReqTemplates(userdata *types.UserData) {
 			Name:  name,
 			Color: y.Data["color"].(string),
 			Type:  y.Data["type"].(string),
-			Icon:  y.Data["icon"].(string),
 			ID:    userdata.ID,
+		}
+
+		if y.Data["icon"] != nil {
+			l_data.Icon = y.Data["icon"].(string)
 		}
 
 		switch y.ActionName {
@@ -338,8 +339,4 @@ func (p *Proxy) runReqTemplates(userdata *types.UserData) {
 			log.Println("[_requestAddToDB] Unknown Action")
 		}
 	}
-}
-
-func (p *Proxy) SearchAndReplaceRequest() {
-
 }

@@ -185,7 +185,9 @@ func (p *Proxy) RunProxy() error {
 }
 
 func (p *Proxy) Stop() {
-
+	// if p.templates != nil {
+	// 	p.templates.Close()
+	// }
 }
 
 func NewProxy(options *Options) (*Proxy, error) {

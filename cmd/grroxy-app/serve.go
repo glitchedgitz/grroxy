@@ -2,14 +2,12 @@ package main
 
 import (
 	"log"
-	"path"
 
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
-	"github.com/glitchedgitz/grroxy-db/api"
+	api "github.com/glitchedgitz/grroxy-db/api/app"
 	"github.com/glitchedgitz/grroxy-db/process"
-	"github.com/glitchedgitz/grroxy-db/proxy"
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -36,45 +34,30 @@ func serve(projectPath string) {
 				// DefaultEncryptionEnv: "hJH#GRJ#HG$JH$54h5kjhHJG#JHG#*&Y&EG#F&GIG@JKGH$JHRGJ##JKJH#JHG",
 			},
 		),
-		Cook:       cook.NewWithoutConfig(),
+		Cook:       cook.NewGenerator(),
 		Wappalyzer: wappalyzerClient,
 		Config:     &conf,
 		CmdChannel: make(chan process.RunCommandData),
 	}
 
-	if !noProxy {
+	// if !noProxy {
 
-		go proxy.StartProxy(&proxy.Options{
-			Silent:                      false,
-			Directory:                   path.Join(API.Config.HomeDirectory, ".config", "grroxy"),
-			CertCacheSize:               256,
-			Verbosity:                   false,
-			AppAddress:                  API.Config.HostAddr,
-			ListenAddrHTTP:              API.Config.ProxyAddr,
-			ListenAddrSocks5:            "127.0.0.1:10080",
-			OutputDirectory:             "grroxy_test",
-			RequestDSL:                  "",
-			ResponseDSL:                 "",
-			UpstreamHTTPProxies:         []string{},
-			UpstreamSock5Proxies:        []string{},
-			ListenDNSAddr:               "",
-			DNSMapping:                  "",
-			DNSFallbackResolver:         "",
-			RequestMatchReplaceDSL:      "",
-			ResponseMatchReplaceDSL:     "",
-			DumpRequest:                 false,
-			DumpResponse:                false,
-			UpstreamProxyRequestsNumber: 1,
-			// Elastic:                     &Elastic,
-			// Kafka:                       &Kafka,
-			Allow:     []string{},
-			Deny:      []string{},
-			Intercept: true,
-			Waiting:   true,
-		})
-	}
 
 	migratecmd.MustRegister(API.App, API.App.RootCmd, migratecmd.Config{})
+
+	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+		record, err := API.App.Dao().FindRecordById("_settings", "PROXY__________")
+		if err != nil {
+			log.Println("Error finding record: ", err)
+			return nil
+		}
+
+		record.Set("value", "")
+		if err := API.App.Dao().SaveRecord(record); err != nil {
+			log.Println("Error saving record: ", err)
+		}
+		return nil
+	})
 
 	// Adding custom endpoints
 	API.App.OnBeforeServe().Add(API.LabelAttach)
@@ -88,7 +71,6 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.SaveFile)
 	API.App.OnBeforeServe().Add(API.ReadFile)
 	API.App.OnBeforeServe().Add(API.DownloadCert)
-	API.App.OnBeforeServe().Add(API.CookSearch)
 	API.App.OnBeforeServe().Add(API.SearchRegex)
 	API.App.OnBeforeServe().Add(API.FileWatcher)
 	API.App.OnBeforeServe().Add(API.TemplatesList)
@@ -96,6 +78,15 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.TemplatesDelete)
 	API.App.OnBeforeServe().Add(API.RunCommand)
 	API.App.OnBeforeServe().Add(API.Tools)
+	API.App.OnBeforeServe().Add(API.CookSearch)
+	API.App.OnBeforeServe().Add(API.CookApplyMethods)
+	API.App.OnBeforeServe().Add(API.CookGenerate)
+	API.App.OnBeforeServe().Add(API.PlaygroundNew)
+	API.App.OnBeforeServe().Add(API.PlaygroundDelete)
+	API.App.OnBeforeServe().Add(API.PlaygroundAddChild)
+	API.App.OnBeforeServe().Add(API.StartProxy)
+	API.App.OnBeforeServe().Add(API.StopProxy)
+	API.App.OnBeforeServe().Add(API.AddRequest)
 
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		API.App.Dao().DB().NewQuery(`

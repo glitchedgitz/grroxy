@@ -7,7 +7,9 @@ const (
 	CreateLabel = "create_label" // Currently only supported one
 	CreateTech  = "create_tech"
 
-	Modify = "modify" // modify request/response
+	Replace = "replace" // modify request/response
+	Set     = "set"     // modify request/response
+	Delete  = "delete"  // delete request/response
 
 	SendNotification = "send_notification"
 

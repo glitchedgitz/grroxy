@@ -145,16 +145,19 @@ func TestSetup(t *testing.T) {
 			},
 			expextedResults: 1,
 		},
-		// {
-		// 	hook: "proxy:before_request",
-		// 	data: map[string]any{
-		// 		"index": 123,
-		// 		"req": map[string]any{
-		// 			"user_agent": "Morzilla",
-		// 		},
-		// 	},
-		// 	expextedResults: 1,
-		// },
+		{
+			hook: "proxy:before_request",
+			data: map[string]any{
+				"index": 123,
+				"host":  "https://asdfsdfasdupwork.com//",
+				"req": map[string]any{
+					"headers": map[string]any{
+						"User-Agent": "Morzilla",
+					},
+				},
+			},
+			expextedResults: 1,
+		},
 	}
 
 	if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {

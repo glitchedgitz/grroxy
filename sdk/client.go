@@ -154,6 +154,106 @@ func (c *Client) CreateCollection(body any) (any, error) {
 	return v, nil
 }
 
+func (c *Client) AddRequest(body types.AddRequestBodyType) (any, error) {
+	var response any
+
+	if err := c.Authorize(); err != nil {
+		return response, err
+	}
+
+	request := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		SetResult(&response)
+
+	log.Println(response)
+
+	resp, err := request.Post(c.url + "/api/request/add")
+	if err != nil {
+		return response, fmt.Errorf("[create] can't send create request to pocketbase, err %w", err)
+	}
+
+	if resp.IsError() {
+		return response, fmt.Errorf("[create] pocketbase returned status: %d, msg: %s, body: %s, err %w",
+			resp.StatusCode(),
+			resp.String(),
+			fmt.Sprintf("%+v", body), // TODO remove that after debugging
+			ErrInvalidResponse,
+		)
+	}
+
+	v := *resp.Result().(*interface{})
+
+	return v, nil
+
+}
+
+func (c *Client) PlaygroundNew(body types.PlaygroundNew) (any, error) {
+	var response any
+
+	if err := c.Authorize(); err != nil {
+		return response, err
+	}
+
+	request := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		SetResult(&response)
+
+	log.Println(response)
+
+	resp, err := request.Post(c.url + "/api/playground/new")
+	if err != nil {
+		return response, fmt.Errorf("[create] can't send create playground request to pocketbase, err %w", err)
+	}
+
+	if resp.IsError() {
+		return response, fmt.Errorf("[create] pocketbase returned status: %d, msg: %s, body: %s, err %w",
+			resp.StatusCode(),
+			resp.String(),
+			fmt.Sprintf("%+v", body), // TODO remove that after debugging
+			ErrInvalidResponse,
+		)
+	}
+
+	v := *resp.Result().(*interface{})
+
+	return v, nil
+}
+
+func (c *Client) PlaygroundAddChild(body types.PlaygroundAdd) (any, error) {
+	var response any
+
+	if err := c.Authorize(); err != nil {
+		return response, err
+	}
+
+	request := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		SetResult(&response)
+
+	log.Println(response)
+
+	resp, err := request.Post(c.url + "/api/playground/add")
+	if err != nil {
+		return response, fmt.Errorf("[create] can't send create playground request to pocketbase, err %w", err)
+	}
+
+	if resp.IsError() {
+		return response, fmt.Errorf("[create] pocketbase returned status: %d, msg: %s, body: %s, err %w",
+			resp.StatusCode(),
+			resp.String(),
+			fmt.Sprintf("%+v", body), // TODO remove that after debugging
+			ErrInvalidResponse,
+		)
+	}
+
+	v := *resp.Result().(*interface{})
+
+	return v, nil
+}
+
 func (c *Client) Delete(collection string, id string) error {
 	if err := c.Authorize(); err != nil {
 		return err

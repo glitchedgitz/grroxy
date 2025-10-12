@@ -10,8 +10,7 @@ import (
 
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
-
-	"github.com/glitchedgitz/grroxy-db/cmd/grroxy-tool/tools_api"
+	"github.com/glitchedgitz/grroxy-db/api/tools"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/utils"

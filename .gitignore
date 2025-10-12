@@ -18,6 +18,13 @@ grroxy_db/
 builds*/
 build/
 
-frontend/node_modules/
+# Node.js dependencies
+node_modules/
+**/node_modules/
+*/electron/dist/
 
 cmd/grroxy/builds*
+
+# macOS system files
+.DS_Store
+**/.DS_Store
