@@ -72,6 +72,11 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
+			// Load initial intercept filters
+			if err := backend.loadInterceptFilters(); err != nil {
+				log.Printf("[StartProxy] Warning: Failed to load intercept filters: %v", err)
+			}
+
 			// Start the proxy
 			if err := PROXY.RunProxy(); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})

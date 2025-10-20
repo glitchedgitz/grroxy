@@ -88,6 +88,12 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.StopProxy)
 	API.App.OnBeforeServe().Add(API.AddRequest)
 
+	// Setup intercept hooks
+	API.SetupInterceptHooks()
+
+	// Setup filters hook
+	API.SetupFiltersHook()
+
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		API.App.Dao().DB().NewQuery(`
 			DELETE FROM _intercept;

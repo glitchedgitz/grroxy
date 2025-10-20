@@ -15,8 +15,11 @@ package api
 // - OS automatically cleans /tmp directory periodically
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -40,6 +43,9 @@ type RawProxyWrapper struct {
 
 	// Statistics
 	stats ProxyStats
+
+	Intercept bool
+	Filters   string
 }
 
 // ProxyStats tracks proxy statistics
@@ -205,6 +211,17 @@ func (rp *RawProxyWrapper) GetCertPath() string {
 	return rp.config.CertPath
 }
 
+func DropReqResp(req *http.Request) *http.Response {
+	resp := &http.Response{}
+	resp.Request = req
+	resp.Header = make(http.Header)
+	resp.StatusCode = http.StatusBadGateway
+	resp.Status = http.StatusText(http.StatusBadGateway)
+	buf := bytes.NewBufferString("")
+	resp.Body = io.NopCloser(buf)
+	return resp
+}
+
 // CleanupTempCaptures removes temporary capture files (if using /tmp)
 // Call this periodically or on shutdown to free up space
 func (rp *RawProxyWrapper) CleanupTempCaptures() error {
@@ -353,6 +370,42 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		RequestStart: time.Now(),
 	}
 
+	requestJson := utils.StructToMap(&userdata, "json")
+
+	if rp.Intercept && rp.checkFilters(requestJson) {
+		log.Printf("[RawProxy][Intercept] Request intercepted: ID=%s", id)
+
+		updatedString, edited := rp.interceptWait(&userdata, "req", req.ContentLength)
+
+		if userdata.Action == "drop" {
+			log.Printf("[RawProxy][Intercept][%s] Dropping request\n", userdata.Host+"/"+userdata.Req.Path)
+
+			// Save the drop action to database
+			go rp.saveRequestToDB(&userdata, requestInString)
+
+			// Return error to signal the request should not proceed
+			return nil, fmt.Errorf("request dropped by intercept")
+		}
+
+		if edited {
+			userdata.IsReqEdited = true
+			log.Printf("[RawProxy][Intercept][%s] Request was edited\n", id)
+
+			// Save edited request to database
+			go rp.saveEditedRequest(&userdata, updatedString)
+
+			// Convert string back to request
+			req.Body.Close()
+			requestNew, err := http.ReadRequest(bufio.NewReader(strings.NewReader(updatedString)))
+			if err != nil {
+				log.Printf("[RawProxy][Intercept][%s][ERROR] Failed to parse edited request: %v\n", id, err)
+				return req, fmt.Errorf("failed to parse edited request: %w", err)
+			}
+
+			return requestNew, nil
+		}
+	}
+
 	log.Printf("[RawProxy][Request] ID=%s Host=%s Path=%s", id, hostWithScheme, req.URL.Path)
 
 	return req, nil
@@ -396,6 +449,47 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 
 	// Save response to database
 	go rp.saveResponseToDB(&userdata, responseInString)
+
+	// Check if response should be intercepted
+	responseJson := utils.StructToMap(&userdata, "json")
+
+	if rp.Intercept && rp.checkFilters(responseJson) {
+		log.Printf("[RawProxy][Intercept] Response intercepted: ID=%s", userdata.ID)
+
+		updatedString, edited := rp.interceptWait(&userdata, "resp", resp.ContentLength)
+
+		if userdata.Action == "drop" {
+			log.Printf("[RawProxy][Intercept][%s] Dropping response\n", userdata.Host+"/"+userdata.Req.Path)
+
+			// Save the drop action to database
+			go rp.saveResponseToDB(&userdata, responseInString)
+
+			// Return error to signal the response should not proceed
+			return nil, fmt.Errorf("response dropped by intercept")
+		}
+
+		if edited {
+			userdata.IsRespEdited = true
+			log.Printf("[RawProxy][Intercept][%s] Response was edited\n", userdata.ID)
+
+			// Save edited response to database
+			go rp.saveEditedResponse(&userdata, updatedString)
+
+			// Parse the edited response string back to http.Response
+			resp.Body.Close()
+
+			// Parse response from string
+			responseReader := bufio.NewReader(strings.NewReader(updatedString))
+			respNew, err := http.ReadResponse(responseReader, req)
+			if err != nil {
+				log.Printf("[RawProxy][Intercept][%s][ERROR] Failed to parse edited response: %v\n", userdata.ID, err)
+				return resp, fmt.Errorf("failed to parse edited response: %w", err)
+			}
+
+			// Update the response
+			return respNew, nil
+		}
+	}
 
 	// No cleanup needed - reqData is automatically garbage collected after this function returns
 
@@ -598,4 +692,86 @@ func formatBytes(bytes uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// saveEditedRequest saves the edited request to the database
+func (rp *RawProxyWrapper) saveEditedRequest(userdata *types.UserData, editedRequest string) {
+	if rp.backend == nil || rp.backend.App == nil {
+		log.Println("[RawProxy][DB][ERROR] Backend or App is nil")
+		return
+	}
+
+	dao := rp.backend.App.Dao()
+	id := userdata.ID
+
+	log.Printf("[RawProxy][DB][EDIT] Saving edited request for ID=%s", id)
+
+	// Update _raw record with edited request
+	rawRecord, err := dao.FindRecordById("_raw", id)
+	if err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to find _raw record ID=%s: %v", id, err)
+		return
+	}
+
+	rawRecord.Set("req_edited", editedRequest)
+	if err := dao.SaveRecord(rawRecord); err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to save edited request to _raw ID=%s: %v", id, err)
+		return
+	}
+	log.Printf("[RawProxy][DB][SUCCESS] Saved edited request to _raw ID=%s", id)
+
+	// Update _data record with is_req_edited flag
+	dataRecord, err := dao.FindRecordById("_data", id)
+	if err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to find _data record ID=%s: %v", id, err)
+		return
+	}
+
+	dataRecord.Set("is_req_edited", true)
+	if err := dao.SaveRecord(dataRecord); err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to update is_req_edited flag ID=%s: %v", id, err)
+		return
+	}
+	log.Printf("[RawProxy][DB][SUCCESS] Updated is_req_edited flag for ID=%s", id)
+}
+
+// saveEditedResponse saves the edited response to the database
+func (rp *RawProxyWrapper) saveEditedResponse(userdata *types.UserData, editedResponse string) {
+	if rp.backend == nil || rp.backend.App == nil {
+		log.Println("[RawProxy][DB][ERROR] Backend or App is nil")
+		return
+	}
+
+	dao := rp.backend.App.Dao()
+	id := userdata.ID
+
+	log.Printf("[RawProxy][DB][EDIT] Saving edited response for ID=%s", id)
+
+	// Update _raw record with edited response
+	rawRecord, err := dao.FindRecordById("_raw", id)
+	if err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to find _raw record ID=%s: %v", id, err)
+		return
+	}
+
+	rawRecord.Set("resp_edited", editedResponse)
+	if err := dao.SaveRecord(rawRecord); err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to save edited response to _raw ID=%s: %v", id, err)
+		return
+	}
+	log.Printf("[RawProxy][DB][SUCCESS] Saved edited response to _raw ID=%s", id)
+
+	// Update _data record with is_resp_edited flag
+	dataRecord, err := dao.FindRecordById("_data", id)
+	if err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to find _data record ID=%s: %v", id, err)
+		return
+	}
+
+	dataRecord.Set("is_resp_edited", true)
+	if err := dao.SaveRecord(dataRecord); err != nil {
+		log.Printf("[RawProxy][DB][ERROR] Failed to update is_resp_edited flag ID=%s: %v", id, err)
+		return
+	}
+	log.Printf("[RawProxy][DB][SUCCESS] Updated is_resp_edited flag for ID=%s", id)
 }
