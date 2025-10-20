@@ -22,8 +22,6 @@ var ProjectPath string
 var ProxyAddress string // removed, we use api now
 var showLogs bool
 
-// var noBanner bool
-var launchApp bool
 
 // func printBanner() {
 // 	if !noBanner {

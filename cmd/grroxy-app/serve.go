@@ -42,7 +42,6 @@ func serve(projectPath string) {
 
 	// if !noProxy {
 
-
 	migratecmd.MustRegister(API.App, API.App.RootCmd, migratecmd.Config{})
 
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
@@ -102,10 +101,5 @@ func serve(projectPath string) {
 		return nil
 	})
 
-	if launchApp {
-		go API.Serve()
-		runApp()
-	} else {
-		API.Serve()
-	}
+	API.Serve()
 }
