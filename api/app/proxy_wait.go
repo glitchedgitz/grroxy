@@ -72,11 +72,11 @@ func (rp *RawProxyWrapper) interceptWait(userdata map[string]any, field string, 
 	log.Printf("[InterceptWait][%s] Processing action: %s\n", id, action)
 
 	// Load the intercept record to delete it
-	interceptRecord, err := dao.FindRecordById("_intercept", id)
-	if err != nil {
-		log.Printf("[InterceptWait][%s][ERROR] Failed to find intercept record: %v", id, err)
-		return "", false
-	}
+	// interceptRecord, err := dao.FindRecordById("_intercept", id)
+	// if err != nil {
+	// 	log.Printf("[InterceptWait][%s][ERROR] Failed to find intercept record: %v", id, err)
+	// 	return "", false
+	// }
 
 	// Delete intercept record
 	defer func() {
