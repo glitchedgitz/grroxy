@@ -11,39 +11,49 @@ import (
 
 // InterceptUpdate represents an update to an intercept request
 type InterceptUpdate struct {
-	Action       string
-	IsReqEdited  bool
-	IsRespEdited bool
+	Action        string
+	IsReqEdited   bool
+	IsRespEdited  bool
+	ReqEditedRaw  string // Raw HTTP request string (if edited)
+	RespEditedRaw string // Raw HTTP response string (if edited)
 }
 
-func (rp *RawProxyWrapper) interceptWait(userdata *types.UserData, field string, contentLength int64) (string, bool) {
+// interceptWait handles request/response interception by:
+// 1. Creating an intercept record in the database for the frontend to display
+// 2. Blocking until the user takes action (forward/drop/edit)
+// 3. Returning the appropriate data (original or edited)
+//
+// Parameters:
+//   - userdata: Request/response metadata
+//   - field: "req" or "resp" to indicate which is being intercepted
+//   - contentLength: Original Content-Length header value
+//   - rawData: The raw HTTP request/response string (already in memory - no DB fetch needed!)
+func (rp *RawProxyWrapper) interceptWait(userdata *types.UserData, field string, contentLength int64, rawData string) (string, bool) {
 	id := userdata.ID
-
-	originalData := field
-	editedData := field + "_edited"
 
 	dao := rp.backend.App.Dao()
 
 	log.Printf("[InterceptWait][%s] Creating intercept record for field: %s\n", id, field)
 
 	// Create intercept record in database
-	interceptCollection, err := dao.FindCollectionByNameOrId("_intercept")
-	if err != nil {
-		log.Printf("[InterceptWait][%s][ERROR] Failed to find _intercept collection: %v", id, err)
-		return "", false
-	}
-
-	interceptRecord := models.NewRecord(interceptCollection)
+	interceptRecord := models.NewRecord(rp.interceptCollection)
 	interceptRecord.Set("id", userdata.ID)
 	interceptRecord.Set("index", userdata.Index)
 	interceptRecord.Set("host", userdata.Host)
 	interceptRecord.Set("port", userdata.Port)
-	interceptRecord.Set("req", userdata.Req)
-	interceptRecord.Set("resp", userdata.Resp)
+	interceptRecord.Set("has_params", userdata.ReqJson.HasParams)
 	interceptRecord.Set("has_resp", userdata.HasResp)
+	interceptRecord.Set("is_https", userdata.IsHTTPS)
 	interceptRecord.Set("is_req_edited", userdata.IsReqEdited)
 	interceptRecord.Set("is_resp_edited", userdata.IsRespEdited)
-	interceptRecord.Set("raw", userdata.ID)
+	interceptRecord.Set("req", userdata.Req)
+	// Only set resp relation if response exists
+	if userdata.HasResp {
+		interceptRecord.Set("resp", userdata.Resp)
+	}
+	interceptRecord.Set("req_json", userdata.ReqJson)
+	interceptRecord.Set("resp_json", userdata.RespJson)
+	interceptRecord.Set("data", userdata.ID)
 	interceptRecord.Set("attached", userdata.ID)
 	interceptRecord.Set("action", "")
 
@@ -53,39 +63,50 @@ func (rp *RawProxyWrapper) interceptWait(userdata *types.UserData, field string,
 	}
 
 	log.Printf("[InterceptWait][%s] Intercept record created, waiting for action...\n", id)
+	log.Printf("[InterceptWait][%s] ========== INTERCEPT CREATED ==========", id)
+	log.Printf("[InterceptWait][%s] Field: %s", id, field)
+	log.Printf("[InterceptWait][%s] has_resp: %v", id, userdata.HasResp)
+	log.Printf("[InterceptWait][%s] req_json: %+v", id, userdata.ReqJson)
+	log.Printf("[InterceptWait][%s] resp_json: %+v", id, userdata.RespJson)
+	log.Printf("[InterceptWait][%s] =======================================", id)
 
 	// Create a channel for this intercept and register it
 	updateChan := make(chan InterceptUpdate, 1)
 	RegisterInterceptChannel(id, updateChan)
 	defer UnregisterInterceptChannel(id)
 
-	// Wait for update notification from the hook
-	log.Printf("[InterceptWait][%s] Waiting for action from hook...\n", id)
+	// Wait for update notification from the API endpoint
+	log.Printf("[InterceptWait][%s] Waiting for action from API endpoint...\n", id)
 	update := <-updateChan
 
 	action := update.Action
 	isReqEdited := update.IsReqEdited
 	isRespEdited := update.IsRespEdited
-	log.Printf("[InterceptWait][%s] Action received via hook: %s (req_edited=%v, resp_edited=%v)\n",
+	reqEditedRaw := update.ReqEditedRaw
+	respEditedRaw := update.RespEditedRaw
+
+	log.Printf("[InterceptWait][%s] Action received: %s (req_edited=%v, resp_edited=%v)\n",
 		id, action, isReqEdited, isRespEdited)
 
 	log.Printf("[InterceptWait][%s] Processing action: %s\n", id, action)
 
-	// Delete intercept record
-	if err := dao.DeleteRecord(interceptRecord); err != nil {
-		log.Printf("[InterceptWait][%s][ERROR] Failed to delete intercept record: %v", id, err)
+	// Load the intercept record to delete it
+	interceptRecord, err := dao.FindRecordById("_intercept", id)
+	if err != nil {
+		log.Printf("[InterceptWait][%s][ERROR] Failed to find intercept record: %v", id, err)
+		return "", false
 	}
+
+	// Delete intercept record
+	defer func() {
+		if err := dao.DeleteRecord(interceptRecord); err != nil {
+			log.Printf("[InterceptWait][%s][ERROR] Failed to delete intercept record: %v", id, err)
+		}
+	}()
 
 	if action == "drop" {
 		userdata.Action = "drop"
 		log.Printf("[InterceptWait][%s] Dropping request/response\n", id)
-		return "", false
-	}
-
-	// Get updated data from _raw collection
-	rawRecord, err := dao.FindRecordById("_raw", id)
-	if err != nil {
-		log.Printf("[InterceptWait][%s][ERROR] Failed to find _raw record: %v", id, err)
 		return "", false
 	}
 
@@ -103,8 +124,43 @@ func (rp *RawProxyWrapper) interceptWait(userdata *types.UserData, field string,
 	}
 
 	if edited {
-		updatedString = rawRecord.GetString(editedData)
-		originalString := rawRecord.GetString(originalData)
+		// Get the raw edited strings directly from the channel update
+		if field == "req" && reqEditedRaw != "" {
+			updatedString = reqEditedRaw
+			userdata.IsReqEdited = true
+			log.Printf("[InterceptWait][%s] Using edited request data from channel", id)
+		} else if field == "resp" && respEditedRaw != "" {
+			updatedString = respEditedRaw
+			userdata.IsRespEdited = true
+			log.Printf("[InterceptWait][%s] Using edited response data from channel", id)
+		} else {
+			log.Printf("[InterceptWait][%s][WARN] Marked as edited but no raw string received", id)
+			edited = false
+		}
+
+		if edited && updatedString != "" {
+			log.Printf("[InterceptWait][%s] ========== EDITED %s DATA ==========", id, strings.ToUpper(field))
+			log.Printf("[InterceptWait][%s] Raw length: %d bytes", id, len(updatedString))
+			log.Printf("[InterceptWait][%s] Raw content:\n%s", id, updatedString)
+			log.Printf("[InterceptWait][%s] =============================================", id)
+		}
+	}
+
+	// If not edited or fallback, use the original raw data passed as parameter
+	// No need to fetch from database - we already have it in memory!
+	if !edited || updatedString == "" {
+		updatedString = rawData
+		log.Printf("[InterceptWait][%s] Using original %s data (from memory)\n", id, field)
+		log.Printf("[InterceptWait][%s] ========== ORIGINAL %s DATA ==========", id, strings.ToUpper(field))
+		log.Printf("[InterceptWait][%s] Raw length: %d bytes", id, len(updatedString))
+		log.Printf("[InterceptWait][%s] Raw content:\n%s", id, updatedString)
+		log.Printf("[InterceptWait][%s] =============================================", id)
+	}
+
+	// Process edited data: update Content-Length if needed
+	if edited && updatedString != "" {
+		// Use the original raw data passed as parameter for comparison
+		originalString := rawData
 
 		// Try different separators for updated string
 		var updatedParts []string
@@ -179,10 +235,13 @@ func (rp *RawProxyWrapper) interceptWait(userdata *types.UserData, field string,
 			logstatement += "==============================================\n"
 			log.Println(logstatement)
 		}
-	} else {
-		updatedString = rawRecord.GetString(originalData)
 	}
 
 	log.Printf("[InterceptWait][%s] Completed - edited=%v\n", id, edited)
+	log.Printf("[InterceptWait][%s] ========== FINAL OUTPUT ==========", id)
+	log.Printf("[InterceptWait][%s] Field: %s, Edited: %v", id, field, edited)
+	log.Printf("[InterceptWait][%s] Returning %d bytes", id, len(updatedString))
+	log.Printf("[InterceptWait][%s] Final content:\n%s", id, updatedString)
+	log.Printf("[InterceptWait][%s] ===================================", id)
 	return updatedString, edited
 }

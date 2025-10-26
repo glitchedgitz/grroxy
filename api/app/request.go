@@ -105,25 +105,26 @@ func generateUserData(data types.AddRequestBodyType) (types.UserData, error) {
 		ID:         id,
 		Index:      index,
 		IndexMinor: data.IndexMinor,
-		Raw:        id,
+		IsHTTPS:    isHttps,
 		Attached:   id,
+		Req:        id,
+		Resp:       id,
 		Host:       host,
 		Port:       port,
 		HasResp:    false,
-		Req: types.RequestData{
+		ReqJson: types.RequestData{
 			Method:     method,
 			HasCookies: len(req.Cookies()) > 0,
 			HasParams:  len(req.URL.Query()) > 0,
 			Length:     req.ContentLength,
 			Headers:    grrhttp.GetHeaders(req.Header),
-			IsHTTPS:    isHttps,
 			Url:        req.URL.RequestURI(),
 			Path:       req.URL.Path,
 			Query:      req.URL.RawQuery,
 			Fragment:   req.URL.RawFragment,
 			Ext:        extension,
 		},
-		Resp: types.ResponseData{
+		RespJson: types.ResponseData{
 			Title:      "",
 			Mime:       "",
 			Status:     0,
@@ -148,7 +149,7 @@ func generateResponseForUserData(userdata *types.UserData, response string) {
 		panic(err)
 	}
 
-	userdata.Resp = types.ResponseData{
+	userdata.RespJson = types.ResponseData{
 		HasCookies: len(resp.Cookies()) > 0,
 		Title:      "",
 		Mime:       resp.Header.Get("content-type"),
@@ -205,22 +206,54 @@ func (backend *Backend) AddRequest(e *core.ServeEvent) error {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to save record in _attached"})
 			}
 
-			log.Printf("[AddRequest] Saving _raw record")
-			collection2, err := backend.App.Dao().FindCollectionByNameOrId("_raw")
+			log.Printf("[AddRequest] Saving _req record")
+			reqCollection, err := backend.App.Dao().FindCollectionByNameOrId("_req")
 			if err != nil {
-				log.Printf("[AddRequest] Error finding _raw collection: %v", err)
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to find collection"})
+				log.Printf("[AddRequest] Error finding _req collection: %v", err)
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to find _req collection"})
 			}
-			record2 := models.NewRecord(collection2)
-			record2.Set("id", userdata.ID)
-			record2.Set("req", body.Request)
-			record2.Set("resp", body.Response)
-			record2.Set("attached", userdata.ID)
+			reqRecord := models.NewRecord(reqCollection)
+			reqRecord.Set("id", userdata.ID)
+			reqRecord.Set("method", userdata.ReqJson.Method)
+			reqRecord.Set("url", userdata.ReqJson.Url)
+			reqRecord.Set("path", userdata.ReqJson.Path)
+			reqRecord.Set("query", userdata.ReqJson.Query)
+			reqRecord.Set("fragment", userdata.ReqJson.Fragment)
+			reqRecord.Set("ext", userdata.ReqJson.Ext)
+			reqRecord.Set("has_cookies", userdata.ReqJson.HasCookies)
+			reqRecord.Set("length", userdata.ReqJson.Length)
+			reqRecord.Set("headers", userdata.ReqJson.Headers)
+			reqRecord.Set("raw", body.Request)
 
-			err = backend.App.Dao().SaveRecord(record2)
+			err = backend.App.Dao().SaveRecord(reqRecord)
 			if err != nil {
-				log.Printf("[AddRequest] Error saving _raw record: %v", err)
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to save record in _raw"})
+				log.Printf("[AddRequest] Error saving _req record: %v", err)
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to save record in _req"})
+			}
+
+			// If response exists, save it to _resp collection
+			if body.Response != "" {
+				log.Printf("[AddRequest] Saving _resp record")
+				respCollection, err := backend.App.Dao().FindCollectionByNameOrId("_resp")
+				if err != nil {
+					log.Printf("[AddRequest] Error finding _resp collection: %v", err)
+					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to find _resp collection"})
+				}
+				respRecord := models.NewRecord(respCollection)
+				respRecord.Set("id", userdata.ID)
+				respRecord.Set("title", userdata.RespJson.Title)
+				respRecord.Set("mime", userdata.RespJson.Mime)
+				respRecord.Set("status", userdata.RespJson.Status)
+				respRecord.Set("length", userdata.RespJson.Length)
+				respRecord.Set("has_cookies", userdata.RespJson.HasCookies)
+				respRecord.Set("headers", userdata.RespJson.Headers)
+				respRecord.Set("raw", body.Response)
+
+				err = backend.App.Dao().SaveRecord(respRecord)
+				if err != nil {
+					log.Printf("[AddRequest] Error saving _resp record: %v", err)
+					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to save record in _resp"})
+				}
 			}
 
 			log.Printf("[AddRequest] _data record")
@@ -255,16 +288,16 @@ func (backend *Backend) AddRequest(e *core.ServeEvent) error {
 
 			typ := "folder"
 
-			if userdata.Req.Ext != "" {
+			if userdata.ReqJson.Ext != "" {
 				typ = "file"
 			}
 
 			s_data := types.SitemapGet{
 				Host:     userdata.Host,
-				Path:     userdata.Req.Path,
-				Query:    userdata.Req.Query,
-				Fragment: userdata.Req.Fragment,
-				Ext:      userdata.Req.Ext,
+				Path:     userdata.ReqJson.Path,
+				Query:    userdata.ReqJson.Query,
+				Fragment: userdata.ReqJson.Fragment,
+				Ext:      userdata.ReqJson.Ext,
 				Type:     typ,
 				Data:     userdata.ID,
 			}

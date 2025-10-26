@@ -22,7 +22,6 @@ type RequestData struct {
 	HasCookies bool              `db:"has_cookies" json:"has_cookies"`
 	HasParams  bool              `db:"has_params" json:"has_params"`
 	Length     int64             `db:"length" json:"length"`
-	IsHTTPS    bool              `db:"is_https" json:"is_https"`
 }
 
 type ResponseData struct {
@@ -37,20 +36,25 @@ type ResponseData struct {
 }
 
 type UserData struct {
-	ID           string       `db:"id,omitempty" json:"id,omitempty"`
-	Host         string       `db:"host,omitempty" json:"host,omitempty"`
-	Index        float64      `db:"index,omitempty" json:"index,omitempty"`
-	IndexMinor   float64      `db:"index_minor,omitempty" json:"index_minor,omitempty"`
-	Port         string       `db:"port,omitempty" json:"port,omitempty"`
-	HasResp      bool         `db:"has_resp,omitempty" json:"has_resp,omitempty"`
-	IsReqEdited  bool         `db:"is_req_edited,omitempty" json:"is_req_edited,omitempty"`
-	IsRespEdited bool         `db:"is_resp_edited,omitempty" json:"is_resp_edited,omitempty"`
-	Req          RequestData  `db:"req" json:"req"`
-	Resp         ResponseData `db:"resp" json:"resp"`
-	ReqEdited    RequestData  `db:"req_edited,omitempty" json:"req_edited,omitempty"`
-	RespEdited   ResponseData `db:"resp_edited,omitempty" json:"resp_edited,omitempty"`
-	Raw          string       `db:"raw,omitempty" json:"raw,omitempty"`
-	Attached     string       `db:"attached,omitempty" json:"attached,omitempty"`
+	ID             string       `db:"id,omitempty" json:"id,omitempty"`
+	Index          float64      `db:"index,omitempty" json:"index,omitempty"`
+	IndexMinor     float64      `db:"index_minor,omitempty" json:"index_minor,omitempty"`
+	Host           string       `db:"host,omitempty" json:"host,omitempty"`
+	Port           string       `db:"port,omitempty" json:"port,omitempty"`
+	HasResp        bool         `db:"has_resp,omitempty" json:"has_resp,omitempty"`
+	HasParams      bool         `db:"has_params,omitempty" json:"has_params,omitempty"`
+	IsReqEdited    bool         `db:"is_req_edited,omitempty" json:"is_req_edited,omitempty"`
+	IsRespEdited   bool         `db:"is_resp_edited,omitempty" json:"is_resp_edited,omitempty"`
+	IsHTTPS        bool         `db:"is_https" json:"is_https"`
+	Req            string       `db:"req" json:"req"`
+	Resp           string       `db:"resp" json:"resp"`
+	ReqEdited      string       `db:"req_edited,omitempty" json:"req_edited,omitempty"`
+	RespEdited     string       `db:"resp_edited,omitempty" json:"resp_edited,omitempty"`
+	ReqJson        RequestData  `db:"req_json" json:"req_json"`
+	RespJson       ResponseData `db:"resp_json" json:"resp_json"`
+	ReqEditedJson  RequestData  `db:"req_edited_json,omitempty" json:"req_edited_json,omitempty"`
+	RespEditedJson ResponseData `db:"resp_edited_json,omitempty" json:"resp_edited_json,omitempty"`
+	Attached       string       `db:"attached,omitempty" json:"attached,omitempty"`
 
 	// Action didn't get saved anywhere, it for intercept forward/drop. Although for below {RealtimeRecord} it's saved in `_intercept` collection.
 	Action string `db:"action,omitempty" json:"action,omitempty"`
@@ -60,18 +64,18 @@ func (userdata *UserData) RequestUpdateKey(req *http.Request, key string, value 
 	log.Println("[RequestUpdateKey] key: '", key, "' value: '", value, "'")
 	if key == "req.method" {
 		req.Method = value.(string)
-		userdata.Req.Method = value.(string)
+		userdata.ReqJson.Method = value.(string)
 	} else if key == "req.url" {
 		parsedURL, err := url.Parse(value.(string))
 		if err != nil {
 			return
 		}
 		req.URL = parsedURL
-		userdata.Req.Url = parsedURL.RequestURI()
+		userdata.ReqJson.Url = parsedURL.RequestURI()
 
 	} else if key == "req.path" {
 		req.URL.Path = value.(string)
-		userdata.Req.Path = value.(string)
+		userdata.ReqJson.Path = value.(string)
 
 	} else if strings.HasPrefix(key, "req.query") {
 		params := req.URL.Query()
@@ -83,14 +87,14 @@ func (userdata *UserData) RequestUpdateKey(req *http.Request, key string, value 
 
 		header := strings.TrimPrefix(key, "req.headers")[1:]
 		req.Header.Set(header, value.(string))
-		userdata.Req.Headers[header] = value.(string)
+		userdata.ReqJson.Headers[header] = value.(string)
 
 	} else if key == "req.body" {
 		newBody := value.(string)
 		req.Body = io.NopCloser(bytes.NewBufferString(newBody))
 		newLength := int64(len(newBody))
 		req.ContentLength = newLength
-		userdata.Req.Length = newLength
+		userdata.ReqJson.Length = newLength
 
 	}
 }
@@ -114,38 +118,38 @@ func (userdata *UserData) RequestDeleteKey(req *http.Request, key string) {
 	} else if strings.HasPrefix(key, "req.headers") {
 		header := strings.TrimPrefix(key, "req.headers")[1:]
 		req.Header.Del(header)
-		delete(userdata.Req.Headers, header)
+		delete(userdata.ReqJson.Headers, header)
 
 	} else if key == "req.body" {
 		newBody := ""
 		req.Body = io.NopCloser(bytes.NewBufferString(newBody))
 		newLength := int64(len(newBody))
 		req.ContentLength = newLength
-		userdata.Req.Length = newLength
+		userdata.ReqJson.Length = newLength
 	}
 }
 
 func (userdata *UserData) ResponseUpdateKey(resp *http.Response, key string, value any) {
 	if key == "resp.mime" {
 		resp.Header.Set("Content-Type", value.(string))
-		userdata.Resp.Headers["Content-Type"] = value.(string)
+		userdata.RespJson.Headers["Content-Type"] = value.(string)
 
 	} else if key == "resp.status" {
 		resp.StatusCode = value.(int)
-		userdata.Resp.Status = value.(int)
+		userdata.RespJson.Status = value.(int)
 
 	} else if strings.HasPrefix(key, "resp.headers") {
 
 		header := strings.TrimPrefix(key, "resp.headers")[1:]
 		resp.Header.Set(header, value.(string))
-		userdata.Resp.Headers[header] = value.(string)
+		userdata.RespJson.Headers[header] = value.(string)
 
 	} else if key == "resp.body" {
 		newBody := value.(string)
 		resp.Body = io.NopCloser(bytes.NewBufferString(newBody))
 		newLength := int64(len(newBody))
 		resp.ContentLength = newLength
-		userdata.Resp.Length = newLength
+		userdata.RespJson.Length = newLength
 
 	}
 }
@@ -153,20 +157,20 @@ func (userdata *UserData) ResponseUpdateKey(resp *http.Response, key string, val
 func (userdata *UserData) ResponseDeleteKey(resp *http.Response, key string) {
 	if key == "resp.mime" {
 		resp.Header.Del("Content-Type")
-		delete(userdata.Resp.Headers, "Content-Type")
+		delete(userdata.RespJson.Headers, "Content-Type")
 
 	} else if strings.HasPrefix(key, "resp.headers") {
 
 		header := strings.TrimPrefix(key, "resp.headers")[1:]
 		resp.Header.Del(header)
-		delete(userdata.Resp.Headers, header)
+		delete(userdata.RespJson.Headers, header)
 
 	} else if key == "resp.body" {
 		newBody := ""
 		resp.Body = io.NopCloser(bytes.NewBufferString(newBody))
 		newLength := int64(len(newBody))
 		resp.ContentLength = newLength
-		userdata.Resp.Length = newLength
+		userdata.RespJson.Length = newLength
 
 	}
 }

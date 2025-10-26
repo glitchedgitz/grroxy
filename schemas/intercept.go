@@ -19,21 +19,15 @@ var Intercept = schema.NewSchema(
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "req",
-		Type: schema.FieldTypeJson,
-		Options: &schema.JsonOptions{
-			MaxSize: 100000,
-		},
-	},
-	&schema.SchemaField{
-		Name: "resp",
-		Type: schema.FieldTypeJson,
-		Options: &schema.JsonOptions{
-			MaxSize: 100000,
-		},
+		Name: "has_params",
+		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
 		Name: "has_resp",
+		Type: schema.FieldTypeBool,
+	},
+	&schema.SchemaField{
+		Name: "is_https",
 		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
@@ -45,17 +39,76 @@ var Intercept = schema.NewSchema(
 		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
+		Name: "req",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_req",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
+		},
+	},
+	&schema.SchemaField{
+		Name: "resp",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_resp",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
+		},
+	},
+	&schema.SchemaField{
 		Name: "req_edited",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_req_edited",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
+		},
+	},
+	&schema.SchemaField{
+		Name: "resp_edited",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_resp_edited",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
+		},
+	},
+	&schema.SchemaField{
+		Name: "req_json",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
 			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
-		Name: "resp_edited",
+		Name: "resp_json",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
 			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
+		Name: "req_edited_json",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
+		Name: "resp_edited_json",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
+		Name: "attached",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_attached",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
 		},
 	},
 	&schema.SchemaField{
@@ -63,11 +116,11 @@ var Intercept = schema.NewSchema(
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name:     "raw",
+		Name:     "data",
 		Type:     schema.FieldTypeRelation,
 		Required: true,
 		Options: &schema.RelationOptions{
-			CollectionId:  "_raw",
+			CollectionId:  "_data",
 			CascadeDelete: true,
 		},
 	},

@@ -89,11 +89,35 @@ var Tools = []DB{
 
 var Collections = []DB{
 	{
-		"_raw",
-		Raw,
+		"_req",
+		RequestData,
 		true,
 		`
-		CREATE UNIQUE INDEX idx_hosts_host ON _hosts (host);
+		CREATE INDEX idx_req_method ON _req (method);
+		`,
+	},
+	{
+		"_resp",
+		ResponseData,
+		true,
+		`
+		CREATE INDEX idx_resp_status ON _resp (status);
+		`,
+	},
+	{
+		"_req_edited",
+		RequestData,
+		true,
+		`
+		CREATE INDEX idx_req_edited_method ON _req_edited (method);
+		`,
+	},
+	{
+		"_resp_edited",
+		ResponseData,
+		true,
+		`
+		CREATE INDEX idx_resp_edited_status ON _resp_edited (status);
 		`,
 	},
 	{
@@ -158,7 +182,9 @@ var Collections = []DB{
 		"_hosts",
 		Sites,
 		false,
-		"",
+		`
+		CREATE UNIQUE INDEX idx_hosts_name ON _hosts (host);
+		`,
 	},
 	{
 		"_settings",

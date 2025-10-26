@@ -5,6 +5,26 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
+//   id :              ______________1
+//   index :           1
+//   host :            www.example.com
+//   port :            80
+//   has_resp:         false
+//   has_params:       true
+//   length:           1000
+//   is_https:         true
+//   is_req_edited:    false
+//   is_resp_edited:   false
+//   req:              (relation to _req)
+//   resp:             (relation to _resp)
+//   req_edited:       (relation to _req_edited)
+//   resp_edited:      (relation to _resp_edited)
+//   req_json:         (json of req)
+//   resp_json:        (json of resp)
+//   req_edited_json:  (json of req_edited)
+//   resp_edited_json: (json of resp_edited)
+//   attached:         (relation to _attached)
+
 var Rows = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "index",
@@ -19,21 +39,15 @@ var Rows = schema.NewSchema(
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name: "req",
-		Type: schema.FieldTypeJson,
-		Options: &schema.JsonOptions{
-			MaxSize: 100000,
-		},
-	},
-	&schema.SchemaField{
-		Name: "resp",
-		Type: schema.FieldTypeJson,
-		Options: &schema.JsonOptions{
-			MaxSize: 100000,
-		},
+		Name: "has_params",
+		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
 		Name: "has_resp",
+		Type: schema.FieldTypeBool,
+	},
+	&schema.SchemaField{
+		Name: "is_https",
 		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
@@ -45,34 +59,177 @@ var Rows = schema.NewSchema(
 		Type: schema.FieldTypeBool,
 	},
 	&schema.SchemaField{
+		Name: "req",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_req",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
+		},
+	},
+	&schema.SchemaField{
+		Name: "resp",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_resp",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
+		},
+	},
+	&schema.SchemaField{
 		Name: "req_edited",
-		Type: schema.FieldTypeJson,
-		Options: &schema.JsonOptions{
-			MaxSize: 100000,
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_req_edited",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
 		},
 	},
 	&schema.SchemaField{
 		Name: "resp_edited",
+		Type: schema.FieldTypeRelation,
+		Options: &schema.RelationOptions{
+			CollectionId:  "_resp_edited",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
+		},
+	},
+	&schema.SchemaField{
+		Name: "req_json",
 		Type: schema.FieldTypeJson,
 		Options: &schema.JsonOptions{
 			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
-		Name:     "raw",
-		Type:     schema.FieldTypeRelation,
-		Required: true,
-		Options: &schema.RelationOptions{
-			CollectionId:  "_raw",
-			CascadeDelete: true,
+		Name: "resp_json",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
+		Name: "req_edited_json",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
+		Name: "resp_edited_json",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
 		Name: "attached",
 		Type: schema.FieldTypeRelation,
 		Options: &schema.RelationOptions{
-			CollectionId: "_attached",
-			MaxSelect:    types.Pointer(1),
+			CollectionId:  "_attached",
+			CascadeDelete: true,
+			MaxSelect:     types.Pointer(1),
 		},
+	},
+)
+
+// Request Data (_req collection)
+//   method:      GET
+//   url:         "https://www.example.com/path?query=value#fragment"
+//   path:        "/path"
+//   query:       "query=value"
+//   fragment:    "fragment"
+//   ext:         ".html"
+//   has_cookies: true
+//   length:      1000
+//   headers:     {"Host": "www.example.com", "User-Agent": "Mozilla/5.0"}
+//   raw:         "GET /path?query=value HTTP/1.1\r\nHost: www.example.com\r\n..."
+
+var RequestData = schema.NewSchema(
+	&schema.SchemaField{
+		Name: "method",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "url",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "path",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "query",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "fragment",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "ext",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "has_cookies",
+		Type: schema.FieldTypeBool,
+	},
+	&schema.SchemaField{
+		Name: "length",
+		Type: schema.FieldTypeNumber,
+	},
+	&schema.SchemaField{
+		Name: "headers",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
+		Name: "raw",
+		Type: schema.FieldTypeText,
+	},
+)
+
+// Response Data (_resp collection)
+//   title:       ""
+//   mime:        ""
+//   status:      0
+//   length:      0
+//   has_cookies: false
+//   headers:     {"Content-Type": "text/html"}
+//   raw:         "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n..."
+
+var ResponseData = schema.NewSchema(
+	&schema.SchemaField{
+		Name: "title",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "mime",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "status",
+		Type: schema.FieldTypeNumber,
+	},
+	&schema.SchemaField{
+		Name: "length",
+		Type: schema.FieldTypeNumber,
+	},
+	&schema.SchemaField{
+		Name: "has_cookies",
+		Type: schema.FieldTypeBool,
+	},
+	&schema.SchemaField{
+		Name: "headers",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
+		Name: "raw",
+		Type: schema.FieldTypeText,
 	},
 )

@@ -7,6 +7,9 @@
 POST /api/proxy/start
 POST /api/proxy/stop
 
+# Intercept
+POST      /api/intercept/action
+
 # Playground
 POST      /api/playground/new
 POST      /api/playground/add
@@ -47,6 +50,56 @@ GET       /api/tool
 # Certificates
 GET       /cacert.crt
 ```
+
+## Intercept
+
+### Handle Intercept Action
+
+Processes an intercept action (forward or drop) for a pending request/response. Optionally includes edited request or response data as raw HTTP strings.
+
+```http
+POST /api/intercept/action
+```
+
+_Request Body:_
+
+```json
+{
+  "id": "string",
+  "action": "forward|drop",
+  "is_req_edited": false,
+  "is_resp_edited": false,
+  "req_edited": "GET /api/endpoint HTTP/1.1\r\nHost: example.com\r\n\r\n",
+  "resp_edited": "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html>...</html>"
+}
+```
+
+_Fields:_
+
+- `id` (string, required): The intercept ID
+- `action` (string, required): Either "forward" or "drop"
+- `is_req_edited` (boolean, optional): Whether the request was edited
+- `is_resp_edited` (boolean, optional): Whether the response was edited
+- `req_edited` (string, optional): Raw HTTP request string (only if `is_req_edited` is true)
+- `resp_edited` (string, optional): Raw HTTP response string (only if `is_resp_edited` is true)
+
+_Response:_
+
+```json
+{
+  "success": true,
+  "message": "Intercept action processed successfully"
+}
+```
+
+_Error Responses:_
+
+- 400 Bad Request - Invalid action or missing ID
+- 403 Forbidden - Unauthorized
+- 404 Not Found - Intercept ID not found
+- 500 Internal Server Error - Failed to update intercept or save edited data
+
+---
 
 ## Playground
 
