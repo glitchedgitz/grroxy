@@ -299,6 +299,54 @@ func (rp *RawProxyWrapper) CleanupTempCaptures() error {
 	return nil
 }
 
+func getExtension(path string) string {
+	extension := ""
+	if path != "" {
+		pathParts := strings.Split(path, "/")
+		lastFile := pathParts[len(pathParts)-1]
+		if strings.Contains(lastFile, ".") {
+			extParts := strings.Split(lastFile, ".")
+			extension = "." + extParts[len(extParts)-1]
+			if len(extension) > 10 {
+				extension = ""
+			}
+		}
+	}
+	return extension
+}
+
+func generateRequestData(req *http.Request) map[string]any {
+	// Dev: check with types.RequestData
+
+	return map[string]any{
+		"method":      req.Method,
+		"has_cookies": len(req.Cookies()) > 0,
+		"has_params":  len(req.URL.Query()) > 0,
+		"length":      req.ContentLength,
+		"headers":     grrhttp.GetHeaders(req.Header),
+		"url":         req.URL.RequestURI(),
+		"path":        req.URL.Path,
+		"query":       req.URL.RawQuery,
+		"fragment":    req.URL.RawFragment,
+		"ext":         getExtension(req.URL.Path),
+	}
+}
+
+func generateResponseData(resp *http.Response) map[string]any {
+	// Dev: check with types.ResponseData
+
+	return map[string]any{
+		"has_cookies": len(resp.Cookies()) > 0,
+		"title":       "",
+		"mime":        resp.Header.Get("Content-Type"),
+		"headers":     grrhttp.GetHeaders(resp.Header),
+		"status":      resp.StatusCode,
+		"length":      resp.ContentLength,
+		"date":        resp.Header.Get("Date"),
+		"time":        time.Now().Format(time.RFC3339),
+	}
+}
+
 // onRequest handles incoming HTTP requests and saves them to the database
 func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Request) (*http.Request, error) {
 	// Skip our own grroxy requests to avoid loops
@@ -344,45 +392,8 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 	hostWithScheme := scheme + "://" + host
 
 	// Extract file extension
-	extension := ""
-	if req.URL.Path != "" {
-		pathParts := strings.Split(req.URL.Path, "/")
-		lastFile := pathParts[len(pathParts)-1]
-		if strings.Contains(lastFile, ".") {
-			extParts := strings.Split(lastFile, ".")
-			extension = "." + extParts[len(extParts)-1]
-			if len(extension) > 10 {
-				extension = ""
-			}
-		}
-	}
 
-	// Dev: Uncomment to check the update structure
-	// requestData := types.RequestData{
-	// 	Method:     req.Method,
-	// 	HasCookies: len(req.Cookies()) > 0,
-	// 	HasParams:  len(req.URL.Query()) > 0,
-	// 	Length:     req.ContentLength,
-	// 	Headers:    grrhttp.GetHeaders(req.Header),
-	// 	Url:        req.URL.RequestURI(),
-	// 	Path:       req.URL.Path,
-	// 	Query:      req.URL.RawQuery,
-	// 	Fragment:   req.URL.RawFragment,
-	// 	Ext:        extension,
-	// }
-
-	requestData := map[string]any{
-		"method":      req.Method,
-		"has_cookies": len(req.Cookies()) > 0,
-		"has_params":  len(req.URL.Query()) > 0,
-		"length":      req.ContentLength,
-		"headers":     grrhttp.GetHeaders(req.Header),
-		"url":         req.URL.RequestURI(),
-		"path":        req.URL.Path,
-		"query":       req.URL.RawQuery,
-		"fragment":    req.URL.RawFragment,
-		"ext":         extension,
-	}
+	requestData := generateRequestData(req)
 
 	// Dev: Uncomment to check the update structure
 	// userdata := types.UserData{
@@ -515,7 +526,6 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 			reqCtx.RawRequest = updatedString
 
 			// Save edited request to database
-			go rp.saveEditedRequest(reqCtx, requestData, updatedString)
 
 			// Convert string back to request
 			req.Body.Close()
@@ -524,6 +534,10 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 				log.Printf("[RawProxy][Intercept][%s][ERROR] Failed to parse edited request: %v\n", id, err)
 				return req, fmt.Errorf("failed to parse edited request: %w", err)
 			}
+
+			editedRequestData := generateRequestData(requestNew)
+
+			go rp.saveEditedRequest(reqCtx, editedRequestData, updatedString)
 
 			return requestNew, nil
 		}
@@ -546,16 +560,7 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 		return resp, nil
 	}
 
-	responseData := map[string]any{
-		"has_cookies": len(resp.Cookies()) > 0,
-		"title":       "",
-		"mime":        resp.Header.Get("Content-Type"),
-		"headers":     grrhttp.GetHeaders(resp.Header),
-		"status":      resp.StatusCode,
-		"length":      resp.ContentLength,
-		"date":        resp.Header.Get("Date"),
-		"time":        time.Now().Format(time.RFC3339),
-	}
+	responseData := generateResponseData(resp)
 
 	// Update userdata with response information
 	userdata := reqCtx.UserData
@@ -604,9 +609,6 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 			// Update RawResponse in context with edited version
 			reqCtx.RawResponse = updatedString
 
-			// Save edited response to database
-			go rp.saveEditedResponse(reqCtx, responseData, updatedString)
-
 			// Parse the edited response string back to http.Response
 			resp.Body.Close()
 
@@ -617,6 +619,10 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 				log.Printf("[RawProxy][Intercept][%s][ERROR] Failed to parse edited response: %v\n", userdata["id"].(string), err)
 				return resp, fmt.Errorf("failed to parse edited response: %w", err)
 			}
+
+			editedResponseData := generateResponseData(respNew)
+			// Save edited response to database
+			go rp.saveEditedResponse(reqCtx, editedResponseData, updatedString)
 
 			// Update the response
 			return respNew, nil
