@@ -71,10 +71,10 @@ func DumpResponse(resp *http.Response) string {
 	// Build headers, but remove Content-Encoding since we've decompressed
 	hasContentLength := false
 	for header, value := range resp.Header {
-		// Skip Content-Encoding header since we've already decompressed
-		if strings.EqualFold(header, "Content-Encoding") {
-			continue
-		}
+		// // Skip Content-Encoding header since we've already decompressed
+		// if strings.EqualFold(header, "Content-Encoding") {
+		// 	continue
+		// }
 
 		// Update Content-Length to reflect decompressed size
 		if strings.EqualFold(header, "Content-Length") {
