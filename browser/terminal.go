@@ -8,6 +8,59 @@ import (
 	"runtime"
 )
 
+// CloseTerminalWindow attempts to close terminal windows for a given process
+// Note: This is a best-effort attempt. macOS terminals launched via AppleScript
+// may not always close cleanly as they detach from the parent process.
+func CloseTerminalWindow(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+
+	log.Printf("[CloseTerminalWindow] Attempting to close terminal window (PID: %d)", cmd.Process.Pid)
+
+	switch runtime.GOOS {
+	case "darwin":
+		// Try to close the frontmost Terminal.app window
+		closeScript := `
+tell application "Terminal"
+    if (count of windows) > 0 then
+        close front window
+    end if
+end tell
+`
+		closeCmd := exec.Command("osascript", "-e", closeScript)
+		if err := closeCmd.Run(); err != nil {
+			log.Printf("[CloseTerminalWindow] Failed to close Terminal.app window via AppleScript: %v", err)
+		}
+
+		// Also try iTerm2
+		closeITermScript := `
+tell application "iTerm"
+    if (count of windows) > 0 then
+        close current window
+    end if
+end tell
+`
+		closeITermCmd := exec.Command("osascript", "-e", closeITermScript)
+		if err := closeITermCmd.Run(); err != nil {
+			log.Printf("[CloseTerminalWindow] Failed to close iTerm window via AppleScript (might not be running): %v", err)
+		}
+
+	case "linux", "windows":
+		// For Linux and Windows, killing the process should close the terminal
+		// This is handled by the caller
+	}
+
+	// Kill the tracked process (osascript on macOS, or the terminal emulator on Linux/Windows)
+	if err := cmd.Process.Kill(); err != nil {
+		log.Printf("[CloseTerminalWindow] Failed to kill process: %v", err)
+		return err
+	}
+
+	log.Printf("[CloseTerminalWindow] Terminal process killed successfully")
+	return nil
+}
+
 func launchTerminal(proxyAddress string, customCertPath string) (*exec.Cmd, error) {
 	log.Println("[launchTerminal] Starting terminal launch process")
 
@@ -23,16 +76,44 @@ func launchTerminal(proxyAddress string, customCertPath string) (*exec.Cmd, erro
 	// Determine terminal executable and arguments based on OS
 	switch runtime.GOOS {
 	case "darwin": // macOS
-		// Use Terminal.app on macOS
-		terminalScript := fmt.Sprintf(`
+		// Use iTerm2 if available, otherwise Terminal.app
+		// First check for iTerm2
+		iTermPath := "/Applications/iTerm.app"
+		useITerm := false
+		if _, err := os.Stat(iTermPath); err == nil {
+			useITerm = true
+		}
+
+		if useITerm {
+			// iTerm2 approach - more direct process control
+			terminalScript := fmt.Sprintf(`
+tell application "iTerm"
+    create window with default profile
+    tell current session of current window
+        write text "echo 'Terminal configured with proxy: %s'"
+        write text "export HTTP_PROXY='%s'"
+        write text "export HTTPS_PROXY='%s'"
+        write text "export http_proxy='%s'"
+        write text "export https_proxy='%s'"
+        write text "export SSL_CERT_FILE='%s'"
+        write text "cd '%s'"
+    end tell
+    activate
+end tell
+`, proxyAddress, proxyAddress, proxyAddress, proxyAddress, proxyAddress, customCertPath, homeDir)
+			cmd = exec.Command("osascript", "-e", terminalScript)
+			log.Printf("[launchTerminal] Launching iTerm2 with proxy configuration")
+		} else {
+			// Terminal.app approach
+			terminalScript := fmt.Sprintf(`
 tell application "Terminal"
     do script "echo 'Terminal configured with proxy: %s' && export HTTP_PROXY='%s' && export HTTPS_PROXY='%s' && export http_proxy='%s' && export https_proxy='%s' && export SSL_CERT_FILE='%s' && cd '%s' && exec $SHELL"
     activate
 end tell
 `, proxyAddress, proxyAddress, proxyAddress, proxyAddress, proxyAddress, customCertPath, homeDir)
-
-		cmd = exec.Command("osascript", "-e", terminalScript)
-		log.Printf("[launchTerminal] Launching macOS Terminal with proxy configuration")
+			cmd = exec.Command("osascript", "-e", terminalScript)
+			log.Printf("[launchTerminal] Launching macOS Terminal with proxy configuration")
+		}
 
 	case "linux":
 		// Try various Linux terminal emulators in order of preference

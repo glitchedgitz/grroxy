@@ -151,14 +151,29 @@ func (pm *ProxyManager) StopProxy(id string) error {
 
 	log.Printf("[ProxyManager] Proxy found, calling Stop()...")
 	err := inst.Proxy.Stop()
-	// attempt to close tied browser if any
+	// attempt to close tied browser/terminal if any
 	pm.mu.Lock()
 	if inst.BrowserCmd != nil && inst.BrowserCmd.Process != nil {
-		log.Printf("[ProxyManager] Attempting to terminate browser for proxy %s (pid=%d)", id, inst.BrowserCmd.Process.Pid)
-		if killErr := inst.BrowserCmd.Process.Kill(); killErr != nil {
-			log.Printf("[ProxyManager] Failed to kill browser process for %s: %v", id, killErr)
+		clientType := "browser"
+		isTerminal := inst.Browser == "terminal"
+		if isTerminal {
+			clientType = "terminal"
+		}
+		log.Printf("[ProxyManager] Attempting to terminate %s for proxy %s (pid=%d)", clientType, id, inst.BrowserCmd.Process.Pid)
+
+		var killErr error
+		if isTerminal {
+			// Use special terminal cleanup for better window closing
+			killErr = browser.CloseTerminalWindow(inst.BrowserCmd)
 		} else {
-			log.Printf("[ProxyManager] Browser process for %s terminated", id)
+			// Standard browser process kill
+			killErr = inst.BrowserCmd.Process.Kill()
+		}
+
+		if killErr != nil {
+			log.Printf("[ProxyManager] Failed to kill %s process for %s: %v", clientType, id, killErr)
+		} else {
+			log.Printf("[ProxyManager] %s process for %s terminated", clientType, id)
 		}
 	}
 	pm.mu.Unlock()
