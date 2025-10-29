@@ -294,8 +294,13 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 					}
 				}
 				ProxyMgr.mu.RUnlock()
+				count++
 
-				label = fmt.Sprintf("%s %d", browserType, count)
+				if count > 1 {
+					label = fmt.Sprintf("%s %d", browserType, count)
+				} else {
+					label = browserType
+				}
 			}
 
 			// Create complete proxy instance with all fields
