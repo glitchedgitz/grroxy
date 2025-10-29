@@ -3,10 +3,11 @@ package browser
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 )
 
-func LaunchBrowser(browserType string, proxyAddress string, customCertPath string) error {
+func LaunchBrowser(browserType string, proxyAddress string, customCertPath string) (*exec.Cmd, error) {
 	if browserType == "" {
 		browserType = "chrome" // Default to Chrome
 	}
@@ -21,7 +22,7 @@ func LaunchBrowser(browserType string, proxyAddress string, customCertPath strin
 	case "safari":
 		return launchSafari(proxyAddress, customCertPath)
 	default:
-		return fmt.Errorf("unsupported browser: %s", browserType)
+		return nil, fmt.Errorf("unsupported browser: %s", browserType)
 	}
 }
 

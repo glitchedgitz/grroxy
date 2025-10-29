@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
 	"path"
 	"sync"
 	"sync/atomic"
@@ -18,14 +19,20 @@ import (
 
 // ProxyManager manages multiple proxy instances
 type ProxyManager struct {
-	proxies map[string]*RawProxyWrapper
-	mu      sync.RWMutex
-	index   atomic.Uint64 // Shared atomic counter for unique indices across all proxies
+	proxies      map[string]*RawProxyWrapper
+	browsers     map[string]*exec.Cmd
+	browserNames map[string]string
+	labels       map[string]string
+	mu           sync.RWMutex
+	index        atomic.Uint64 // Shared atomic counter for unique indices across all proxies
 }
 
 // Global proxy manager instance
 var ProxyMgr = &ProxyManager{
-	proxies: make(map[string]*RawProxyWrapper),
+	proxies:      make(map[string]*RawProxyWrapper),
+	browsers:     make(map[string]*exec.Cmd),
+	browserNames: make(map[string]string),
+	labels:       make(map[string]string),
 }
 
 // init is intentionally empty - initialization happens on first proxy start
@@ -93,6 +100,9 @@ func (pm *ProxyManager) RemoveProxy(id string) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	delete(pm.proxies, id)
+	delete(pm.browsers, id)
+	delete(pm.browserNames, id)
+	delete(pm.labels, id)
 }
 
 // GetAllProxies returns all proxy IDs
@@ -120,7 +130,21 @@ func (pm *ProxyManager) StopProxy(id string) error {
 	}
 
 	log.Printf("[ProxyManager] Proxy found, calling Stop()...")
-	return proxy.Stop()
+	err := proxy.Stop()
+	// attempt to close tied browser if any
+	pm.mu.Lock()
+	if cmd, ok := pm.browsers[id]; ok && cmd != nil && cmd.Process != nil {
+		log.Printf("[ProxyManager] Attempting to terminate browser for proxy %s (pid=%d)", id, cmd.Process.Pid)
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			log.Printf("[ProxyManager] Failed to kill browser process for %s: %v", id, killErr)
+		} else {
+			log.Printf("[ProxyManager] Browser process for %s terminated", id)
+		}
+		delete(pm.browsers, id)
+		delete(pm.browserNames, id)
+	}
+	pm.mu.Unlock()
+	return err
 }
 
 // StopAllProxies stops all running proxies
@@ -231,6 +255,12 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 
 			// Add proxy to manager
 			ProxyMgr.AddProxy(proxyID, newProxy)
+			// Save label if provided
+			if body.Name != "" {
+				ProxyMgr.mu.Lock()
+				ProxyMgr.labels[proxyID] = body.Name
+				ProxyMgr.mu.Unlock()
+			}
 
 			// Update PROXY for backward compatibility
 			updateProxyVar()
@@ -248,12 +278,17 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 			if body.Browser != "" {
 				// Use the certificate path from the rawproxy
 				certPath := newProxy.GetCertPath()
-				go func() {
-					err := browser.LaunchBrowser(body.Browser, body.HTTP, certPath)
+				go func(proxyID, browserType, listenAddr, cert string) {
+					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert)
 					if err != nil {
 						log.Println("Error launching browser:", err)
+						return
 					}
-				}()
+					ProxyMgr.mu.Lock()
+					ProxyMgr.browsers[proxyID] = cmd
+					ProxyMgr.browserNames[proxyID] = browserType
+					ProxyMgr.mu.Unlock()
+				}(proxyID, body.Browser, body.HTTP, certPath)
 			}
 
 			record, err := backend.App.Dao().FindRecordById("_settings", "PROXY__________")
@@ -374,10 +409,21 @@ func (backend *Backend) ListProxies(e *core.ServeEvent) error {
 			for _, id := range proxyIDs {
 				proxy := ProxyMgr.GetProxy(id)
 				if proxy != nil {
+					ProxyMgr.mu.RLock()
+					browserName := ProxyMgr.browserNames[id]
+					label := ProxyMgr.labels[id]
+					var browserPid int
+					if cmd := ProxyMgr.browsers[id]; cmd != nil && cmd.Process != nil {
+						browserPid = cmd.Process.Pid
+					}
+					ProxyMgr.mu.RUnlock()
+
 					proxies = append(proxies, map[string]interface{}{
 						"id":         id,
 						"listenAddr": id,
-						"certPath":   proxy.GetCertPath(),
+						"label":      label,
+						"browser":    browserName,
+						"browserPid": browserPid,
 					})
 				}
 			}

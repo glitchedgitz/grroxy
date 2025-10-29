@@ -11,13 +11,13 @@ import (
 	"strings"
 )
 
-func launchFirefox(proxyAddress string, customCertPath string) error {
+func launchFirefox(proxyAddress string, customCertPath string) (*exec.Cmd, error) {
 	log.Println("[launchFirefox] Starting Firefox launch process")
 
 	// Get user's home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("[launchFirefox] failed to get home directory: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to get home directory: %v", err)
 	}
 	log.Printf("[launchFirefox] Home directory: %s", homeDir)
 
@@ -29,7 +29,7 @@ func launchFirefox(proxyAddress string, customCertPath string) error {
 		log.Printf("[launchFirefox] Warning: couldn't clean up old profile: %v", err)
 	}
 	if err := os.MkdirAll(profileDir, 0755); err != nil {
-		return fmt.Errorf("[launchFirefox] failed to create Firefox profile directory: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to create Firefox profile directory: %v", err)
 	}
 	log.Printf("[launchFirefox] Created Firefox profile directory successfully")
 
@@ -37,7 +37,7 @@ func launchFirefox(proxyAddress string, customCertPath string) error {
 	certPath := filepath.Join(profileDir, "ca.crt")
 	log.Printf("[launchFirefox] Copying certificate from %s to %s", customCertPath, certPath)
 	if err := copyFile(customCertPath, certPath); err != nil {
-		return fmt.Errorf("[launchFirefox] failed to copy certificate: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to copy certificate: %v", err)
 	}
 	log.Printf("[launchFirefox] Certificate copied successfully")
 
@@ -46,7 +46,7 @@ func launchFirefox(proxyAddress string, customCertPath string) error {
 	log.Printf("[launchFirefox] Creating cert_override.txt at %s", certOverridePath)
 	certOverrideContent := "# PSM Certificate Override Settings file\n# This is a generated file!  Do not edit.\n"
 	if err := os.WriteFile(certOverridePath, []byte(certOverrideContent), 0644); err != nil {
-		return fmt.Errorf("[launchFirefox] failed to write cert_override.txt: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to write cert_override.txt: %v", err)
 	}
 	log.Printf("[launchFirefox] Created cert_override.txt successfully")
 
@@ -65,7 +65,7 @@ Version=2
 `
 	profileIniContent = strings.Replace(profileIniContent, "${PROFILE_PATH}", profileDir, -1)
 	if err := os.WriteFile(profileIniPath, []byte(profileIniContent), 0644); err != nil {
-		return fmt.Errorf("[launchFirefox] failed to write Firefox profile.ini: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to write Firefox profile.ini: %v", err)
 	}
 	log.Printf("[launchFirefox] Created profiles.ini successfully")
 
@@ -174,7 +174,7 @@ Version=2
 	log.Printf("[launchFirefox] Writing preferences to %s", prefsJsPath)
 	prefsContent := strings.Join(prefsLines, "\n")
 	if err := os.WriteFile(prefsJsPath, []byte(prefsContent), 0644); err != nil {
-		return fmt.Errorf("[launchFirefox] failed to write Firefox preferences: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to write Firefox preferences: %v", err)
 	}
 	log.Printf("[launchFirefox] Wrote preferences successfully")
 
@@ -182,7 +182,7 @@ Version=2
 	userJsPath := filepath.Join(profileDir, "user.js")
 	log.Printf("[launchFirefox] Writing user.js to %s", userJsPath)
 	if err := os.WriteFile(userJsPath, []byte(prefsContent), 0644); err != nil {
-		return fmt.Errorf("[launchFirefox] failed to write Firefox user.js: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to write Firefox user.js: %v", err)
 	}
 	log.Printf("[launchFirefox] Wrote user.js successfully")
 
@@ -253,12 +253,12 @@ Version=2
 		}
 		log.Printf("[launchFirefox] Using Windows Firefox path: %s", firefoxPath)
 	default:
-		return fmt.Errorf("[launchFirefox] unsupported operating system: %s", runtime.GOOS)
+		return nil, fmt.Errorf("[launchFirefox] unsupported operating system: %s", runtime.GOOS)
 	}
 
 	// Verify Firefox executable exists
 	if _, err := os.Stat(firefoxPath); err != nil {
-		return fmt.Errorf("[launchFirefox] Firefox executable not found at %s: %v", firefoxPath, err)
+		return nil, fmt.Errorf("[launchFirefox] Firefox executable not found at %s: %v", firefoxPath, err)
 	}
 	log.Printf("[launchFirefox] Firefox executable found and verified")
 
@@ -276,7 +276,7 @@ Version=2
 	cmd := exec.Command(firefoxPath, args...)
 	log.Printf("[launchFirefox] Command: %s", cmd.String())
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("[launchFirefox] failed to launch Firefox: %v", err)
+		return nil, fmt.Errorf("[launchFirefox] failed to launch Firefox: %v", err)
 	}
 
 	log.Printf("[launchFirefox] Firefox process started successfully")
@@ -297,5 +297,5 @@ Version=2
 		log.Printf("[launchFirefox] and import the certificate from: %s", certPath)
 	}
 
-	return nil
+	return cmd, nil
 }
