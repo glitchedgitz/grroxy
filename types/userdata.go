@@ -36,25 +36,27 @@ type ResponseData struct {
 }
 
 type UserData struct {
-	ID             string       `db:"id,omitempty" json:"id,omitempty"`
-	Index          float64      `db:"index,omitempty" json:"index,omitempty"`
-	IndexMinor     float64      `db:"index_minor,omitempty" json:"index_minor,omitempty"`
-	Host           string       `db:"host,omitempty" json:"host,omitempty"`
-	Port           string       `db:"port,omitempty" json:"port,omitempty"`
-	HasResp        bool         `db:"has_resp,omitempty" json:"has_resp,omitempty"`
-	HasParams      bool         `db:"has_params,omitempty" json:"has_params,omitempty"`
-	IsReqEdited    bool         `db:"is_req_edited,omitempty" json:"is_req_edited,omitempty"`
-	IsRespEdited   bool         `db:"is_resp_edited,omitempty" json:"is_resp_edited,omitempty"`
-	IsHTTPS        bool         `db:"is_https" json:"is_https"`
-	Req            string       `db:"req" json:"req"`
-	Resp           string       `db:"resp" json:"resp"`
-	ReqEdited      string       `db:"req_edited,omitempty" json:"req_edited,omitempty"`
-	RespEdited     string       `db:"resp_edited,omitempty" json:"resp_edited,omitempty"`
-	ReqJson        RequestData  `db:"req_json" json:"req_json"`
-	RespJson       ResponseData `db:"resp_json" json:"resp_json"`
-	ReqEditedJson  RequestData  `db:"req_edited_json,omitempty" json:"req_edited_json,omitempty"`
-	RespEditedJson ResponseData `db:"resp_edited_json,omitempty" json:"resp_edited_json,omitempty"`
-	Attached       string       `db:"attached,omitempty" json:"attached,omitempty"`
+	ID             string         `db:"id,omitempty" json:"id,omitempty"`
+	Index          float64        `db:"index,omitempty" json:"index,omitempty"`
+	IndexMinor     float64        `db:"index_minor,omitempty" json:"index_minor,omitempty"`
+	Host           string         `db:"host,omitempty" json:"host,omitempty"`
+	Port           string         `db:"port,omitempty" json:"port,omitempty"`
+	HasResp        bool           `db:"has_resp,omitempty" json:"has_resp,omitempty"`
+	HasParams      bool           `db:"has_params,omitempty" json:"has_params,omitempty"`
+	IsReqEdited    bool           `db:"is_req_edited,omitempty" json:"is_req_edited,omitempty"`
+	IsRespEdited   bool           `db:"is_resp_edited,omitempty" json:"is_resp_edited,omitempty"`
+	IsHTTPS        bool           `db:"is_https" json:"is_https"`
+	Req            string         `db:"req" json:"req"`
+	Resp           string         `db:"resp" json:"resp"`
+	ReqEdited      string         `db:"req_edited,omitempty" json:"req_edited,omitempty"`
+	RespEdited     string         `db:"resp_edited,omitempty" json:"resp_edited,omitempty"`
+	ReqJson        RequestData    `db:"req_json" json:"req_json"`
+	RespJson       ResponseData   `db:"resp_json" json:"resp_json"`
+	ReqEditedJson  RequestData    `db:"req_edited_json,omitempty" json:"req_edited_json,omitempty"`
+	RespEditedJson ResponseData   `db:"resp_edited_json,omitempty" json:"resp_edited_json,omitempty"`
+	GeneratedBy    string         `db:"generated_by,omitempty" json:"generated_by,omitempty"`
+	Extra          map[string]any `db:"extra,omitempty" json:"extra,omitempty"`
+	Attached       string         `db:"attached,omitempty" json:"attached,omitempty"`
 
 	// Action didn't get saved anywhere, it for intercept forward/drop. Although for below {RealtimeRecord} it's saved in `_intercept` collection.
 	Action string `db:"action,omitempty" json:"action,omitempty"`

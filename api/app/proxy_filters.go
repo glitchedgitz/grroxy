@@ -66,13 +66,11 @@ func (backend *Backend) SetupFiltersHook() error {
 			return nil
 		}
 
-		// Update filters
-		if PROXY != nil {
-			PROXY.Filters = filterstring
-			log.Printf("[FiltersManager] Updated filters: %s", filterstring)
-		} else {
-			log.Println("[FiltersManager][WARN] PROXY is nil, cannot update filters")
-		}
+		// Update filters for all proxies
+		ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+			proxy.Filters = filterstring
+		})
+		log.Printf("[FiltersManager] Updated filters: %s", filterstring)
 
 		return nil
 	})
@@ -112,10 +110,11 @@ func (backend *Backend) SetupFiltersHook() error {
 			}
 		}
 
-		if PROXY != nil {
-			PROXY.Filters = filterstring
-			log.Printf("[FiltersManager] Initialized filters on create: %s", filterstring)
-		}
+		// Update filters for all proxies
+		ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+			proxy.Filters = filterstring
+		})
+		log.Printf("[FiltersManager] Initialized filters on create: %s", filterstring)
 
 		return nil
 	})
@@ -135,9 +134,10 @@ func (backend *Backend) loadInterceptFilters() error {
 
 	if err != nil {
 		log.Printf("[FiltersManager] No INTERCEPT filters record found, using empty filters: %v", err)
-		if PROXY != nil {
-			PROXY.Filters = ""
-		}
+		// Update filters for all proxies
+		ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+			proxy.Filters = ""
+		})
 		return nil
 	}
 	log.Printf("[FiltersManager] Found _ui record with ID: %s", record.Id)
@@ -145,9 +145,10 @@ func (backend *Backend) loadInterceptFilters() error {
 	data := record.Get("data")
 	if data == nil {
 		log.Println("[FiltersManager] No data field, using empty filters")
-		if PROXY != nil {
-			PROXY.Filters = ""
-		}
+		// Update filters for all proxies
+		ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+			proxy.Filters = ""
+		})
 		return nil
 	}
 
@@ -160,9 +161,10 @@ func (backend *Backend) loadInterceptFilters() error {
 		var dataMap map[string]any
 		if err := json.Unmarshal(jsonRaw, &dataMap); err != nil {
 			log.Printf("[FiltersManager][ERROR] Failed to unmarshal JSON: %v", err)
-			if PROXY != nil {
-				PROXY.Filters = ""
-			}
+			// Update filters for all proxies
+			ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+				proxy.Filters = ""
+			})
 			return err
 		}
 
@@ -180,18 +182,20 @@ func (backend *Backend) loadInterceptFilters() error {
 		}
 	} else {
 		log.Printf("[FiltersManager][ERROR] Unexpected data type: %T, using empty filters", data)
-		if PROXY != nil {
-			PROXY.Filters = ""
-		}
+		// Update filters for all proxies
+		ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+			proxy.Filters = ""
+		})
 		return nil
 	}
 
-	if PROXY != nil {
-		PROXY.Filters = filterstring
-		log.Printf("[FiltersManager] ✓ Loaded initial filters: %s", filterstring)
-	} else {
-		log.Println("[FiltersManager][WARN] PROXY is nil, cannot set filters")
-	}
+	// Update filters for all proxies
+	updatedCount := 0
+	ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+		proxy.Filters = filterstring
+		updatedCount++
+	})
+	log.Printf("[FiltersManager] ✓ Loaded initial filters: %s (updated %d proxies)", filterstring, updatedCount)
 
 	return nil
 }

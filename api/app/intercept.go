@@ -66,9 +66,10 @@ func (backend *Backend) SetupInterceptHooks() error {
 			// Intercept turned OFF - forward all pending intercepts
 			log.Println("[InterceptManager] Intercept disabled - forwarding all pending requests")
 
-			if PROXY != nil {
-				PROXY.Intercept = false
-			}
+			// Apply to all proxies
+			ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+				proxy.Intercept = false
+			})
 
 			// Forward all pending intercepts
 			go backend.forwardAllIntercepts()
@@ -76,9 +77,10 @@ func (backend *Backend) SetupInterceptHooks() error {
 			// Intercept turned ON
 			log.Println("[InterceptManager] Intercept enabled")
 
-			if PROXY != nil {
-				PROXY.Intercept = true
-			}
+			// Apply to all proxies
+			ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+				proxy.Intercept = true
+			})
 		}
 
 		return nil
@@ -122,12 +124,13 @@ func (backend *Backend) forwardAllIntercepts() {
 	log.Println("[InterceptManager] All pending intercepts forwarded via channels")
 }
 
-// UpdateInterceptFilters updates the intercept filters for the proxy
+// UpdateInterceptFilters updates the intercept filters for all proxies
 func (backend *Backend) UpdateInterceptFilters(filters string) {
-	if PROXY != nil {
-		PROXY.Filters = filters
-		log.Printf("[InterceptManager] Updated intercept filters: %s", filters)
-	}
+	// Apply to all proxies
+	ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+		proxy.Filters = filters
+	})
+	log.Printf("[InterceptManager] Updated intercept filters: %s", filters)
 }
 
 // InterceptActionRequest represents the request body for intercept actions
