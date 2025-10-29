@@ -6,8 +6,12 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -17,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +34,8 @@ type MitmCA struct {
 	caKey  any
 	mu     sync.Mutex
 	cache  map[string]*tls.Certificate
+	// Reused leaf private key to keep SPKI stable across generated leaf certs
+	leafKey *rsa.PrivateKey
 }
 
 func LoadMITMCA(certPath, keyPath string) (*MitmCA, error) {
@@ -55,7 +62,21 @@ func LoadMITMCA(certPath, keyPath string) (*MitmCA, error) {
 		return nil, err
 	}
 
-	return &MitmCA{caCert: caCert, caKey: priv, cache: make(map[string]*tls.Certificate)}, nil
+	// Generate a reusable leaf RSA key to keep SPKI stable for pinning
+	lk, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, err
+	}
+
+	// Persist a base64 SHA-256 SPKI fingerprint for the reusable leaf key for launchers to consume
+	if spkiDER, err := x509.MarshalPKIXPublicKey(&lk.PublicKey); err == nil {
+		spkiHash := sha256.Sum256(spkiDER)
+		b64 := base64.StdEncoding.EncodeToString(spkiHash[:])
+		dir := filepath.Dir(certPath)
+		_ = os.WriteFile(filepath.Join(dir, "leaf.spki"), []byte(b64), 0o644)
+	}
+
+	return &MitmCA{caCert: caCert, caKey: priv, cache: make(map[string]*tls.Certificate), leafKey: lk}, nil
 }
 
 func (m *MitmCA) CertForHost(host string) (*tls.Certificate, error) {
@@ -68,11 +89,15 @@ func (m *MitmCA) CertForHost(host string) (*tls.Certificate, error) {
 	serial := big.NewInt(0).SetUint64(uint64(time.Now().UnixNano()))
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
-		Subject:      m.caCert.Subject,
-		NotBefore:    time.Now().Add(-5 * time.Minute),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		// Present a Subject matching the site, like typical MITM proxies do
+		Subject: pkix.Name{
+			CommonName: host,
+			// Organization: m.caCert.Subject.Organization,
+		},
+		NotBefore:   time.Now().Add(-5 * time.Minute),
+		NotAfter:    time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
 	if ip := net.ParseIP(host); ip != nil {
 		tmpl.IPAddresses = []net.IP{ip}
@@ -80,18 +105,23 @@ func (m *MitmCA) CertForHost(host string) (*tls.Certificate, error) {
 		tmpl.DNSNames = []string{host}
 	}
 
-	leafKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, err
+	// Set SKI on leaf from its public key, and AKI from CA SKI when available
+	if pubKeyDER, err := x509.MarshalPKIXPublicKey(&m.leafKey.PublicKey); err == nil {
+		ski := sha1.Sum(pubKeyDER)
+		tmpl.SubjectKeyId = ski[:]
+	}
+	if len(m.caCert.SubjectKeyId) > 0 {
+		tmpl.AuthorityKeyId = m.caCert.SubjectKeyId
 	}
 
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, m.caCert, &leafKey.PublicKey, m.caKey)
+	// Reuse the single process-wide key so SPKI stays constant
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, m.caCert, &m.leafKey.PublicKey, m.caKey)
 	if err != nil {
 		return nil, err
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(leafKey)})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(m.leafKey)})
 	leaf, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		return nil, err
