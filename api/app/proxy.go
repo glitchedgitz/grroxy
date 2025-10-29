@@ -214,14 +214,20 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 
 			log.Println("/api/proxy/start body", body)
 
+			if body.HTTP == "" && body.Browser != "" {
+				body.HTTP = "127.0.0.1:9797"
+			}
+
 			availableHost, err := utils.CheckAndFindAvailablePort(body.HTTP)
 
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			if availableHost != body.HTTP {
+			if body.Browser == "" && availableHost != body.HTTP {
 				return c.JSON(http.StatusOK, map[string]interface{}{"error": "port not available", "availableHost": availableHost})
+			} else {
+				body.HTTP = availableHost
 			}
 
 			// Proxy ID is the listen address
