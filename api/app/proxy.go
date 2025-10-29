@@ -20,9 +20,9 @@ import (
 // ProxyInstance holds a proxy and its optional runtime attachments (browser, label, etc.)
 type ProxyInstance struct {
 	Proxy      *RawProxyWrapper
-	Browser    string    // Browser type (chrome, firefox, safari)
-	BrowserCmd *exec.Cmd // Browser process command
-	Label      string    // Optional label/name for the proxy
+	Browser    string // `json:"browser"`
+	BrowserCmd *exec.Cmd
+	Label      string // `json:"label"`
 }
 
 // ProxyManager manages multiple proxy instances
@@ -271,14 +271,34 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 
 			// Add proxy to manager
 			ProxyMgr.AddProxy(proxyID, newProxy)
-			// Set label if provided
-			if body.Name != "" {
-				ProxyMgr.mu.Lock()
-				if inst := ProxyMgr.instances[proxyID]; inst != nil {
-					inst.Label = body.Name
+
+			// Set label - generate one if not provided
+			label := body.Name
+			if label == "" {
+				// Generate label in format: {browser}+{instance_number}
+				browserType := body.Browser
+				if browserType == "" {
+					browserType = "proxy"
 				}
-				ProxyMgr.mu.Unlock()
+
+				// Count existing instances of this browser type
+				ProxyMgr.mu.RLock()
+				count := 0
+				for _, inst := range ProxyMgr.instances {
+					if inst != nil && (inst.Browser == browserType || (browserType == "proxy" && inst.Browser == "")) {
+						count++
+					}
+				}
+				ProxyMgr.mu.RUnlock()
+
+				label = fmt.Sprintf("%s %d", browserType, count)
 			}
+
+			ProxyMgr.mu.Lock()
+			if inst := ProxyMgr.instances[proxyID]; inst != nil {
+				inst.Label = label
+			}
+			ProxyMgr.mu.Unlock()
 
 			// Update PROXY for backward compatibility
 			updateProxyVar()
@@ -311,7 +331,7 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				}(proxyID, body.Browser, body.HTTP, certPath)
 			}
 
-			return c.JSON(http.StatusOK, map[string]any{"message": "Proxy started"})
+			return c.JSON(http.StatusOK, map[string]any{"id": proxyID, "listenAddr": proxyID, "label": label, "browser": body.Browser})
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),
