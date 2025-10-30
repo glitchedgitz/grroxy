@@ -54,10 +54,37 @@ func (backend *Backend) SetupInterceptHooks() error {
 	log.Println("[InterceptManager] Setting up intercept hooks...")
 
 	// Monitor intercept state changes in _proxies collection for per-proxy intercept control
-	// backend.App.OnRecordAfterUpdateRequest("_proxies").Add(func(e *core.RecordUpdateEvent) error {
+	backend.App.OnRecordAfterUpdateRequest("_proxies").Add(func(e *core.RecordUpdateEvent) error {
+		proxyDBID := e.Record.Id
+		intercept := e.Record.GetBool("intercept")
 
-	// 	return nil
-	// })
+		log.Printf("[InterceptManager] Proxy %s intercept changed to: %v", proxyDBID, intercept)
+
+		// Find the proxy instance with this ID
+		ProxyMgr.mu.RLock()
+		inst := ProxyMgr.instances[proxyDBID]
+		ProxyMgr.mu.RUnlock()
+
+		if inst == nil || inst.Proxy == nil {
+			log.Printf("[InterceptManager] Proxy with ID %s not found in running instances", proxyDBID)
+			return nil
+		}
+
+		if !intercept {
+			// Intercept turned OFF for this proxy - forward all pending intercepts from this proxy
+			log.Printf("[InterceptManager] Intercept disabled for proxy %s - forwarding pending requests", proxyDBID)
+			inst.Proxy.Intercept = false
+
+			// Forward all pending intercepts for this proxy
+			go backend.forwardProxyIntercepts(proxyDBID)
+		} else {
+			// Intercept turned ON for this proxy
+			log.Printf("[InterceptManager] Intercept enabled for proxy %s", proxyDBID)
+			inst.Proxy.Intercept = true
+		}
+
+		return nil
+	})
 
 	log.Println("[InterceptManager] Intercept hooks registered successfully")
 	return nil

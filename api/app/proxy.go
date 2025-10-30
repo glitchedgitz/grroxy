@@ -256,28 +256,20 @@ func updateProxyVar() {
 	PROXY = nil
 }
 
-// loadProxySettings loads intercept and filter settings from a proxy record
+// loadProxySettings loads intercept and filter settings for a proxy
 func (backend *Backend) loadProxySettings(proxy *RawProxyWrapper, proxyRecord *models.Record) error {
 	log.Printf("[ProxySettings] Loading settings for proxy ID: %s", proxyRecord.Id)
 
-	// Load intercept setting
+	// Load intercept setting from _proxies record
 	intercept := proxyRecord.GetBool("intercept")
 	proxy.Intercept = intercept
 	log.Printf("[ProxySettings] Intercept: %v", intercept)
 
-	// Load filter from data column
-	data := proxyRecord.Get("data")
-	if data == nil {
-		log.Println("[ProxySettings] No data field, using empty filters")
-		proxy.Filters = ""
-		return nil
-	}
-
-	filterstring := ""
-	if dataMap, ok := data.(map[string]any); ok {
-		if fs, ok := dataMap["filterstring"].(string); ok {
-			filterstring = fs
-		}
+	// Load filters from _ui collection (format: proxy/{proxyID})
+	filterstring, err := backend.loadProxyFilters(proxyRecord.Id)
+	if err != nil {
+		log.Printf("[ProxySettings] Error loading filters: %v, using empty filters", err)
+		filterstring = ""
 	}
 
 	proxy.Filters = filterstring
@@ -407,10 +399,8 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 			proxyRecord.Set("color", "")
 			proxyRecord.Set("profile", "")
 
-			// Store filter settings in data column
-			proxyData := map[string]interface{}{
-				"filterstring": "", // Default empty filter
-			}
+			// Initialize data column (filters are now stored separately in _ui collection)
+			proxyData := map[string]interface{}{}
 			proxyRecord.Set("data", proxyData)
 
 			if err := dao.SaveRecord(proxyRecord); err != nil {
