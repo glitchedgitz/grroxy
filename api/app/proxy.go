@@ -27,9 +27,10 @@ type ProxyInstance struct {
 
 // ProxyManager manages multiple proxy instances
 type ProxyManager struct {
-	instances map[string]*ProxyInstance
-	mu        sync.RWMutex
-	index     atomic.Uint64 // Shared atomic counter for unique indices across all proxies
+	instances  map[string]*ProxyInstance
+	mu         sync.RWMutex
+	index      atomic.Uint64 // Shared atomic counter for unique indices across all proxies (for requests)
+	proxyIndex atomic.Uint64 // Counter for proxy IDs
 }
 
 // Global proxy manager instance
@@ -50,6 +51,12 @@ func (pm *ProxyManager) SetGlobalIndex(value uint64) {
 // GetNextIndex returns the next unique index (thread-safe)
 func (pm *ProxyManager) GetNextIndex() uint64 {
 	return pm.index.Add(1)
+}
+
+// GetNextProxyID returns the next unique proxy ID (thread-safe)
+func (pm *ProxyManager) GetNextProxyID() string {
+	idx := pm.proxyIndex.Add(1)
+	return utils.FormatNumericID(float64(idx), 15)
 }
 
 // initializeIndexFromDB queries the database to get the current max index
@@ -79,6 +86,34 @@ func (pm *ProxyManager) initializeIndexFromDB(backend *Backend) error {
 	log.Printf("[ProxyManager]   - Next index will be: %d", totalRows+1)
 	log.Printf("[ProxyManager]   - Counter starting at: %d", totalRows)
 	log.Printf("[ProxyManager] ========================================")
+
+	return nil
+}
+
+// initializeProxyIndexFromDB queries the database to get the current max proxy count
+func (pm *ProxyManager) initializeProxyIndexFromDB(backend *Backend) error {
+	dao := backend.App.Dao()
+
+	// Query for the total number of proxies in _proxies collection
+	var result struct {
+		TotalProxies int `db:"total_proxies" json:"total_proxies"`
+	}
+
+	err := dao.DB().
+		NewQuery("SELECT COUNT(*) as total_proxies FROM _proxies").
+		One(&result)
+
+	if err != nil {
+		return fmt.Errorf("failed to query total proxies: %w", err)
+	}
+
+	// Set the proxy index counter
+	totalProxies := uint64(result.TotalProxies)
+	pm.proxyIndex.Store(totalProxies)
+
+	log.Printf("[ProxyManager] Proxy Index Initialization:")
+	log.Printf("[ProxyManager]   - Total proxies in database: %d", totalProxies)
+	log.Printf("[ProxyManager]   - Next proxy ID will use index: %d", totalProxies+1)
 
 	return nil
 }
@@ -221,6 +256,36 @@ func updateProxyVar() {
 	PROXY = nil
 }
 
+// loadProxySettings loads intercept and filter settings from a proxy record
+func (backend *Backend) loadProxySettings(proxy *RawProxyWrapper, proxyRecord *models.Record) error {
+	log.Printf("[ProxySettings] Loading settings for proxy ID: %s", proxyRecord.Id)
+
+	// Load intercept setting
+	intercept := proxyRecord.GetBool("intercept")
+	proxy.Intercept = intercept
+	log.Printf("[ProxySettings] Intercept: %v", intercept)
+
+	// Load filter from data column
+	data := proxyRecord.Get("data")
+	if data == nil {
+		log.Println("[ProxySettings] No data field, using empty filters")
+		proxy.Filters = ""
+		return nil
+	}
+
+	filterstring := ""
+	if dataMap, ok := data.(map[string]any); ok {
+		if fs, ok := dataMap["filterstring"].(string); ok {
+			filterstring = fs
+		}
+	}
+
+	proxy.Filters = filterstring
+	log.Printf("[ProxySettings] Filters: %s", filterstring)
+
+	return nil
+}
+
 type ProxyBody struct {
 	HTTP    string `json:"http,omitempty"`
 	Browser string `json:"browser,omitempty"`
@@ -267,9 +332,6 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				body.HTTP = availableHost
 			}
 
-			// Proxy ID is the listen address
-			proxyID := body.HTTP
-
 			// Initialize global index from database if not already initialized
 			// This ensures all proxies use the same unique index counter
 			if ProxyMgr.index.Load() == 0 {
@@ -277,6 +339,17 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 					log.Printf("[StartProxy] Warning: Failed to initialize global index from database: %v", err)
 				}
 			}
+
+			// Initialize proxy index from database if not already initialized
+			if ProxyMgr.proxyIndex.Load() == 0 {
+				if err := ProxyMgr.initializeProxyIndexFromDB(backend); err != nil {
+					log.Printf("[StartProxy] Warning: Failed to initialize proxy index from database: %v", err)
+				}
+			}
+
+			// Generate unique proxy ID (this will be the primary ID, not the listen address)
+			proxyID := ProxyMgr.GetNextProxyID()
+			log.Printf("[StartProxy] Generated proxy ID: %s for address: %s", proxyID, body.HTTP)
 
 			// Create new rawproxy wrapper
 			configDir := path.Join(backend.Config.HomeDirectory, ".config", "grroxy")
@@ -286,7 +359,7 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 			// outputDir := path.Join(backend.Config.HomeDirectory, ".config", "grroxy", "captures")
 			outputDir := "" // Empty = disabled
 
-			newProxy, err := NewRawProxyWrapper(body.HTTP, configDir, outputDir, backend)
+			newProxy, err := NewRawProxyWrapper(body.HTTP, configDir, outputDir, backend, proxyID)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
@@ -317,6 +390,35 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				}
 			}
 
+			// Create proxy record in database
+			dao := backend.App.Dao()
+			proxiesCollection, err := dao.FindCollectionByNameOrId("_proxies")
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to find _proxies collection: %v", err)})
+			}
+
+			proxyRecord := models.NewRecord(proxiesCollection)
+			proxyRecord.Set("id", proxyID)
+			proxyRecord.Set("label", label)
+			proxyRecord.Set("addr", body.HTTP)
+			proxyRecord.Set("browser", body.Browser)
+			proxyRecord.Set("intercept", false) // Default to false
+			proxyRecord.Set("state", "running")
+			proxyRecord.Set("color", "")
+			proxyRecord.Set("profile", "")
+
+			// Store filter settings in data column
+			proxyData := map[string]interface{}{
+				"filterstring": "", // Default empty filter
+			}
+			proxyRecord.Set("data", proxyData)
+
+			if err := dao.SaveRecord(proxyRecord); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to save proxy record: %v", err)})
+			}
+
+			log.Printf("[StartProxy] Created proxy record in database with ID: %s", proxyID)
+
 			// Create complete proxy instance with all fields
 			proxyInstance := &ProxyInstance{
 				Proxy:      newProxy,
@@ -325,15 +427,15 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				Label:      label,
 			}
 
-			// Add complete instance to manager
+			// Add complete instance to manager using the formatted ID as key
 			ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
 
 			// Update PROXY for backward compatibility
 			updateProxyVar()
 
-			// Load initial intercept filters
-			if err := backend.loadInterceptFilters(); err != nil {
-				log.Printf("[StartProxy] Warning: Failed to load intercept filters: %v", err)
+			// Load initial intercept and filter settings from proxy record
+			if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
+				log.Printf("[StartProxy] Warning: Failed to load proxy settings: %v", err)
 			}
 
 			// Start the proxy
@@ -359,13 +461,35 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				}(proxyID, body.Browser, body.HTTP, certPath)
 			}
 
-			return c.JSON(http.StatusOK, map[string]any{"id": proxyID, "listenAddr": proxyID, "label": label, "browser": body.Browser})
+			return c.JSON(http.StatusOK, map[string]any{
+				"id":         proxyID,
+				"listenAddr": body.HTTP,
+				"label":      label,
+				"browser":    body.Browser,
+			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
+}
+
+// updateProxyState updates the state field of a proxy record
+func (backend *Backend) updateProxyState(proxyID string, state string) {
+	dao := backend.App.Dao()
+	proxyRecord, err := dao.FindRecordById("_proxies", proxyID)
+	if err != nil {
+		log.Printf("[ProxyState][WARN] Failed to find proxy record %s: %v", proxyID, err)
+		return
+	}
+
+	proxyRecord.Set("state", state)
+	if err := dao.SaveRecord(proxyRecord); err != nil {
+		log.Printf("[ProxyState][WARN] Failed to update proxy state for %s: %v", proxyID, err)
+	} else {
+		log.Printf("[ProxyState] Updated proxy %s state to: %s", proxyID, state)
+	}
 }
 
 func (backend *Backend) StopProxy(e *core.ServeEvent) error {
@@ -384,7 +508,11 @@ func (backend *Backend) StopProxy(e *core.ServeEvent) error {
 				return c.String(http.StatusForbidden, "")
 			}
 
-			var body ProxyBody
+			type StopProxyBody struct {
+				ID string `json:"id,omitempty"` // Formatted ID like "______________1"
+			}
+
+			var body StopProxyBody
 			if err := c.Bind(&body); err != nil {
 				// If no body provided and field is optional, stop all proxies
 				log.Println("[StopProxy] No body or empty body provided, stopping all proxies")
@@ -393,32 +521,37 @@ func (backend *Backend) StopProxy(e *core.ServeEvent) error {
 					if err := ProxyMgr.StopProxy(proxyID); err != nil {
 						log.Printf("[WARN] Error stopping proxy %s: %v", proxyID, err)
 					}
+					backend.updateProxyState(proxyID, "")
 					ProxyMgr.RemoveProxy(proxyID)
 				}
-			} else if body.HTTP != "" {
-				// Stop specific proxy
-				proxyID := body.HTTP
+			} else if body.ID != "" {
+				// Stop specific proxy by ID
+				proxyID := body.ID
 				log.Printf("[StopProxy] Stopping specific proxy: %s", proxyID)
 
 				// Check if proxy exists
 				if proxy := ProxyMgr.GetProxy(proxyID); proxy == nil {
 					log.Printf("[StopProxy][WARN] Proxy %s not found in manager", proxyID)
+					return c.JSON(http.StatusNotFound, map[string]interface{}{"error": fmt.Sprintf("Proxy %s not found", proxyID)})
 				}
 
 				if err := ProxyMgr.StopProxy(proxyID); err != nil {
 					log.Printf("[StopProxy][ERROR] Failed to stop proxy %s: %v", proxyID, err)
 					return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 				}
+
+				backend.updateProxyState(proxyID, "")
 				log.Printf("[StopProxy] Removing proxy %s from manager", proxyID)
 				ProxyMgr.RemoveProxy(proxyID)
 			} else {
-				// No HTTP field, stop all proxies
-				log.Println("[StopProxy] HTTP field not specified, stopping all proxies")
+				// No ID field, stop all proxies
+				log.Println("[StopProxy] ID field not specified, stopping all proxies")
 				proxyIDs := ProxyMgr.GetAllProxies()
 				for _, proxyID := range proxyIDs {
 					if err := ProxyMgr.StopProxy(proxyID); err != nil {
 						log.Printf("[WARN] Error stopping proxy %s: %v", proxyID, err)
 					}
+					backend.updateProxyState(proxyID, "")
 					ProxyMgr.RemoveProxy(proxyID)
 				}
 			}
@@ -427,6 +560,148 @@ func (backend *Backend) StopProxy(e *core.ServeEvent) error {
 			updateProxyVar()
 
 			return c.JSON(http.StatusOK, map[string]any{"message": "Proxy stopped"})
+		},
+	})
+	return nil
+}
+
+func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/restart",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type RestartProxyBody struct {
+				ID string `json:"id"` // Formatted ID like "______________1"
+			}
+
+			var body RestartProxyBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+
+			proxyID := body.ID
+			log.Printf("[RestartProxy] Restarting proxy: %s", proxyID)
+
+			// Check if proxy is already running
+			if ProxyMgr.GetProxy(proxyID) != nil {
+				return c.JSON(http.StatusConflict, map[string]interface{}{"error": "Proxy is already running"})
+			}
+
+			// Get the proxy record from database
+			dao := backend.App.Dao()
+			proxyRecord, err := dao.FindRecordById("_proxies", proxyID)
+			if err != nil {
+				log.Printf("[RestartProxy] Proxy record not found: %s", proxyID)
+				return c.JSON(http.StatusNotFound, map[string]interface{}{"error": "Proxy record not found"})
+			}
+
+			// Read proxy configuration from record
+			listenAddr := proxyRecord.GetString("addr")
+			browserType := proxyRecord.GetString("browser")
+			label := proxyRecord.GetString("label")
+
+			log.Printf("[RestartProxy] Found proxy config - addr: %s, browser: %s, label: %s", listenAddr, browserType, label)
+
+			// Check if port is available
+			availableHost, err := utils.CheckAndFindAvailablePort(listenAddr)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			if availableHost != listenAddr {
+				return c.JSON(http.StatusConflict, map[string]interface{}{
+					"error":         "port not available",
+					"availableHost": availableHost,
+				})
+			}
+
+			// Initialize global index from database if not already initialized
+			if ProxyMgr.index.Load() == 0 {
+				if err := ProxyMgr.initializeIndexFromDB(backend); err != nil {
+					log.Printf("[RestartProxy] Warning: Failed to initialize global index from database: %v", err)
+				}
+			}
+
+			// Create new rawproxy wrapper with existing ID
+			configDir := path.Join(backend.Config.HomeDirectory, ".config", "grroxy")
+			outputDir := "" // Disabled
+
+			newProxy, err := NewRawProxyWrapper(listenAddr, configDir, outputDir, backend, proxyID)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			// Update proxy record state to running
+			proxyRecord.Set("state", "running")
+			if err := dao.SaveRecord(proxyRecord); err != nil {
+				log.Printf("[RestartProxy][WARN] Failed to update proxy state: %v", err)
+			}
+
+			// Create proxy instance
+			proxyInstance := &ProxyInstance{
+				Proxy:      newProxy,
+				Browser:    browserType,
+				BrowserCmd: nil,
+				Label:      label,
+			}
+
+			// Add to manager with the same ID
+			ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
+
+			// Update PROXY for backward compatibility
+			updateProxyVar()
+
+			// Load intercept and filter settings from proxy record
+			if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
+				log.Printf("[RestartProxy] Warning: Failed to load proxy settings: %v", err)
+			}
+
+			// Start the proxy
+			if err := newProxy.RunProxy(); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			// Launch browser if configured
+			if browserType != "" {
+				certPath := newProxy.GetCertPath()
+				go func(proxyID, browserType, listenAddr, cert string) {
+					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert)
+					if err != nil {
+						log.Println("Error launching browser:", err)
+						return
+					}
+					ProxyMgr.mu.Lock()
+					if inst := ProxyMgr.instances[proxyID]; inst != nil {
+						inst.Browser = browserType
+						inst.BrowserCmd = cmd
+					}
+					ProxyMgr.mu.Unlock()
+				}(proxyID, browserType, listenAddr, certPath)
+			}
+
+			log.Printf("[RestartProxy] Successfully restarted proxy %s", proxyID)
+
+			return c.JSON(http.StatusOK, map[string]any{
+				"id":         proxyID,
+				"listenAddr": listenAddr,
+				"label":      label,
+				"browser":    browserType,
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
@@ -455,8 +730,8 @@ func (backend *Backend) ListProxies(e *core.ServeEvent) error {
 						browserPid = inst.BrowserCmd.Process.Pid
 					}
 					instances = append(instances, map[string]interface{}{
-						"id":         id,
-						"listenAddr": id,
+						"id":         id,                    // Formatted ID like "______________1"
+						"listenAddr": inst.Proxy.listenAddr, // Listen address like "127.0.0.1:8080"
 						"label":      inst.Label,
 						"browser":    inst.Browser,
 						"browserPid": browserPid,

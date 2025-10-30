@@ -10,29 +10,50 @@ import (
 )
 
 // SetupFiltersHook sets up the event hook for filter management
-// Monitors the _ui collection for changes to intercept filters
+// Monitors the _proxies collection for changes to intercept filters
 func (backend *Backend) SetupFiltersHook() error {
 	log.Println("[FiltersManager] Setting up filters hook...")
 
 	// Note: Initial filters will be loaded when proxy starts, not here
 	// because the DAO might not be fully initialized yet during app setup
 
-	// Hook: Monitor filter changes in _ui collection
-	backend.App.OnRecordAfterUpdateRequest("_ui").Add(func(e *core.RecordUpdateEvent) error {
-		// Check if this is the INTERCEPT filters record
-		uniqueID := e.Record.GetString("unique_id")
-		log.Printf("[FiltersManager][Hook] _ui update - unique_id: %s", uniqueID)
+	// Hook: Monitor filter changes in _proxies collection (per-proxy filters)
+	backend.App.OnRecordAfterUpdateRequest("_proxies").Add(func(e *core.RecordUpdateEvent) error {
+		proxyDBID := e.Record.Id
+		log.Printf("[FiltersManager][Hook] _proxies update - proxy_id: %s", proxyDBID)
 
-		if uniqueID != "___INTERCEPT___" {
+		// Extract filterstring from data JSON
+		data := e.Record.Get("data")
+		intercept := e.Record.GetBool("intercept")
+
+		if data == nil {
+			log.Println("[FiltersManager][WARN] No data field in _proxies record")
 			return nil
 		}
 
-		// Extract filterstring from data JSON
-		// PocketBase JSON fields are stored as types.JsonRaw ([]byte)
-		data := e.Record.Get("data")
-		if data == nil {
-			log.Println("[FiltersManager][WARN] No data field in _ui record")
+		log.Printf("[InterceptManager] Proxy %s intercept changed to: %v", proxyDBID, intercept)
+
+		// Find the proxy instance with this ID (map key is now the formatted ID)
+		ProxyMgr.mu.RLock()
+		inst := ProxyMgr.instances[proxyDBID]
+		ProxyMgr.mu.RUnlock()
+
+		if inst == nil || inst.Proxy == nil {
+			log.Printf("[InterceptManager] Proxy with ID %s not found in running instances", proxyDBID)
 			return nil
+		}
+
+		if !intercept {
+			// Intercept turned OFF for this proxy - forward all pending intercepts from this proxy
+			log.Printf("[InterceptManager] Intercept disabled for proxy %s - forwarding pending requests", proxyDBID)
+			inst.Proxy.Intercept = false
+
+			// Forward all pending intercepts for this proxy
+			go backend.forwardProxyIntercepts(proxyDBID)
+		} else {
+			// Intercept turned ON for this proxy
+			log.Printf("[InterceptManager] Intercept enabled for proxy %s", proxyDBID)
+			inst.Proxy.Intercept = true
 		}
 
 		log.Printf("[FiltersManager][DEBUG] data type: %T", data)
@@ -66,58 +87,118 @@ func (backend *Backend) SetupFiltersHook() error {
 			return nil
 		}
 
-		// Update filters for all proxies
-		ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
-			proxy.Filters = filterstring
-		})
-		log.Printf("[FiltersManager] Updated filters: %s", filterstring)
+		if inst == nil || inst.Proxy == nil {
+			log.Printf("[FiltersManager] Proxy with ID %s not found in running instances", proxyDBID)
+			return nil
+		}
+
+		inst.Proxy.Filters = filterstring
+		log.Printf("[FiltersManager] Updated filters for proxy %s: %s", proxyDBID, filterstring)
 
 		return nil
 	})
 
-	// Also handle create events (for initial setup)
-	backend.App.OnRecordAfterCreateRequest("_ui").Add(func(e *core.RecordCreateEvent) error {
-		uniqueID := e.Record.GetString("unique_id")
-		log.Printf("[FiltersManager][Hook] _ui create - unique_id: %s", uniqueID)
+	// Keep backward compatibility: Monitor filter changes in _ui collection (global filters)
+	// backend.App.OnRecordAfterUpdateRequest("_ui").Add(func(e *core.RecordUpdateEvent) error {
+	// 	// Check if this is the INTERCEPT filters record
+	// 	uniqueID := e.Record.GetString("unique_id")
+	// 	log.Printf("[FiltersManager][Hook] _ui update - unique_id: %s", uniqueID)
 
-		if uniqueID != "___INTERCEPT___" {
-			return nil
-		}
+	// 	if uniqueID != "___INTERCEPT___" {
+	// 		return nil
+	// 	}
 
-		data := e.Record.Get("data")
-		if data == nil {
-			log.Println("[FiltersManager][WARN] No data in created _ui record")
-			return nil
-		}
+	// 	// Extract filterstring from data JSON
+	// 	// PocketBase JSON fields are stored as types.JsonRaw ([]byte)
+	// 	data := e.Record.Get("data")
+	// 	if data == nil {
+	// 		log.Println("[FiltersManager][WARN] No data field in _ui record")
+	// 		return nil
+	// 	}
 
-		filterstring := ""
+	// 	log.Printf("[FiltersManager][DEBUG] data type: %T", data)
 
-		// Handle types.JsonRaw (PocketBase's JSON type)
-		if jsonRaw, ok := data.(types.JsonRaw); ok {
-			var dataMap map[string]any
-			if err := json.Unmarshal(jsonRaw, &dataMap); err != nil {
-				log.Printf("[FiltersManager][ERROR] Failed to unmarshal JSON on create: %v", err)
-				return nil
-			}
+	// 	filterstring := ""
 
-			if fs, ok := dataMap["filterstring"].(string); ok {
-				filterstring = fs
-			}
-		} else if dataMap, ok := data.(map[string]any); ok {
-			// Fallback: already a map
-			if fs, ok := dataMap["filterstring"].(string); ok {
-				filterstring = fs
-			}
-		}
+	// 	// Handle types.JsonRaw (PocketBase's JSON type)
+	// 	if jsonRaw, ok := data.(types.JsonRaw); ok {
+	// 		log.Printf("[FiltersManager][DEBUG] Unmarshaling JsonRaw: %s", string(jsonRaw))
 
-		// Update filters for all proxies
-		ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
-			proxy.Filters = filterstring
-		})
-		log.Printf("[FiltersManager] Initialized filters on create: %s", filterstring)
+	// 		var dataMap map[string]any
+	// 		if err := json.Unmarshal(jsonRaw, &dataMap); err != nil {
+	// 			log.Printf("[FiltersManager][ERROR] Failed to unmarshal JSON: %v", err)
+	// 			return nil
+	// 		}
 
-		return nil
-	})
+	// 		if fs, ok := dataMap["filterstring"].(string); ok {
+	// 			filterstring = fs
+	// 		} else {
+	// 			log.Printf("[FiltersManager][WARN] No filterstring in data. Keys: %v", getMapKeys(dataMap))
+	// 		}
+	// 	} else if dataMap, ok := data.(map[string]any); ok {
+	// 		// Fallback: already a map
+	// 		if fs, ok := dataMap["filterstring"].(string); ok {
+	// 			filterstring = fs
+	// 		} else {
+	// 			log.Printf("[FiltersManager][WARN] No filterstring in data. Keys: %v", getMapKeys(dataMap))
+	// 		}
+	// 	} else {
+	// 		log.Printf("[FiltersManager][ERROR] Unexpected data type: %T", data)
+	// 		return nil
+	// 	}
+
+	// 	// Update filters for all proxies (global filter)
+	// 	ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+	// 		proxy.Filters = filterstring
+	// 	})
+	// 	log.Printf("[FiltersManager] Updated global filters: %s", filterstring)
+
+	// 	return nil
+	// })
+
+	// // Also handle create events (for initial setup)
+	// backend.App.OnRecordAfterCreateRequest("_ui").Add(func(e *core.RecordCreateEvent) error {
+	// 	uniqueID := e.Record.GetString("unique_id")
+	// 	log.Printf("[FiltersManager][Hook] _ui create - unique_id: %s", uniqueID)
+
+	// 	if uniqueID != "___INTERCEPT___" {
+	// 		return nil
+	// 	}
+
+	// 	data := e.Record.Get("data")
+	// 	if data == nil {
+	// 		log.Println("[FiltersManager][WARN] No data in created _ui record")
+	// 		return nil
+	// 	}
+
+	// 	filterstring := ""
+
+	// 	// Handle types.JsonRaw (PocketBase's JSON type)
+	// 	if jsonRaw, ok := data.(types.JsonRaw); ok {
+	// 		var dataMap map[string]any
+	// 		if err := json.Unmarshal(jsonRaw, &dataMap); err != nil {
+	// 			log.Printf("[FiltersManager][ERROR] Failed to unmarshal JSON on create: %v", err)
+	// 			return nil
+	// 		}
+
+	// 		if fs, ok := dataMap["filterstring"].(string); ok {
+	// 			filterstring = fs
+	// 		}
+	// 	} else if dataMap, ok := data.(map[string]any); ok {
+	// 		// Fallback: already a map
+	// 		if fs, ok := dataMap["filterstring"].(string); ok {
+	// 			filterstring = fs
+	// 		}
+	// 	}
+
+	// 	// Update filters for all proxies
+	// 	ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+	// 		proxy.Filters = filterstring
+	// 	})
+	// 	log.Printf("[FiltersManager] Initialized filters on create: %s", filterstring)
+
+	// 	return nil
+	// })
 
 	log.Println("[FiltersManager] Filters hook registered successfully")
 	return nil

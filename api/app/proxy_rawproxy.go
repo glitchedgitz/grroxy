@@ -41,8 +41,8 @@ type RawProxyWrapper struct {
 	proxy      *rawproxy.Proxy
 	config     *rawproxy.Config
 	backend    *Backend
-	listenAddr string        // Store the listen address for this proxy instance
-	oldIndex   atomic.Uint64 // Keep for backward compatibility if needed
+	listenAddr string // Store the listen address for this proxy instance
+	proxyID    string // Database ID for this proxy instance
 
 	// Goroutine tracking
 	wg        sync.WaitGroup // Tracks the proxy goroutine
@@ -89,10 +89,11 @@ type RequestContext struct {
 
 // NewRawProxyWrapper creates a new rawproxy wrapper with the given configuration
 // Set outputDir to empty string ("") to disable file captures
-func NewRawProxyWrapper(listenAddr, configDir, outputDir string, backend *Backend) (*RawProxyWrapper, error) {
+func NewRawProxyWrapper(listenAddr, configDir, outputDir string, backend *Backend, proxyID string) (*RawProxyWrapper, error) {
 	wrapper := &RawProxyWrapper{
 		backend:    backend,
 		listenAddr: listenAddr,
+		proxyID:    proxyID,
 	}
 
 	// If outputDir is empty, use a temp directory (rawproxy requires a valid path)
@@ -459,7 +460,7 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		"port":         port,
 		"has_resp":     false,
 		"is_https":     scheme == "https",
-		"generated_by": rp.listenAddr, // Track which proxy generated this request
+		"generated_by": fmt.Sprintf("proxy/%s", rp.proxyID), // Format: proxy/______________1
 		"req_json":     requestData,
 		"resp_json": map[string]any{
 			"title":       "",
