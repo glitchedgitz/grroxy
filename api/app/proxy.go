@@ -382,6 +382,48 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				}
 			}
 
+			// Create complete proxy instance with all fields
+			proxyInstance := &ProxyInstance{
+				Proxy:      newProxy,
+				Browser:    body.Browser,
+				BrowserCmd: nil, // Will be set later if browser is launched
+				Label:      label,
+			}
+
+			// Add complete instance to manager using the formatted ID as key
+			ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
+
+			// Update PROXY for backward compatibility
+			updateProxyVar()
+
+			// // Load initial intercept and filter settings from proxy record
+			// if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
+			// 	log.Printf("[StartProxy] Warning: Failed to load proxy settings: %v", err)
+			// }
+
+			// Start the proxy
+			if err := newProxy.RunProxy(); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			if body.Browser != "" {
+				// Use the certificate path from the rawproxy
+				certPath := newProxy.GetCertPath()
+				go func(proxyID, browserType, listenAddr, cert string) {
+					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert)
+					if err != nil {
+						log.Println("Error launching browser:", err)
+						return
+					}
+					ProxyMgr.mu.Lock()
+					if inst := ProxyMgr.instances[proxyID]; inst != nil {
+						inst.Browser = browserType
+						inst.BrowserCmd = cmd
+					}
+					ProxyMgr.mu.Unlock()
+				}(proxyID, body.Browser, body.HTTP, certPath)
+			}
+
 			// Create proxy record in database
 			dao := backend.App.Dao()
 			proxiesCollection, err := dao.FindCollectionByNameOrId("_proxies")
@@ -408,48 +450,6 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 			}
 
 			log.Printf("[StartProxy] Created proxy record in database with ID: %s", proxyID)
-
-			// Create complete proxy instance with all fields
-			proxyInstance := &ProxyInstance{
-				Proxy:      newProxy,
-				Browser:    body.Browser,
-				BrowserCmd: nil, // Will be set later if browser is launched
-				Label:      label,
-			}
-
-			// Add complete instance to manager using the formatted ID as key
-			ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
-
-			// Update PROXY for backward compatibility
-			updateProxyVar()
-
-			// Load initial intercept and filter settings from proxy record
-			if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
-				log.Printf("[StartProxy] Warning: Failed to load proxy settings: %v", err)
-			}
-
-			// Start the proxy
-			if err := newProxy.RunProxy(); err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-			}
-
-			if body.Browser != "" {
-				// Use the certificate path from the rawproxy
-				certPath := newProxy.GetCertPath()
-				go func(proxyID, browserType, listenAddr, cert string) {
-					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert)
-					if err != nil {
-						log.Println("Error launching browser:", err)
-						return
-					}
-					ProxyMgr.mu.Lock()
-					if inst := ProxyMgr.instances[proxyID]; inst != nil {
-						inst.Browser = browserType
-						inst.BrowserCmd = cmd
-					}
-					ProxyMgr.mu.Unlock()
-				}(proxyID, body.Browser, body.HTTP, certPath)
-			}
 
 			return c.JSON(http.StatusOK, map[string]any{
 				"id":         proxyID,

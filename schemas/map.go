@@ -131,10 +131,8 @@ var Collections = []DB{
 	{
 		"_proxies",
 		Proxies,
-		true,
-		`
-		CREATE UNIQUE INDEX idx_proxies_addr ON _proxies (addr);
-		`,
+		false,
+		"",
 	},
 	{
 		"_labels",

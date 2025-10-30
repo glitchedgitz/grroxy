@@ -459,6 +459,7 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		"host":         hostWithScheme,
 		"port":         port,
 		"has_resp":     false,
+		"has_params":   len(req.URL.Query()) > 0,
 		"is_https":     scheme == "https",
 		"generated_by": fmt.Sprintf("proxy/%s", rp.proxyID), // Format: proxy/______________1
 		"req_json":     requestData,
