@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,10 +38,16 @@ import (
 
 // RawProxyWrapper wraps the rawproxy.Proxy to match our interface
 type RawProxyWrapper struct {
-	proxy   *rawproxy.Proxy
-	config  *rawproxy.Config
-	backend *Backend
-	index   atomic.Uint64
+	proxy      *rawproxy.Proxy
+	config     *rawproxy.Config
+	backend    *Backend
+	listenAddr string // Store the listen address for this proxy instance
+	proxyID    string // Database ID for this proxy instance
+
+	// Goroutine tracking
+	wg        sync.WaitGroup // Tracks the proxy goroutine
+	stopOnce  sync.Once      // Ensures Stop() is only called once
+	isRunning atomic.Bool    // Tracks if proxy is running
 
 	// Statistics
 	stats ProxyStats
@@ -82,14 +89,11 @@ type RequestContext struct {
 
 // NewRawProxyWrapper creates a new rawproxy wrapper with the given configuration
 // Set outputDir to empty string ("") to disable file captures
-func NewRawProxyWrapper(listenAddr, configDir, outputDir string, backend *Backend) (*RawProxyWrapper, error) {
+func NewRawProxyWrapper(listenAddr, configDir, outputDir string, backend *Backend, proxyID string) (*RawProxyWrapper, error) {
 	wrapper := &RawProxyWrapper{
-		backend: backend,
-	}
-
-	// Initialize index from database to continue from last saved record
-	if err := wrapper.initializeIndex(); err != nil {
-		log.Printf("[RawProxy][WARN] Failed to initialize index from database: %v (starting from 0)", err)
+		backend:    backend,
+		listenAddr: listenAddr,
+		proxyID:    proxyID,
 	}
 
 	// If outputDir is empty, use a temp directory (rawproxy requires a valid path)
@@ -187,59 +191,64 @@ func (rp *RawProxyWrapper) cacheCollections() error {
 	return nil
 }
 
-// initializeIndex gets the maximum index from database and sets the counter
-func (rp *RawProxyWrapper) initializeIndex() error {
-	if rp.backend == nil || rp.backend.App == nil {
-		return fmt.Errorf("backend not available")
-	}
-
-	dao := rp.backend.App.Dao()
-
-	// Query for the total number of rows in _data collection
-	// This matches the old proxy behavior: total = result.TotalItems
-	var result struct {
-		TotalRows int `db:"total_rows" json:"total_rows"`
-	}
-
-	err := dao.DB().
-		NewQuery("SELECT COUNT(*) as total_rows FROM _data").
-		One(&result)
-
-	if err != nil {
-		return fmt.Errorf("failed to query total rows: %w", err)
-	}
-
-	// Set the atomic counter to the total rows count
-	// The next Add(1) will increment it to totalRows + 1
-	totalRows := uint64(result.TotalRows)
-	rp.index.Store(totalRows)
-
-	log.Printf("[RawProxy][INIT] ========================================")
-	log.Printf("[RawProxy][INIT] Index Initialization:")
-	log.Printf("[RawProxy][INIT]   - Total rows in database: %d", totalRows)
-	log.Printf("[RawProxy][INIT]   - Next index will be: %d", totalRows+1)
-	log.Printf("[RawProxy][INIT]   - Counter starting at: %d", totalRows)
-	log.Printf("[RawProxy][INIT] ========================================")
-
-	return nil
-}
+// initializeIndex is now handled globally by ProxyManager
+// Removed per-proxy index counter in favor of shared global index
 
 // RunProxy starts the proxy server in a non-blocking manner
 func (rp *RawProxyWrapper) RunProxy() error {
+	if rp.isRunning.Load() {
+		return fmt.Errorf("proxy is already running")
+	}
+
+	rp.isRunning.Store(true)
+	rp.wg.Add(1)
+
 	go func() {
+		defer rp.wg.Done()
+		defer rp.isRunning.Store(false)
+
+		log.Printf("[RawProxy][RunProxy] Goroutine started for %s", rp.listenAddr)
+
 		if err := rp.proxy.Start(); err != nil && err != http.ErrServerClosed {
 			log.Printf("[ERROR] RawProxy server error: %v", err)
 		}
+
+		log.Printf("[RawProxy][RunProxy] Goroutine exiting for %s", rp.listenAddr)
 	}()
 
 	// Give the server a moment to start
 	time.Sleep(100 * time.Millisecond)
+
+	log.Printf("[RawProxy][RunProxy] Proxy on %s started", rp.listenAddr)
 	return nil
 }
 
 // Stop gracefully stops the proxy server
 func (rp *RawProxyWrapper) Stop() error {
-	log.Println("[RawProxy] Stopping proxy server...")
+	stopped := false
+	rp.stopOnce.Do(func() {
+		stopped = true
+	})
+
+	if !stopped {
+		log.Printf("[RawProxy][Stop] Already stopped or stopping proxy on %s", rp.listenAddr)
+		return nil
+	}
+
+	log.Printf("[RawProxy] Stopping proxy server on %s...", rp.listenAddr)
+
+	// Check if proxy exists
+	if rp.proxy == nil {
+		log.Printf("[RawProxy][ERROR] proxy is nil")
+		rp.isRunning.Store(false)
+		return fmt.Errorf("proxy is nil")
+	}
+
+	// Check if actually running
+	if !rp.isRunning.Load() {
+		log.Printf("[RawProxy][Stop] Proxy on %s was not running", rp.listenAddr)
+		return nil
+	}
 
 	// Print final statistics
 	rp.PrintStats()
@@ -247,12 +256,28 @@ func (rp *RawProxyWrapper) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	log.Printf("[RawProxy] Calling rawproxy.Stop()...")
 	if err := rp.proxy.Stop(ctx); err != nil {
 		log.Printf("[RawProxy][ERROR] Error stopping rawproxy: %v", err)
+		rp.isRunning.Store(false)
 		return err
 	}
 
-	log.Println("[RawProxy][INFO] Proxy stopped successfully")
+	// Wait for the goroutine to finish with timeout
+	done := make(chan struct{})
+	go func() {
+		rp.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Printf("[RawProxy][INFO] Proxy on %s stopped successfully, goroutine exited", rp.listenAddr)
+	case <-time.After(10 * time.Second):
+		log.Printf("[RawProxy][WARN] Timeout waiting for goroutine to exit for proxy on %s", rp.listenAddr)
+	}
+
+	rp.isRunning.Store(false)
 	return nil
 }
 
@@ -358,8 +383,8 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 	// Track total requests
 	rp.stats.RequestsTotal.Add(1)
 
-	// Generate unique ID and index
-	index := rp.index.Add(1)
+	// Generate unique ID and index using the shared global index
+	index := ProxyMgr.GetNextIndex()
 	id := utils.FormatNumericID(float64(index), 15)
 
 	// Log first request to verify index is correct
@@ -424,18 +449,20 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 
 	// Build UserData
 	userdata := map[string]any{
-		"id":          id,
-		"index":       float64(index),
-		"req":         id,
-		"resp":        id,
-		"req_edited":  id,
-		"resp_edited": id,
-		"attached":    id,
-		"host":        hostWithScheme,
-		"port":        port,
-		"has_resp":    false,
-		"is_https":    scheme == "https",
-		"req_json":    requestData,
+		"id":           id,
+		"index":        float64(index),
+		"req":          id,
+		"resp":         id,
+		"req_edited":   id,
+		"resp_edited":  id,
+		"attached":     id,
+		"host":         hostWithScheme,
+		"port":         port,
+		"has_resp":     false,
+		"has_params":   len(req.URL.Query()) > 0,
+		"is_https":     scheme == "https",
+		"generated_by": fmt.Sprintf("proxy/%s", rp.proxyID), // Format: proxy/______________1
+		"req_json":     requestData,
 		"resp_json": map[string]any{
 			"title":       "",
 			"mime":        "",
@@ -503,8 +530,7 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 
 	// requestJson := utils.StructToMap(&userdata, "json")
 
-	// if rp.Intercept && rp.checkFilters(requestJson) {
-	if rp.Intercept {
+	if rp.Intercept && rp.checkFilters(userdata) {
 		log.Printf("[RawProxy][Intercept] Request intercepted: ID=%s", id)
 
 		updatedString, edited := rp.interceptWait(userdata, "req", req.ContentLength, requestInString)
@@ -585,8 +611,7 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 	// Check if response should be intercepted
 	// responseJson := utils.StructToMap(&userdata, "json")
 
-	// if rp.Intercept && rp.checkFilters(responseJson) {
-	if rp.Intercept {
+	if rp.Intercept && rp.checkFilters(userdata) {
 		log.Printf("[RawProxy][Intercept] Response intercepted: ID=%s", userdata["id"].(string))
 
 		updatedString, edited := rp.interceptWait(userdata, "resp", resp.ContentLength, responseInString)

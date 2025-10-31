@@ -9,13 +9,13 @@ import (
 	"runtime"
 )
 
-func launchChrome(proxyAddress string, customCertPath string) error {
+func launchChrome(proxyAddress string, customCertPath string) (*exec.Cmd, error) {
 	log.Println("[launchChrome] Starting Chrome launch process")
 
 	// Get user's home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return fmt.Errorf("[launchChrome] failed to get home directory: %v", err)
+		return nil, fmt.Errorf("[launchChrome] failed to get home directory: %v", err)
 	}
 	log.Printf("[launchChrome] Home directory: %s", homeDir)
 
@@ -27,26 +27,35 @@ func launchChrome(proxyAddress string, customCertPath string) error {
 		log.Printf("[launchChrome] Warning: couldn't clean up old profile: %v", err)
 	}
 	if err := os.MkdirAll(chromeDataDir, 0755); err != nil {
-		return fmt.Errorf("[launchChrome] failed to create Chrome data directory: %v", err)
+		return nil, fmt.Errorf("[launchChrome] failed to create Chrome data directory: %v", err)
 	}
 	log.Printf("[launchChrome] Created Chrome data directory successfully")
 
-	// Copy CA certificate to Chrome's certificate store
+	// Copy CA certificate to Chrome's certificate store directory (note: this does not add trust itself)
 	certPath := filepath.Join(chromeDataDir, "ca.crt")
 	log.Printf("[launchChrome] Copying certificate from %s to %s", customCertPath, certPath)
 	if err := copyFile(customCertPath, certPath); err != nil {
-		return fmt.Errorf("[launchChrome] failed to copy certificate: %v", err)
+		return nil, fmt.Errorf("[launchChrome] failed to copy certificate: %v", err)
 	}
 	log.Printf("[launchChrome] Certificate copied successfully")
 
-	// Calculate the SHA-256 SPKI fingerprint of our root CA
-	log.Printf("[launchChrome] Calculating certificate fingerprint")
-	fingerprint, err := GetSPKIFingerprint(certPath)
-	if err != nil {
-		log.Printf("[launchChrome] Warning: couldn't calculate certificate fingerprint: %v", err)
-		log.Printf("[launchChrome] Certificate trust may not work correctly")
+	// Prefer the stable leaf SPKI if available (written by MITM init), else fall back to CA SPKI
+	var fingerprint string
+	leafSpkiPath := filepath.Join(filepath.Dir(customCertPath), "leaf.spki")
+	if data, err := os.ReadFile(leafSpkiPath); err == nil {
+		fingerprint = string(data)
+		log.Printf("[launchChrome] Using leaf SPKI from %s", leafSpkiPath)
 	} else {
-		log.Printf("[launchChrome] Certificate fingerprint calculated successfully")
+		log.Printf("[launchChrome] leaf SPKI not found (%v), calculating CA SPKI instead", err)
+		log.Printf("[launchChrome] Calculating certificate fingerprint")
+		fp, ferr := GetSPKIFingerprint(certPath)
+		if ferr != nil {
+			log.Printf("[launchChrome] Warning: couldn't calculate certificate fingerprint: %v", ferr)
+			log.Printf("[launchChrome] Certificate trust may not work correctly")
+		} else {
+			fingerprint = fp
+			log.Printf("[launchChrome] Certificate fingerprint calculated successfully")
+		}
 	}
 
 	// Determine Chrome executable path
@@ -67,13 +76,13 @@ func launchChrome(proxyAddress string, customCertPath string) error {
 			chromePath = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
 		}
 	default:
-		return fmt.Errorf("[launchChrome] unsupported operating system: %s", runtime.GOOS)
+		return nil, fmt.Errorf("[launchChrome] unsupported operating system: %s", runtime.GOOS)
 	}
 	log.Printf("[launchChrome] Using Chrome path: %s", chromePath)
 
 	// Verify Chrome executable exists
 	if _, err := os.Stat(chromePath); err != nil {
-		return fmt.Errorf("[launchChrome] Chrome executable not found at %s: %v", chromePath, err)
+		return nil, fmt.Errorf("[launchChrome] Chrome executable not found at %s: %v", chromePath, err)
 	}
 	log.Printf("[launchChrome] Chrome executable found and verified")
 
@@ -120,10 +129,10 @@ func launchChrome(proxyAddress string, customCertPath string) error {
 	cmd := exec.Command(chromePath, args...)
 	log.Println("[launchChrome] " + cmd.String())
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("[launchChrome] failed to launch Chrome: %v", err)
+		return nil, fmt.Errorf("[launchChrome] failed to launch Chrome: %v", err)
 	}
 
 	log.Printf("[launchChrome] Chrome process started successfully")
 	log.Printf("[launchChrome] Chrome profile at: %s", chromeDataDir)
-	return nil
+	return cmd, nil
 }

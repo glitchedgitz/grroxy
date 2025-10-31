@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -52,33 +53,34 @@ func NotifyInterceptUpdate(id string, update InterceptUpdate) {
 func (backend *Backend) SetupInterceptHooks() error {
 	log.Println("[InterceptManager] Setting up intercept hooks...")
 
-	// Monitor intercept state changes in _settings to enable/disable intercept globally
-	backend.App.OnRecordAfterUpdateRequest("_settings").Add(func(e *core.RecordUpdateEvent) error {
-		// Check if this is the INTERCEPT setting (ID has 6 underscores, not 8)
-		if e.Record.Id != "INTERCEPT______" {
+	// Monitor intercept state changes in _proxies collection for per-proxy intercept control
+	backend.App.OnRecordAfterUpdateRequest("_proxies").Add(func(e *core.RecordUpdateEvent) error {
+		proxyDBID := e.Record.Id
+		intercept := e.Record.GetBool("intercept")
+
+		log.Printf("[InterceptManager] Proxy %s intercept changed to: %v", proxyDBID, intercept)
+
+		// Find the proxy instance with this ID
+		ProxyMgr.mu.RLock()
+		inst := ProxyMgr.instances[proxyDBID]
+		ProxyMgr.mu.RUnlock()
+
+		if inst == nil || inst.Proxy == nil {
+			log.Printf("[InterceptManager] Proxy with ID %s not found in running instances", proxyDBID)
 			return nil
 		}
 
-		value := e.Record.GetString("value")
-		log.Printf("[InterceptManager] Intercept setting changed to: %s", value)
+		if !intercept {
+			// Intercept turned OFF for this proxy - forward all pending intercepts from this proxy
+			log.Printf("[InterceptManager] Intercept disabled for proxy %s - forwarding pending requests", proxyDBID)
+			inst.Proxy.Intercept = false
 
-		if value == "false" {
-			// Intercept turned OFF - forward all pending intercepts
-			log.Println("[InterceptManager] Intercept disabled - forwarding all pending requests")
-
-			if PROXY != nil {
-				PROXY.Intercept = false
-			}
-
-			// Forward all pending intercepts
-			go backend.forwardAllIntercepts()
+			// Forward all pending intercepts for this proxy
+			go backend.forwardProxyIntercepts(proxyDBID)
 		} else {
-			// Intercept turned ON
-			log.Println("[InterceptManager] Intercept enabled")
-
-			if PROXY != nil {
-				PROXY.Intercept = true
-			}
+			// Intercept turned ON for this proxy
+			log.Printf("[InterceptManager] Intercept enabled for proxy %s", proxyDBID)
+			inst.Proxy.Intercept = true
 		}
 
 		return nil
@@ -122,12 +124,75 @@ func (backend *Backend) forwardAllIntercepts() {
 	log.Println("[InterceptManager] All pending intercepts forwarded via channels")
 }
 
-// UpdateInterceptFilters updates the intercept filters for the proxy
-func (backend *Backend) UpdateInterceptFilters(filters string) {
-	if PROXY != nil {
-		PROXY.Filters = filters
-		log.Printf("[InterceptManager] Updated intercept filters: %s", filters)
+// forwardProxyIntercepts forwards all pending intercept requests for a specific proxy
+func (backend *Backend) forwardProxyIntercepts(proxyDBID string) {
+	interceptChannelsMu.RLock()
+	defer interceptChannelsMu.RUnlock()
+
+	if len(interceptChannels) == 0 {
+		log.Printf("[InterceptManager] No pending intercepts to forward for proxy %s", proxyDBID)
+		return
 	}
+
+	log.Printf("[InterceptManager] Forwarding pending intercepts for proxy %s", proxyDBID)
+
+	// TODO: We need to track which intercepts belong to which proxy
+	// For now, we'll need to query the database to check each intercept
+	dao := backend.App.Dao()
+
+	forwardUpdate := InterceptUpdate{
+		Action:        "forward",
+		IsReqEdited:   false,
+		IsRespEdited:  false,
+		ReqEditedRaw:  "",
+		RespEditedRaw: "",
+	}
+
+	forwardedCount := 0
+	expectedGeneratedBy := fmt.Sprintf("proxy/%s", proxyDBID)
+
+	for id, ch := range interceptChannels {
+		// Check if this intercept belongs to the proxy
+		interceptRecord, err := dao.FindRecordById("_intercept", id)
+		if err != nil {
+			log.Printf("[InterceptManager][WARN] Failed to find intercept record %s: %v", id, err)
+			continue
+		}
+
+		// Get the data record to check generated_by
+		dataID := interceptRecord.GetString("req")
+		if dataID == "" {
+			continue
+		}
+
+		dataRecord, err := dao.FindRecordById("_data", dataID)
+		if err != nil {
+			log.Printf("[InterceptManager][WARN] Failed to find data record %s: %v", dataID, err)
+			continue
+		}
+
+		recordGeneratedBy := dataRecord.GetString("generated_by")
+		if recordGeneratedBy == expectedGeneratedBy {
+			select {
+			case ch <- forwardUpdate:
+				log.Printf("[InterceptManager] Forwarded intercept %s for proxy %s", id, proxyDBID)
+				forwardedCount++
+			default:
+				log.Printf("[InterceptManager][WARN] Channel for ID=%s is not ready", id)
+			}
+		}
+	}
+
+	log.Printf("[InterceptManager] Forwarded %d intercepts for proxy %s", forwardedCount, proxyDBID)
+}
+
+// UpdateInterceptFilters updates the intercept filters for all proxies
+func (backend *Backend) UpdateInterceptFilters(filters string) {
+	// Apply to all proxies
+	ProxyMgr.ApplyToAllProxies(func(proxy *RawProxyWrapper, proxyID string) {
+		proxy.Filters = filters
+	})
+	log.Printf("[InterceptManager] Updated intercept filters: %s", filters)
 }
 
 // InterceptActionRequest represents the request body for intercept actions

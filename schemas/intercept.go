@@ -112,16 +112,14 @@ var Intercept = schema.NewSchema(
 		},
 	},
 	&schema.SchemaField{
-		Name: "action",
+		Name: "generated_by",
 		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
-		Name:     "data",
-		Type:     schema.FieldTypeRelation,
-		Required: true,
-		Options: &schema.RelationOptions{
-			CollectionId:  "_data",
-			CascadeDelete: true,
+		Name: "extra",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
 		},
 	},
 	&schema.SchemaField{
@@ -131,5 +129,9 @@ var Intercept = schema.NewSchema(
 			CollectionId: "_attached",
 			MaxSelect:    types.Pointer(1),
 		},
+	},
+	&schema.SchemaField{
+		Name: "action",
+		Type: schema.FieldTypeText,
 	},
 )

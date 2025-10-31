@@ -31,6 +31,10 @@ var Rows = schema.NewSchema(
 		Type: schema.FieldTypeNumber,
 	},
 	&schema.SchemaField{
+		Name: "index_minor",
+		Type: schema.FieldTypeNumber,
+	},
+	&schema.SchemaField{
 		Name: "host",
 		Type: schema.FieldTypeText,
 	},
@@ -123,6 +127,17 @@ var Rows = schema.NewSchema(
 		},
 	},
 	&schema.SchemaField{
+		Name: "generated_by",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "extra",
+		Type: schema.FieldTypeJson,
+		Options: &schema.JsonOptions{
+			MaxSize: 100000,
+		},
+	},
+	&schema.SchemaField{
 		Name: "attached",
 		Type: schema.FieldTypeRelation,
 		Options: &schema.RelationOptions{
@@ -130,6 +145,10 @@ var Rows = schema.NewSchema(
 			CascadeDelete: true,
 			MaxSelect:     types.Pointer(1),
 		},
+	},
+	&schema.SchemaField{
+		Name: "action",
+		Type: schema.FieldTypeText,
 	},
 )
 
