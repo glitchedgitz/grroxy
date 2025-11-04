@@ -1,16 +1,18 @@
 package api
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"log"
 
 	"github.com/glitchedgitz/grroxy-db/grrhttp"
+	"github.com/glitchedgitz/grroxy-db/rawhttp"
 	"github.com/glitchedgitz/grroxy-db/types"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/labstack/echo/v5"
@@ -30,16 +32,9 @@ func generateUserData(data types.AddRequestBodyType) (types.UserData, error) {
 	// requestInString := string(requestInBytes)
 
 	log.Printf("[generateUserData] Reading Request: %s", data.Request)
-	// Normalize HTTP/2 to HTTP/2.0 for compatibility with http.ReadRequest
-	// AI generated HTTP/2 instead HTTP/2.0
-	requestStr := strings.Replace(data.Request, " HTTP/2\r\n", " HTTP/2.0\r\n", 1)
-	requestStr = strings.Replace(requestStr, " HTTP/2\n", " HTTP/2.0\n", 1)
-	req, err := http.ReadRequest(bufio.NewReader(strings.NewReader(fmt.Sprint(requestStr + "\n\n"))))
-	if err != nil {
-		return userdata, err
-	}
-
-	log.Printf("[generateUserData] Request: %+v", req)
+	// Use tolerant raw parser (no dependency on net/http parsing)
+	parsed := rawhttp.ParseRequest([]byte(data.Request))
+	log.Printf("[generateUserData] Parsed Request: %+v", parsed)
 
 	log.Printf("[generateUserData] Initiating variables")
 
@@ -59,14 +54,18 @@ func generateUserData(data types.AddRequestBodyType) (types.UserData, error) {
 		host = strings.Replace(host, "http://", "", 1)
 		host = strings.Replace(host, "https://", "", 1)
 	} else {
-		host = req.URL.Host
-		isHttps = req.URL.Scheme == "https"
+		// Fallback to Host header if provided
+		if h, ok := parsed.Headers["host"]; ok {
+			host = h
+		}
+		// No scheme in request line; cannot infer reliably. Leave isHttps false unless URL hints
+		isHttps = false
 	}
 
 	log.Printf("[generateUserData] Setting method")
 	// Set method
-	if req.Method != "" {
-		method = req.Method
+	if parsed.Method != "" {
+		method = parsed.Method
 	}
 
 	log.Printf("[generateUserData] Setting host and port")
@@ -89,8 +88,16 @@ func generateUserData(data types.AddRequestBodyType) (types.UserData, error) {
 
 	log.Printf("[generateUserData] Setting path")
 
-	if req.URL.Path != "" {
-		p := strings.Split(req.URL.Path, "/")
+	// Parse URL path/query/fragment from request line URL
+	var reqURL *url.URL
+	if parsed.URL != "" {
+		// url.ParseRequestURI handles absolute path or absolute-form URI
+		if u, err := url.ParseRequestURI(parsed.URL); err == nil {
+			reqURL = u
+		}
+	}
+	if reqURL != nil && reqURL.Path != "" {
+		p := strings.Split(reqURL.Path, "/")
 		lastfile := p[len(p)-1]
 
 		if strings.Contains(lastfile, ".") {
@@ -105,6 +112,36 @@ func generateUserData(data types.AddRequestBodyType) (types.UserData, error) {
 
 	log.Printf("[generateUserData] Extension: %s", extension)
 	log.Printf("[generateUserData] Setting userdata")
+	// Build http.Header from parsed headers for existing helpers
+	httpHdr := http.Header{}
+	for k, v := range parsed.Headers {
+		httpHdr.Set(k, v)
+	}
+
+	// Determine content length
+	var contentLen int64 = 0
+	if clStr, ok := parsed.Headers["content-length"]; ok {
+		if n, err := strconv.ParseInt(strings.TrimSpace(clStr), 10, 64); err == nil {
+			contentLen = n
+		}
+	}
+
+	// Determine cookies and params
+	hasCookies := false
+	if c, ok := parsed.Headers["cookie"]; ok && strings.TrimSpace(c) != "" {
+		hasCookies = true
+	}
+	hasParams := false
+	urlPath := ""
+	urlQuery := ""
+	urlFragment := ""
+	if reqURL != nil {
+		hasParams = reqURL.RawQuery != ""
+		urlPath = reqURL.Path
+		urlQuery = reqURL.RawQuery
+		urlFragment = reqURL.RawFragment
+	}
+
 	userdata = types.UserData{
 		ID:         id,
 		Index:      index,
@@ -118,14 +155,14 @@ func generateUserData(data types.AddRequestBodyType) (types.UserData, error) {
 		HasResp:    false,
 		ReqJson: types.RequestData{
 			Method:     method,
-			HasCookies: len(req.Cookies()) > 0,
-			HasParams:  len(req.URL.Query()) > 0,
-			Length:     req.ContentLength,
-			Headers:    grrhttp.GetHeaders(req.Header),
-			Url:        req.URL.RequestURI(),
-			Path:       req.URL.Path,
-			Query:      req.URL.RawQuery,
-			Fragment:   req.URL.RawFragment,
+			HasCookies: hasCookies,
+			HasParams:  hasParams,
+			Length:     contentLen,
+			Headers:    grrhttp.GetHeaders(httpHdr),
+			Url:        parsed.URL,
+			Path:       urlPath,
+			Query:      urlQuery,
+			Fragment:   urlFragment,
 			Ext:        extension,
 		},
 		RespJson: types.ResponseData{
@@ -147,26 +184,40 @@ func generateUserData(data types.AddRequestBodyType) (types.UserData, error) {
 
 func generateResponseForUserData(userdata *types.UserData, response string) {
 	log.Printf("[generateResponseForUserData] Called for user ID: %s", userdata.ID)
-	// Normalize HTTP/2 to HTTP/2.0 for compatibility with http.ReadResponse
-	responseStr := strings.Replace(response, "HTTP/2 ", "HTTP/2.0 ", 1)
-	resp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(fmt.Sprint(responseStr)+"\n\n")), nil)
-	if err != nil {
-		log.Printf("[generateResponseForUserData] Error reading response: %v", err)
-		panic(err)
+	parsed := rawhttp.ParseResponse([]byte(response))
+
+	// Build http.Header from parsed headers for existing helpers
+	httpHdr := http.Header{}
+	for k, v := range parsed.Headers {
+		httpHdr.Set(k, v)
+	}
+
+	// Determine content length
+	var contentLen int64 = 0
+	if clStr, ok := parsed.Headers["content-length"]; ok {
+		if n, err := strconv.ParseInt(strings.TrimSpace(clStr), 10, 64); err == nil {
+			contentLen = n
+		}
+	}
+
+	// Cookies via Set-Cookie
+	hasCookies := false
+	if sc, ok := parsed.Headers["set-cookie"]; ok && strings.TrimSpace(sc) != "" {
+		hasCookies = true
 	}
 
 	userdata.RespJson = types.ResponseData{
-		HasCookies: len(resp.Cookies()) > 0,
+		HasCookies: hasCookies,
 		Title:      "",
-		Mime:       resp.Header.Get("content-type"),
-		Headers:    grrhttp.GetHeaders(resp.Header),
-		Status:     resp.StatusCode,
-		Length:     resp.ContentLength,
-		Date:       resp.Header.Get("Date"),
+		Mime:       httpHdr.Get("Content-Type"),
+		Headers:    grrhttp.GetHeaders(httpHdr),
+		Status:     parsed.Status,
+		Length:     contentLen,
+		Date:       httpHdr.Get("Date"),
 		Time:       time.Now().Format(time.RFC3339),
 	}
 
-	log.Printf("[generateResponseForUserData] Response: %+v", resp)
+	log.Printf("[generateResponseForUserData] Parsed Response: %+v", parsed)
 }
 
 func (backend *Backend) AddRequest(e *core.ServeEvent) error {
