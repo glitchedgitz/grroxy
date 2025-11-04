@@ -1,0 +1,4 @@
+GET /old-endpoint HTTP/1000
+Host: example.com
+Connection: close
+

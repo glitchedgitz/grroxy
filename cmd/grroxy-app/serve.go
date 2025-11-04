@@ -74,6 +74,7 @@ func serve(projectPath string) {
 
 	// Send Raw Request
 	API.App.OnBeforeServe().Add(API.SendRawRequest)
+	API.App.OnBeforeServe().Add(API.SendHttpRaw)
 
 	// Testing
 	API.App.OnBeforeServe().Add(API.TextSQL)
