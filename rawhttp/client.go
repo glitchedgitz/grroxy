@@ -3,6 +3,8 @@ package rawhttp
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
+	"compress/zlib"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -10,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/andybalholm/brotli"
 )
 
 // Client is a raw HTTP client that sends requests with minimal validation
@@ -148,9 +152,10 @@ func (c *Client) Send(req Request) (*Response, error) {
 	bodyBytesAlreadyRead := headerBytes[headerEndIdx:]
 	headerBytes = headerBytes[:headerEndIdx]
 
-	// Parse headers to find Content-Length - optimized parsing
+	// Parse headers to find Content-Length, Transfer-Encoding, and Content-Encoding - optimized parsing
 	contentLength := -1
 	chunked := false
+	contentEncoding := ""
 
 	// Find Content-Length header efficiently
 	headerLower := strings.ToLower(string(headerBytes))
@@ -169,6 +174,21 @@ func (c *Client) Send(req Request) (*Response, error) {
 	// Check for chunked encoding
 	if strings.Contains(headerLower, "transfer-encoding:") && strings.Contains(headerLower, "chunked") {
 		chunked = true
+	}
+
+	// Find Content-Encoding header efficiently
+	if idx := strings.Index(headerLower, "content-encoding:"); idx >= 0 {
+		// Extract value after colon
+		start := idx + len("content-encoding:")
+		end := start
+		for end < len(headerLower) && headerLower[end] != '\r' && headerLower[end] != '\n' {
+			end++
+		}
+		contentEncoding = strings.TrimSpace(headerLower[start:end])
+		// Handle multiple encodings (e.g., "gzip, deflate" - take first one)
+		if commaIdx := strings.IndexByte(contentEncoding, ','); commaIdx >= 0 {
+			contentEncoding = strings.TrimSpace(contentEncoding[:commaIdx])
+		}
 	}
 
 	responseBytes := headerBytes
@@ -266,6 +286,65 @@ func (c *Client) Send(req Request) (*Response, error) {
 		}
 	}
 
+	// Decompress body if Content-Encoding is present
+	// Note: For chunked responses, we would need to decode chunks first before decompressing.
+	// For now, we only decompress non-chunked responses.
+	if contentEncoding != "" && !chunked && len(responseBytes) > headerEndIdx {
+		bodyBytes := responseBytes[headerEndIdx:]
+		if len(bodyBytes) > 0 {
+			decompressedBody, err := decompressBodyByEncoding(bodyBytes, contentEncoding)
+			if err == nil && len(decompressedBody) > 0 {
+				// Rebuild response with decompressed body
+				// Update headers: remove Content-Encoding and update Content-Length
+				headerBytesStr := string(headerBytes)
+				headerLines := splitHeaderLines(headerBytesStr)
+
+				// Extract status line (first line of headers)
+				statusLine := ""
+				if idx := strings.Index(headerBytesStr, "\r\n"); idx >= 0 {
+					statusLine = headerBytesStr[:idx]
+				} else if idx := strings.Index(headerBytesStr, "\n"); idx >= 0 {
+					statusLine = headerBytesStr[:idx]
+				} else {
+					statusLine = headerBytesStr
+				}
+
+				var newHeaderLines []string
+				hasContentLength := false
+				lineBreak := detectLineBreakFromHeaders(headerBytes)
+
+				// Start with status line
+				newHeaderLines = append(newHeaderLines, statusLine)
+
+				// Process header lines
+				for _, line := range headerLines {
+					lineLower := strings.ToLower(line)
+					// Skip Content-Encoding header
+					if strings.HasPrefix(lineLower, "content-encoding:") {
+						continue
+					}
+					// Update Content-Length with decompressed size
+					// if strings.HasPrefix(lineLower, "content-length:") {
+					// 	newHeaderLines = append(newHeaderLines, fmt.Sprintf("Content-Length: %d", len(decompressedBody)))
+					// 	hasContentLength = true
+					// 	continue
+					// }
+					newHeaderLines = append(newHeaderLines, line)
+				}
+
+				// Add Content-Length if it didn't exist
+				if !hasContentLength {
+					newHeaderLines = append(newHeaderLines, fmt.Sprintf("Content-Length: %d", len(decompressedBody)))
+				}
+
+				// Rebuild response with new headers and decompressed body
+				newHeaders := strings.Join(newHeaderLines, lineBreak) + lineBreak + lineBreak
+				responseBytes = []byte(newHeaders)
+				responseBytes = append(responseBytes, decompressedBody...)
+			}
+		}
+	}
+
 	// Try to parse status code (optional, for convenience)
 	statusCode, status := parseStatusLine(responseBytes)
 
@@ -336,6 +415,83 @@ func parseStatusLine(responseBytes []byte) (int, string) {
 	}
 
 	return 0, firstLine
+}
+
+// decompressBodyByEncoding decompresses the body based on Content-Encoding header
+func decompressBodyByEncoding(bodyBytes []byte, contentEncoding string) ([]byte, error) {
+	if len(bodyBytes) == 0 {
+		return bodyBytes, nil
+	}
+
+	var reader io.Reader
+	var err error
+
+	switch strings.ToLower(contentEncoding) {
+	case "gzip", "x-gzip":
+		gzReader, err := gzip.NewReader(bytes.NewReader(bodyBytes))
+		if err != nil {
+			return bodyBytes, err
+		}
+		defer gzReader.Close()
+		reader = gzReader
+	case "br", "brotli":
+		reader = brotli.NewReader(bytes.NewReader(bodyBytes))
+	case "deflate":
+		zlibReader, err := zlib.NewReader(bytes.NewReader(bodyBytes))
+		if err != nil {
+			return bodyBytes, err
+		}
+		defer zlibReader.Close()
+		reader = zlibReader
+	default:
+		// Unknown encoding, return original
+		return bodyBytes, nil
+	}
+
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		return bodyBytes, err
+	}
+
+	return decompressed, nil
+}
+
+// splitHeaderLines splits header text into individual header lines
+func splitHeaderLines(headerText string) []string {
+	var lines []string
+	if strings.Contains(headerText, "\r\n") {
+		lines = strings.Split(headerText, "\r\n")
+	} else {
+		lines = strings.Split(headerText, "\n")
+	}
+	// Filter out empty lines and status line (first line)
+	var headerLines []string
+	for i, line := range lines {
+		if i == 0 {
+			// Skip status line
+			continue
+		}
+		if strings.TrimSpace(line) != "" {
+			headerLines = append(headerLines, line)
+		}
+	}
+	return headerLines
+}
+
+// detectLineBreakFromHeaders detects the line break style from headers
+// It finds the first \n and checks if the previous byte is \r
+func detectLineBreakFromHeaders(headerBytes []byte) string {
+	for i := 0; i < len(headerBytes); i++ {
+		if headerBytes[i] == '\n' {
+			// Check previous byte if it exists
+			if i > 0 && headerBytes[i-1] == '\r' {
+				return "\r\n"
+			}
+			return "\n"
+		}
+	}
+	// Default to \n if no line break found
+	return "\n"
 }
 
 // SendFile is a convenience method that reads a request from a file and sends it

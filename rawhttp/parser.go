@@ -42,7 +42,7 @@ func ParseRequest(raw []byte) ParsedRequest {
 	}
 
 	// Detect header/body separator (prefer \r\n\r\n, fallback to \n\n)
-	sep := []byte("\r\n\r\n")
+	sep := []byte(lineBreak + lineBreak)
 	idx := bytes.Index(raw, sep)
 	if idx < 0 {
 		sep = []byte("\n\n")
@@ -188,23 +188,25 @@ func ParseResponse(raw []byte) ParsedResponse {
 }
 
 // detectLineBreak detects the line break style used in the raw HTTP message.
+// It finds the first \n and checks if the previous byte is \r.
 // Returns "\r\n" (CRLF), "\n" (LF), "\r" (CR), or "" if none detected.
 func detectLineBreak(raw []byte) string {
 	if len(raw) == 0 {
 		return ""
 	}
 
-	// Look for CRLF first (most common in HTTP)
-	if bytes.Contains(raw, []byte("\r\n")) {
-		return "\r\n"
+	// Find the first \n and check if previous byte is \r
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '\n' {
+			// Check previous byte if it exists
+			if i > 0 && raw[i-1] == '\r' {
+				return "\r\n"
+			}
+			return "\n"
+		}
 	}
 
-	// Look for LF (Unix-style)
-	if bytes.Contains(raw, []byte("\n")) {
-		return "\n"
-	}
-
-	// Look for CR (old Mac-style, rare in HTTP)
+	// If no \n found, check for \r (old Mac style)
 	if bytes.Contains(raw, []byte("\r")) {
 		return "\r"
 	}
@@ -243,4 +245,81 @@ func splitLines(s string) []string {
 		return strings.Split(s, "\r\n")
 	}
 	return strings.Split(s, "\n")
+}
+
+// UnparseRequest converts a ParsedRequest back into raw HTTP request bytes.
+// It uses the LineBreak field to determine line endings.
+func UnparseRequest(pr ParsedRequest) []byte {
+	var buf bytes.Buffer
+	lineBreak := pr.LineBreak
+
+	// Write request line: METHOD SP URL SP HTTPVERSION
+	reqLine := strings.TrimSpace(pr.Method + " " + pr.URL)
+	if pr.HTTPVersion != "" {
+		reqLine += " " + pr.HTTPVersion
+	}
+	buf.WriteString(reqLine)
+	buf.WriteString(lineBreak)
+
+	// Write headers
+	for key, value := range pr.Headers {
+		// Format: Key: Value
+		// Note: keys are stored lowercase, but we output them as-is
+		buf.WriteString(key + ": " + value)
+		buf.WriteString(lineBreak)
+	}
+
+	// Empty line separating headers and body
+	buf.WriteString(lineBreak)
+
+	// Write body
+	if pr.Body != "" {
+		buf.WriteString(pr.Body)
+	}
+
+	return buf.Bytes()
+}
+
+// UnparseResponse converts a ParsedResponse back into raw HTTP response bytes.
+// It uses the LineBreak field to determine line endings.
+func UnparseResponse(pr ParsedResponse) []byte {
+	var buf bytes.Buffer
+	lineBreak := pr.LineBreak
+
+	// Write status line: VERSION SP STATUS SP REASON
+	statusLine := ""
+	if pr.StatusFull != "" {
+		// Use StatusFull if provided
+		statusLine = pr.StatusFull
+	} else {
+		// Construct from Version and Status
+		if pr.Version != "" {
+			statusLine = pr.Version
+		} else {
+			statusLine = "HTTP/1.1"
+		}
+		if pr.Status > 0 {
+			statusLine += " " + strconv.Itoa(pr.Status)
+		}
+	}
+	buf.WriteString(statusLine)
+	buf.WriteString(lineBreak)
+
+	// Write headers
+	for key, value := range pr.Headers {
+		// Format: Key: Value
+		// Note: keys are stored lowercase, but we output them as-is
+		buf.WriteString(key + ": " + value)
+		buf.WriteString(lineBreak)
+	}
+
+	// Empty line separating headers and body
+	buf.WriteString(lineBreak)
+
+	// Write body
+	if pr.Body != "" {
+		buf.WriteString(pr.Body)
+	}
+
+	return buf.Bytes()
 }
