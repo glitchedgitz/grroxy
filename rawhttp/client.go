@@ -286,10 +286,23 @@ func (c *Client) Send(req Request) (*Response, error) {
 		}
 	}
 
+	// Decode chunked encoding if present (must be done before decompression)
+	chunkedDecoded := false
+	if chunked && len(responseBytes) > headerEndIdx {
+		chunkedBody := responseBytes[headerEndIdx:]
+		decodedBody, err := decodeChunkedBody(chunkedBody)
+		if err == nil {
+			// Replace chunked body with decoded body
+			responseBytes = append(responseBytes[:headerEndIdx], decodedBody...)
+			chunked = false // Mark as no longer chunked since we decoded it
+			chunkedDecoded = true
+		}
+		// If decoding fails, keep original chunked body
+	}
+
 	// Decompress body if Content-Encoding is present
-	// Note: For chunked responses, we would need to decode chunks first before decompressing.
-	// For now, we only decompress non-chunked responses.
-	if contentEncoding != "" && !chunked && len(responseBytes) > headerEndIdx {
+	// Now we can decompress even if it was originally chunked (since we decoded it above)
+	if contentEncoding != "" && len(responseBytes) > headerEndIdx {
 		bodyBytes := responseBytes[headerEndIdx:]
 		if len(bodyBytes) > 0 {
 			decompressedBody, err := decompressBodyByEncoding(bodyBytes, contentEncoding)
@@ -323,6 +336,10 @@ func (c *Client) Send(req Request) (*Response, error) {
 					if strings.HasPrefix(lineLower, "content-encoding:") {
 						continue
 					}
+					// Skip Transfer-Encoding header (we decoded chunked encoding)
+					if strings.HasPrefix(lineLower, "transfer-encoding:") {
+						continue
+					}
 					// Update Content-Length with decompressed size
 					// if strings.HasPrefix(lineLower, "content-length:") {
 					// 	newHeaderLines = append(newHeaderLines, fmt.Sprintf("Content-Length: %d", len(decompressedBody)))
@@ -343,6 +360,53 @@ func (c *Client) Send(req Request) (*Response, error) {
 				responseBytes = append(responseBytes, decompressedBody...)
 			}
 		}
+	} else if chunkedDecoded && len(responseBytes) > headerEndIdx {
+		// We decoded chunked encoding but there's no content-encoding
+		// Still need to update headers to remove Transfer-Encoding
+		bodyBytes := responseBytes[headerEndIdx:]
+		headerBytesStr := string(headerBytes)
+		headerLines := splitHeaderLines(headerBytesStr)
+
+		// Extract status line (first line of headers)
+		statusLine := ""
+		if idx := strings.Index(headerBytesStr, "\r\n"); idx >= 0 {
+			statusLine = headerBytesStr[:idx]
+		} else if idx := strings.Index(headerBytesStr, "\n"); idx >= 0 {
+			statusLine = headerBytesStr[:idx]
+		} else {
+			statusLine = headerBytesStr
+		}
+
+		var newHeaderLines []string
+		hasContentLength := false
+		lineBreak := detectLineBreakFromHeaders(headerBytes)
+
+		// Start with status line
+		newHeaderLines = append(newHeaderLines, statusLine)
+
+		// Process header lines
+		for _, line := range headerLines {
+			lineLower := strings.ToLower(line)
+			// Skip Transfer-Encoding header (we decoded chunked encoding)
+			if strings.HasPrefix(lineLower, "transfer-encoding:") {
+				continue
+			}
+			// Check if Content-Length exists
+			if strings.HasPrefix(lineLower, "content-length:") {
+				hasContentLength = true
+			}
+			newHeaderLines = append(newHeaderLines, line)
+		}
+
+		// Add Content-Length if it didn't exist
+		if !hasContentLength && len(bodyBytes) > 0 {
+			newHeaderLines = append(newHeaderLines, fmt.Sprintf("Content-Length: %d", len(bodyBytes)))
+		}
+
+		// Rebuild response with new headers and decoded body
+		newHeaders := strings.Join(newHeaderLines, lineBreak) + lineBreak + lineBreak
+		responseBytes = []byte(newHeaders)
+		responseBytes = append(responseBytes, bodyBytes...)
 	}
 
 	// Try to parse status code (optional, for convenience)
@@ -426,7 +490,7 @@ func decompressBodyByEncoding(bodyBytes []byte, contentEncoding string) ([]byte,
 	var reader io.Reader
 	var err error
 
-	switch strings.ToLower(contentEncoding) {
+	switch strings.TrimSpace(strings.ToLower(contentEncoding)) {
 	case "gzip", "x-gzip":
 		gzReader, err := gzip.NewReader(bytes.NewReader(bodyBytes))
 		if err != nil {
@@ -454,6 +518,88 @@ func decompressBodyByEncoding(bodyBytes []byte, contentEncoding string) ([]byte,
 	}
 
 	return decompressed, nil
+}
+
+// decodeChunkedBody decodes a chunked HTTP body according to RFC 7230
+// Chunked format: chunk-size\r\nchunk-data\r\n...0\r\n\r\n
+func decodeChunkedBody(chunkedBody []byte) ([]byte, error) {
+	if len(chunkedBody) == 0 {
+		return chunkedBody, nil
+	}
+
+	var decoded []byte
+	pos := 0
+	lineBreak := "\r\n"
+
+	// Detect line break style
+	if !bytes.Contains(chunkedBody, []byte("\r\n")) {
+		lineBreak = "\n"
+	}
+
+	for pos < len(chunkedBody) {
+		// Find the end of the chunk size line
+		var lineEnd int
+		if lineBreak == "\r\n" {
+			lineEnd = bytes.Index(chunkedBody[pos:], []byte("\r\n"))
+		} else {
+			lineEnd = bytes.Index(chunkedBody[pos:], []byte("\n"))
+		}
+
+		if lineEnd == -1 {
+			// Malformed chunked body
+			break
+		}
+
+		lineEnd += pos
+
+		// Parse chunk size (hex number, may have chunk extensions after semicolon)
+		chunkSizeLine := string(chunkedBody[pos:lineEnd])
+		chunkSizeStr := chunkSizeLine
+		if semicolonIdx := strings.IndexByte(chunkSizeStr, ';'); semicolonIdx >= 0 {
+			chunkSizeStr = chunkSizeStr[:semicolonIdx]
+		}
+		chunkSizeStr = strings.TrimSpace(chunkSizeStr)
+
+		// Parse hex chunk size
+		chunkSize, err := strconv.ParseInt(chunkSizeStr, 16, 64)
+		if err != nil {
+			// Malformed chunk size
+			break
+		}
+
+		// Move past the chunk size line
+		pos = lineEnd + len(lineBreak)
+
+		// If chunk size is 0, we've reached the end
+		if chunkSize == 0 {
+			// Should be followed by \r\n\r\n or \n\n
+			break
+		}
+
+		// Read chunk data
+		if pos+int(chunkSize) > len(chunkedBody) {
+			// Not enough data, return what we have
+			break
+		}
+
+		chunkData := chunkedBody[pos : pos+int(chunkSize)]
+		decoded = append(decoded, chunkData...)
+
+		// Move past chunk data
+		pos += int(chunkSize)
+
+		// Skip the trailing \r\n after chunk data
+		if pos < len(chunkedBody) {
+			if lineBreak == "\r\n" && pos+2 <= len(chunkedBody) &&
+				chunkedBody[pos] == '\r' && chunkedBody[pos+1] == '\n' {
+				pos += 2
+			} else if lineBreak == "\n" && pos < len(chunkedBody) && chunkedBody[pos] == '\n' {
+				pos++
+			}
+		}
+	}
+
+	return decoded, nil
 }
 
 // splitHeaderLines splits header text into individual header lines
