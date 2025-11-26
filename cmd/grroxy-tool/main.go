@@ -7,13 +7,14 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/glitchedgitz/grroxy-db/api/tools"
+	tools_api "github.com/glitchedgitz/grroxy-db/api/tools"
 	"github.com/glitchedgitz/grroxy-db/config"
 	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/utils"
+	"github.com/pocketbase/pocketbase"
+	"github.com/pocketbase/pocketbase/apis"
 
 	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-tool/migrations"
 )
@@ -63,10 +64,20 @@ func main() {
 	flag.StringVar(&name, "name", "grroxy-tool", "tool name")
 	flag.Parse()
 
+	// Resolve the project path to an absolute path
+	projectPath, err := filepath.Abs(path)
+	utils.CheckErr("Failed to resolve project path", err)
+
+	// Change working directory to the project directory
+	err = os.Chdir(projectPath)
+	utils.CheckErr("Failed to change working directory to project path", err)
+
+	fmt.Println("Working directory changed to:", projectPath)
+
 	backend := tools_api.Tools{
 		App: pocketbase.NewWithConfig(
 			pocketbase.Config{
-				ProjectDir:      path,
+				ProjectDir:      projectPath,
 				DefaultDataDir:  name,
 				HideStartBanner: true,
 			},
@@ -84,7 +95,7 @@ func main() {
 	backend.App.Bootstrap()
 	go backend.CommandManager()
 
-	_, err := apis.Serve(backend.App, apis.ServeConfig{
+	_, err = apis.Serve(backend.App, apis.ServeConfig{
 		HttpAddr: host,
 	})
 
