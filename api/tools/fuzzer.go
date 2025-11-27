@@ -135,6 +135,17 @@ func (backend *Tools) StartFuzzer(e *core.ServeEvent) error {
 			if body.Host == "" {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "host is required"})
 			}
+			if body.Markers == nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "markers is required"})
+			}
+			if len(body.Markers) == 0 {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "markers cannot be blank"})
+			}
+			for key, value := range body.Markers {
+				if value == "" {
+					return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": fmt.Sprintf("marker '%s' must have a value", key)})
+				}
+			}
 
 			// Clean host (remove http:// or https://)
 			host := strings.TrimPrefix(body.Host, "http://")
@@ -183,11 +194,8 @@ func (backend *Tools) StartFuzzer(e *core.ServeEvent) error {
 			// Update state to running
 			backend.SetProcess(id, schemas.ProcessState.Running)
 
-			var wg sync.WaitGroup
-			wg.Add(1)
-
+			// Start result processing in a goroutine
 			go func() {
-				defer wg.Done()
 				for result := range f.Results {
 					fuzzerResult, ok := result.(fuzzer.FuzzerResult)
 					if !ok {
@@ -215,26 +223,23 @@ func (backend *Tools) StartFuzzer(e *core.ServeEvent) error {
 						log.Printf("[StartFuzzer] Failed to save record: %v", err)
 					}
 				}
+
+				log.Println("[StartFuzzer] results processing completed for ", id)
+
+				// Clean up after all results are processed
+				FuzzerMgr.mu.Lock()
+				delete(FuzzerMgr.instances, id)
+				FuzzerMgr.mu.Unlock()
 			}()
 
-			// Start fuzzing in a goroutine
+			// Start fuzzing in a separate goroutine (non-blocking)
 			err = f.Fuzz()
 			if err != nil {
 				log.Printf("[StartFuzzer] Error: %v", err)
-				backend.SetProcess(id, fmt.Sprintf("Error: %v", err))
-			} else {
-				backend.SetProcess(id, schemas.ProcessState.Completed)
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			log.Println("[StartFuzzer] results for ", id)
-
-			wg.Wait()
-
-			// Clean up
-			FuzzerMgr.mu.Lock()
-			delete(FuzzerMgr.instances, id)
-			FuzzerMgr.mu.Unlock()
-
+			// Return immediately with the fuzzer ID
 			return c.JSON(http.StatusOK, map[string]interface{}{
 				"id": id,
 			})

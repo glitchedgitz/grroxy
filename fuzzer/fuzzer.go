@@ -63,11 +63,16 @@ func NewFuzzer(config FuzzerConfig) *Fuzzer {
 
 func (f *Fuzzer) Fuzz() error {
 
+	log.Printf("[fuzzer] Fuzz() called with config: host=%s port=%s useTLS=%v mode=%s concurrency=%d timeout=%s",
+		f.Config.Host, f.Config.Port, f.Config.UseTLS, f.Config.Mode, f.Config.Concurrency, f.Config.Timeout)
+
 	if f.Config.Request == "" {
+		log.Println("[fuzzer] aborting: request is empty")
 		return fmt.Errorf("request is empty")
 	}
 
 	if f.Config.Host == "" {
+		log.Println("[fuzzer] aborting: host is empty")
 		return fmt.Errorf("host is empty")
 	}
 
@@ -77,6 +82,7 @@ func (f *Fuzzer) Fuzz() error {
 		} else {
 			f.Config.Port = "80"
 		}
+		log.Printf("[fuzzer] port not set, defaulting to %s", f.Config.Port)
 	}
 
 	if f.files == nil {
@@ -89,26 +95,52 @@ func (f *Fuzzer) Fuzz() error {
 
 	if f.Config.Mode == "" {
 		f.Config.Mode = ModeClusterBomb
+		log.Printf("[fuzzer] mode not set, defaulting to %s", f.Config.Mode)
 	}
 
 	if f.Config.Concurrency == 0 {
 		f.Config.Concurrency = 10
+		log.Printf("[fuzzer] concurrency not set, defaulting to %d", f.Config.Concurrency)
 	}
 
 	if f.Config.Mode != ModeClusterBomb && f.Config.Mode != ModePitchFork {
+		log.Printf("[fuzzer] aborting: invalid mode %s", f.Config.Mode)
 		return fmt.Errorf("invalid mode: %s", f.Config.Mode)
 	}
 
 	// defer close(f.results)
 
 	for marker, wordlist := range f.Config.Markers {
-		file, err := os.Open("./" + wordlist)
+		log.Printf("[fuzzer] opening wordlist for marker %s: %s", marker, wordlist)
+
+		cwd, err := os.Getwd()
+		if err != nil {
+			log.Printf("[fuzzer] failed to get current working directory: %v", err)
+			return fmt.Errorf("failed to get current working directory: %w", err)
+		}
+
+		log.Printf("[fuzzer] current working directory: %s", cwd)
+
+		// time.Sleep(2 * time.Second)
+
+		// // Debug: read and print the full wordlist content before using it
+		// debugPath := path.Join(cwd, wordlist)
+
+		// if b, err := os.ReadFile(debugPath); err != nil {
+		// 	log.Printf("[fuzzer] failed to read full wordlist %s for debug: %v", debugPath, err)
+		// } else {
+		// 	log.Printf("[fuzzer] full content of wordlist %s:\n%s", debugPath, string(b))
+		// }
+
+		file, err := os.Open(wordlist)
 		if err != nil {
 			return fmt.Errorf("failed to open wordlist: %w", err)
 		}
 		f.files[marker] = bufio.NewReader(file)
 		f.fileHandles[marker] = file
 	}
+
+	log.Printf("[fuzzer] initialized %d wordlists; starting fuzz loop", len(f.files))
 
 outerLoop:
 	for {
@@ -117,6 +149,7 @@ outerLoop:
 		hitEOF := false
 
 		if f.isStopped() {
+			log.Println("[fuzzer] stop signal received before reading markers; breaking outer loop")
 			break outerLoop
 		}
 
@@ -126,12 +159,14 @@ outerLoop:
 
 		for marker, reader := range f.files {
 			if f.isStopped() {
+				log.Println("[fuzzer] stop signal received during marker iteration; breaking outer loop")
 				break outerLoop
 			}
 
 			word, err := reader.ReadString('\n')
 
 			if err == io.EOF {
+				log.Printf("[fuzzer] reached EOF for marker %s", marker)
 				hitEOF = true
 			}
 
@@ -153,6 +188,7 @@ outerLoop:
 
 			if f.Config.Mode == ModeClusterBomb {
 				f.wg.Add(1)
+				log.Printf("[fuzzer] dispatching request in cluster_bomb mode with markers=%v", markers)
 				go f.SendRequest(markers)
 			}
 		}
@@ -161,25 +197,31 @@ outerLoop:
 			// Only process if we didn't hit EOF (all markers were read successfully)
 			if !hitEOF {
 				f.wg.Add(1)
+				log.Printf("[fuzzer] dispatching request in pitch_fork mode with markers=%v", markers)
 				go f.SendRequest(markers)
 			}
 		}
 
 		if hitEOF {
+			log.Println("[fuzzer] hit EOF on at least one wordlist; breaking outer loop")
 			// f.Stop()
 			break outerLoop
 		}
 
 		if f.isStopped() {
+			log.Println("[fuzzer] stop signal received after iteration; breaking outer loop")
 			break outerLoop
 		}
 	}
 
 	// Wait for all pending goroutines to finish
+	log.Println("[fuzzer] waiting for all in-flight requests to finish")
 	f.wg.Wait()
 	// Close the results channel so the receiver knows we're done
+	log.Println("[fuzzer] all requests finished; closing results channel")
 	close(f.Results)
 
+	log.Println("[fuzzer] Fuzz() completed successfully")
 	return nil
 
 }
