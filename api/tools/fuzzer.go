@@ -35,6 +35,7 @@ type FuzzerStartRequest struct {
 	Host        string            `json:"host"`
 	Port        string            `json:"port"`
 	UseTLS      bool              `json:"useTLS"`
+	UseHTTP2    bool              `json:"useHTTP2"` // Enable HTTP/2 support
 	Markers     map[string]string `json:"markers"`
 	Mode        string            `json:"mode"`
 	Concurrency int               `json:"concurrency"`
@@ -163,6 +164,7 @@ func (backend *Tools) StartFuzzer(e *core.ServeEvent) error {
 				Host:        host,
 				Port:        body.Port,
 				UseTLS:      body.UseTLS,
+				UseHTTP2:    body.UseHTTP2,
 				Markers:     body.Markers,
 				Mode:        body.Mode,
 				Concurrency: body.Concurrency,

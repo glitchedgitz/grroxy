@@ -49,6 +49,13 @@ func (backend *Backend) SendHttpRaw(e *core.ServeEvent) error {
 			log.Println("RawRequest Timeout: ", time.Duration(data["timeout"].(float64))*time.Second)
 			log.Println("RawRequest Request: ", request)
 
+			// Check if HTTP/2 is requested
+			useHTTP2 := false
+			if http2Val, ok := data["http2"].(bool); ok {
+				useHTTP2 = http2Val
+				log.Println("RawRequest HTTP/2: ", useHTTP2)
+			}
+
 			mappedData := RawRequest{
 				TLS:      data["tls"].(bool),
 				Hostname: host,
@@ -72,13 +79,17 @@ func (backend *Backend) SendHttpRaw(e *core.ServeEvent) error {
 			// Get the current time before sending
 			timeBefore := time.Now()
 
-			// Send the raw request
-			resp, err := client.SendString(
-				mappedData.Request,
-				mappedData.Hostname,
-				mappedData.Port,
-				mappedData.TLS,
-			)
+			// Send the raw request with HTTP/2 support
+			req := rawhttp.Request{
+				RawBytes: []byte(mappedData.Request),
+				Host:     mappedData.Hostname,
+				Port:     mappedData.Port,
+				UseTLS:   mappedData.TLS,
+				UseHTTP2: useHTTP2, // Enable HTTP/2 if requested
+				Timeout:  mappedData.Timeout,
+			}
+
+			resp, err := client.Send(req)
 
 			// Get the time after sending
 			timeAfter := time.Now()

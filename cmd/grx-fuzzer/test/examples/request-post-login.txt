@@ -1,0 +1,6 @@
+POST /api/login HTTP/1.1
+Host: auth.example.com
+Content-Type: application/json
+User-Agent: grx-fuzzer
+
+{"username":"USER","password":"PASS"}

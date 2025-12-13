@@ -1,0 +1,6 @@
+GET /api/ENDPOINT HTTP/1.1
+Host: api.example.com
+User-Agent: grx-fuzzer
+Accept: application/json
+Authorization: Bearer test-token
+

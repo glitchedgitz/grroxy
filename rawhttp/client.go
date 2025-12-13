@@ -45,7 +45,13 @@ func DefaultClient() *Client {
 // Send sends a raw HTTP request and returns the raw response.
 // This function performs minimal validation - only what's necessary for TCP/TLS connection.
 // All malformed headers, formatting issues, and protocol violations are preserved and sent as-is.
+// If UseHTTP2 is true, the request will be sent using HTTP/2 protocol.
 func (c *Client) Send(req Request) (*Response, error) {
+	// Route to HTTP/2 handler if requested
+	if req.UseHTTP2 {
+		return c.SendHTTP2(req)
+	}
+
 	// Determine port
 	port := req.Port
 	if port == "" {

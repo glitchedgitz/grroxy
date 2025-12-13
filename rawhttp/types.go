@@ -20,6 +20,11 @@ type Request struct {
 	// UseTLS determines whether to use TLS/HTTPS
 	UseTLS bool
 
+	// UseHTTP2 determines whether to use HTTP/2 protocol
+	// If true, the request will be sent using HTTP/2
+	// Note: HTTP/2 requires TLS (UseTLS must also be true)
+	UseHTTP2 bool
+
 	// Timeout specifies the connection and read timeout
 	Timeout time.Duration
 }

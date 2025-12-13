@@ -22,6 +22,7 @@ type FuzzerConfig struct {
 	Host        string
 	Port        string
 	UseTLS      bool
+	UseHTTP2    bool // Enable HTTP/2 support
 	Markers     map[string]string
 	Mode        string
 	Concurrency int
@@ -261,6 +262,7 @@ func (f *Fuzzer) SendRequest(markers map[string]string) {
 		Host:     f.Config.Host,
 		Port:     f.Config.Port,
 		UseTLS:   f.Config.UseTLS,
+		UseHTTP2: f.Config.UseHTTP2,
 		Timeout:  f.Config.Timeout,
 	}
 	resp, err := f.http.Send(req)

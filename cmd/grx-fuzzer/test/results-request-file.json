@@ -1,0 +1,83 @@
+[
+  {
+    "request": "GET /api/users HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 302,
+    "markers": {
+      "ENDPOINT": "users"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/comments HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 314,
+    "markers": {
+      "ENDPOINT": "comments"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/customers HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 316,
+    "markers": {
+      "ENDPOINT": "customers"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/ HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 317,
+    "markers": {
+      "ENDPOINT": ""
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/products HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 319,
+    "markers": {
+      "ENDPOINT": "products"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/posts HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 322,
+    "markers": {
+      "ENDPOINT": "posts"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/orders HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 324,
+    "markers": {
+      "ENDPOINT": "orders"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/stats HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 320,
+    "markers": {
+      "ENDPOINT": "stats"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api/health HTTP/1.1\nHost: api.example.com\nUser-Agent: grx-fuzzer\nAccept: application/json\nAuthorization: Bearer test-token\n\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:24 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 339,
+    "markers": {
+      "ENDPOINT": "health"
+    },
+    "status_code": 503
+  }
+]

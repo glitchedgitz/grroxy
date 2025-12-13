@@ -1,0 +1,8 @@
+admin
+api
+users
+login
+config
+dashboard
+settings
+profile
