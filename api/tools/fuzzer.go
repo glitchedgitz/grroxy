@@ -35,7 +35,7 @@ type FuzzerStartRequest struct {
 	Host        string            `json:"host"`
 	Port        string            `json:"port"`
 	UseTLS      bool              `json:"useTLS"`
-	UseHTTP2    bool              `json:"useHTTP2"` // Enable HTTP/2 support
+	UseHTTP2    bool              `json:"http2"` // Enable HTTP/2 support
 	Markers     map[string]string `json:"markers"`
 	Mode        string            `json:"mode"`
 	Concurrency int               `json:"concurrency"`
