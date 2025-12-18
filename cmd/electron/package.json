@@ -1,6 +1,6 @@
 {
   "name": "grroxy",
-  "version": "2025.10.1",
+  "version": "2025.12.0",
   "main": "./src/index.js",
   "scripts": {
     "start": "NODE_ENV=development concurrently \"npm run dev\" \"npm run electron:start\"",
