@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	api "github.com/glitchedgitz/grroxy-db/api/app"
 	"github.com/glitchedgitz/grroxy-db/config"
@@ -53,10 +54,10 @@ func initialize() {
 	}
 	conf.ProxyAddr = ProxyAddress
 
-	if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {
-		panic("GRROXY_TEMPLATE_DIR environment variable is not set")
+	// Optional override: if GRROXY_TEMPLATE_DIR isn't set, keep the default config value.
+	if templateDir := strings.TrimSpace(os.Getenv("GRROXY_TEMPLATE_DIR")); templateDir != "" {
+		conf.TemplateDirectory = templateDir
 	}
-	conf.TemplateDirectory = os.Getenv("GRROXY_TEMPLATE_DIR")
 
 	conf.Initiate()
 }

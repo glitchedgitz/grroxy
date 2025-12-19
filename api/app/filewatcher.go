@@ -17,16 +17,17 @@ func (backend *Backend) FileWatcher(e *core.ServeEvent) error {
 		Path:   "/api/filewatcher",
 		Handler: func(c echo.Context) error {
 
+			settingsFilePath := os.Getenv("GRROXY_TEMPLATE_DIR")
+			// If GRROXY_TEMPLATE_DIR isn't configured, skip file watching instead of crashing.
+			if settingsFilePath == "" {
+				return c.NoContent(204)
+			}
+
 			c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
 			c.Response().Header().Set(echo.HeaderCacheControl, "no-cache")
 			c.Response().Header().Set(echo.HeaderConnection, "keep-alive")
 
 			updateChan := make(chan fsnotify.Event)
-			
-			if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {
-				panic("GRROXY_TEMPLATE_DIR environment variable is not set")
-			}
-			settingsFilePath := os.Getenv("GRROXY_TEMPLATE_DIR")
 
 			go func() {
 				watcher, err := fsnotify.NewWatcher()
@@ -36,7 +37,11 @@ func (backend *Backend) FileWatcher(e *core.ServeEvent) error {
 				defer watcher.Close()
 
 				// Create a channel to send updates
-				watcher.Add(settingsFilePath)
+				if err := watcher.Add(settingsFilePath); err != nil {
+					log.Printf("filewatcher: failed to watch %q: %v", settingsFilePath, err)
+					close(updateChan)
+					return
+				}
 				for {
 					select {
 					case event := <-watcher.Events:

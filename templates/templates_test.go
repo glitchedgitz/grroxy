@@ -161,7 +161,7 @@ func TestSetup(t *testing.T) {
 	}
 
 	if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {
-		panic("GRROXY_TEMPLATE_DIR environment variable is not set")
+		t.Skip("GRROXY_TEMPLATE_DIR is not set; skipping template integration test")
 	}
 	x := &templates.Templates{
 		TempalteDir: os.Getenv("GRROXY_TEMPLATE_DIR"),
