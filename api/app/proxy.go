@@ -409,8 +409,15 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 			if body.Browser != "" {
 				// Use the certificate path from the rawproxy
 				certPath := newProxy.GetCertPath()
-				go func(proxyID, browserType, listenAddr, cert string) {
-					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert)
+				
+				// Generate browser profile directory: [projectid]+[proxyid]
+				// This ensures each browser instance has its own isolated profile
+				profileID := backend.Config.ProjectID + proxyID
+				profileDir := path.Join(backend.Config.HomeDirectory, ".config", "grroxy", "profiles", profileID)
+				log.Printf("[StartProxy] Browser profile directory: %s", profileDir)
+				
+				go func(proxyID, browserType, listenAddr, cert, profDir string) {
+					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir)
 					if err != nil {
 						log.Println("Error launching browser:", err)
 						return
@@ -421,7 +428,7 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 						inst.BrowserCmd = cmd
 					}
 					ProxyMgr.mu.Unlock()
-				}(proxyID, body.Browser, body.HTTP, certPath)
+				}(proxyID, body.Browser, body.HTTP, certPath, profileDir)
 			}
 
 			// Create proxy record in database
@@ -666,8 +673,14 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 			// Launch browser if configured
 			if browserType != "" {
 				certPath := newProxy.GetCertPath()
-				go func(proxyID, browserType, listenAddr, cert string) {
-					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert)
+				
+				// Generate browser profile directory: [projectid]+[proxyid]
+				profileID := backend.Config.ProjectID + proxyID
+				profileDir := path.Join(backend.Config.HomeDirectory, ".config", "grroxy", "profiles", profileID)
+				log.Printf("[RestartProxy] Browser profile directory: %s", profileDir)
+				
+				go func(proxyID, browserType, listenAddr, cert, profDir string) {
+					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir)
 					if err != nil {
 						log.Println("Error launching browser:", err)
 						return
@@ -678,7 +691,7 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 						inst.BrowserCmd = cmd
 					}
 					ProxyMgr.mu.Unlock()
-				}(proxyID, browserType, listenAddr, certPath)
+				}(proxyID, browserType, listenAddr, certPath, profileDir)
 			}
 
 			log.Printf("[RestartProxy] Successfully restarted proxy %s", proxyID)

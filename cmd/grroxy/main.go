@@ -13,6 +13,7 @@ import (
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/api/launcher"
 	"github.com/glitchedgitz/grroxy-db/config"
+	_ "github.com/glitchedgitz/grroxy-db/logflags"
 	"github.com/glitchedgitz/grroxy-db/process"
 	"github.com/glitchedgitz/grroxy-db/rawproxy"
 	"github.com/glitchedgitz/grroxy-db/utils"
@@ -39,7 +40,8 @@ var launchApp bool
 // }
 
 func init() {
-	// log.SetOutput(io.Discard)
+	// Ensure timestamps are included in standard log output.
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 }
 
 var launch *launcher.Launcher

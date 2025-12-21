@@ -6,13 +6,11 @@ import (
 	"log"
 	"testing"
 	"time"
-
-	"github.com/tomnomnom/rawhttp"
 )
 
 func TestSendHTTP2RawRequest(t *testing.T) {
 	// Test cases
-	testCases := []rawhttp.RawRequest{
+	testCases := []RawRequest{
 		{
 			TLS:      true,
 			Hostname: "accounts.google.com",

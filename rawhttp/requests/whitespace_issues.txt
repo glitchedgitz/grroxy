@@ -1,0 +1,10 @@
+GET /test HTTP/1.1
+Host: example.com
+  Header-With-Spaces: value
+Header-With-Tabs:	value
+Header-With-Mixed:   value  	
+Empty-Lines-Above:
+
+
+Header-After-Empty: value
+

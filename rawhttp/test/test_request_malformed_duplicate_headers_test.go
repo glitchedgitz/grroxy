@@ -1,0 +1,27 @@
+package rawhttp_test
+
+import (
+	"testing"
+
+	"github.com/glitchedgitz/grroxy-db/rawhttp"
+)
+
+func TestRequestMalformedDuplicateHeaders(t *testing.T) {
+	rawRequest := "GET /api/data HTTP/1.1\r\n" +
+		"Host: api.example.com\r\n" +
+		"X-Custom-Header: first\r\n" +
+		"X-Custom-Header: second\r\n" +
+		"X-Custom-Header: third\r\n" +
+		"\r\n"
+
+	// Parse the request
+	parsed := rawhttp.ParseRequest([]byte(rawRequest))
+
+	// Unparse back to raw bytes
+	unparsed := rawhttp.UnparseRequest(parsed)
+
+	if string(unparsed) != rawRequest {
+		t.Errorf("Roundtrip failed:\nExpected: %q\nGot:      %q", rawRequest, string(unparsed))
+	}
+}
+

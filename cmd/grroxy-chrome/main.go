@@ -9,6 +9,7 @@ import (
 
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
+	_ "github.com/glitchedgitz/grroxy-db/logflags"
 )
 
 func main() {

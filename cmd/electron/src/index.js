@@ -3,10 +3,12 @@
 const { app, BrowserWindow, ipcMain, nativeImage } = require('electron')
 const path = require('path')
 
+let mainWindow = null
+
 function createWindow() {
     const iconPath = path.resolve(__dirname, "icons", "grroxy.png")
 
-    const win = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1080,
         height: 720,
         fullscreen: true,
@@ -37,42 +39,35 @@ function createWindow() {
 
     if (process.env.NODE_ENV !== 'development') {
         // Load production build
-        win.loadFile(`${__dirname}/frontend/dist/index.html`)
+        mainWindow.loadFile(`${__dirname}/frontend/dist/index.html`)
     } else {
         // Load vite dev server page 
         console.log('Development mode')
-        win.loadURL('http://localhost:5173/')
-        // win.loadFile(`${__dirname}/frontend/dist/index.html`)
+        mainWindow.loadURL('http://localhost:5173/')
+        // mainWindow.loadFile(`${__dirname}/frontend/dist/index.html`)
 
     }
 
     // setTimeout(() => {
-    //     win.webContents.openDevTools()
+    //     mainWindow.webContents.openDevTools()
     // }, 5000)
 
 
     // Send fullscreen change to renderer
     // const sendFullscreenState = () => {
-    //     win.webContents.send('fullscreen-changed', win.isFullScreen());
+    //     mainWindow.webContents.send('fullscreen-changed', mainWindow.isFullScreen());
     // };
 
-    // win.on('enter-full-screen', sendFullscreenState);
-    // win.on('leave-full-screen', sendFullscreenState);
-    win.on('enter-full-screen', () => {
+    // mainWindow.on('enter-full-screen', sendFullscreenState);
+    // mainWindow.on('leave-full-screen', sendFullscreenState);
+    mainWindow.on('enter-full-screen', () => {
         console.log('[main] Entered fullscreen');
-        win.webContents.send('fullscreen-changed', true);
+        mainWindow.webContents.send('fullscreen-changed', true);
     });
 
-    win.on('leave-full-screen', () => {
+    mainWindow.on('leave-full-screen', () => {
         console.log('[main] Left fullscreen');
-        win.webContents.send('fullscreen-changed', false);
-    });
-
-    // Handler for isFullscreen
-    ipcMain.handle('check-fullscreen', (event) => {
-        const isFs = win.isFullScreen();
-        console.log('[main] check-fullscreen →', isFs);
-        return isFs;
+        mainWindow.webContents.send('fullscreen-changed', false);
     });
 
     app.dock.setIcon(nativeImage.createFromPath(iconPath))
@@ -82,6 +77,16 @@ function createWindow() {
 
 app.whenReady()
     .then(() => {
+        // Register IPC handlers once when app is ready
+        ipcMain.handle('check-fullscreen', (event) => {
+            if (mainWindow) {
+                const isFs = mainWindow.isFullScreen();
+                console.log('[main] check-fullscreen →', isFs);
+                return isFs;
+            }
+            return false;
+        });
+
         createWindow()
 
         app.on('activate', function () {

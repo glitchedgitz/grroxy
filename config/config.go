@@ -11,12 +11,13 @@ import (
 type Config struct {
 	HostAddr          string
 	ProxyAddr         string // Deprecated: Use the API to start the proxy instead
-	HomeDirectory     string 
+	HomeDirectory     string
 	CWDirectory       string
 	ConfigDirectory   string
 	CacheDirectory    string
 	TemplateDirectory string
 	ProjectFile       string
+	ProjectID         string // Project ID extracted from project path
 	AppData           JSONData
 }
 

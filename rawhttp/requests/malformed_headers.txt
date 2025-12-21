@@ -1,0 +1,10 @@
+GET /test HTTP/1.1
+Host: example.com
+Invalid Header No Colon
+  Leading Spaces: value
+Trailing Spaces : value
+Duplicate-Header: first
+Duplicate-Header: second
+Header-With-No-Value:
+Content-Length: invalid-number
+

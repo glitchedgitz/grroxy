@@ -27,7 +27,6 @@ require (
 	github.com/rs/xid v1.5.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.10.0
-	github.com/tomnomnom/rawhttp v0.0.0-20220611225552-e98e9bba2559
 	golang.org/x/net v0.35.0
 	golang.org/x/sync v0.11.0
 	gopkg.in/fsnotify.v1 v1.4.7

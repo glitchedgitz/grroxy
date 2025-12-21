@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func LaunchBrowser(browserType string, proxyAddress string, customCertPath string) (*exec.Cmd, error) {
+func LaunchBrowser(browserType string, proxyAddress string, customCertPath string, profileDir string) (*exec.Cmd, error) {
 	if browserType == "" {
 		browserType = "chrome" // Default to Chrome
 	}
@@ -16,11 +16,11 @@ func LaunchBrowser(browserType string, proxyAddress string, customCertPath strin
 
 	switch browserType {
 	case "chrome":
-		return launchChrome(proxyAddress, customCertPath)
+		return launchChrome(proxyAddress, customCertPath, profileDir)
 	case "firefox":
-		return launchFirefox(proxyAddress, customCertPath)
+		return launchFirefox(proxyAddress, customCertPath, profileDir)
 	case "safari":
-		return launchSafari(proxyAddress, customCertPath)
+		return launchSafari(proxyAddress, customCertPath, profileDir)
 	case "terminal":
 		return launchTerminal(proxyAddress, customCertPath)
 	default:

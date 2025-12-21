@@ -11,23 +11,13 @@ import (
 	"strings"
 )
 
-func launchFirefox(proxyAddress string, customCertPath string) (*exec.Cmd, error) {
+func launchFirefox(proxyAddress string, customCertPath string, profileDir string) (*exec.Cmd, error) {
 	log.Println("[launchFirefox] Starting Firefox launch process")
 
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("[launchFirefox] failed to get home directory: %v", err)
-	}
-	log.Printf("[launchFirefox] Home directory: %s", homeDir)
-
-	// Create Firefox profile directory
-	profileDir := filepath.Join(homeDir, ".proxy-firefox")
+	// Use provided profile directory
 	log.Printf("[launchFirefox] Firefox profile directory: %s", profileDir)
 
-	if err := os.RemoveAll(profileDir); err != nil {
-		log.Printf("[launchFirefox] Warning: couldn't clean up old profile: %v", err)
-	}
+	// Create profile directory if it doesn't exist (keep existing profile for persistence)
 	if err := os.MkdirAll(profileDir, 0755); err != nil {
 		return nil, fmt.Errorf("[launchFirefox] failed to create Firefox profile directory: %v", err)
 	}

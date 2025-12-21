@@ -22,7 +22,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -476,9 +475,8 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 	}
 
 	// Dump request to raw string
-	// httputil.DumpRequest with body=true automatically restores the body
-	requestInBytes, _ := httputil.DumpRequest(req, true)
-	requestInString := string(requestInBytes)
+	normalizeHTTP := (scheme == "http")
+	requestInString := grrhttp.DumpRequest(req, normalizeHTTP)
 
 	// Track bytes
 	rp.stats.BytesRequest.Add(uint64(len(requestInString)))

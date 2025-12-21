@@ -9,7 +9,7 @@ import (
 	"runtime"
 )
 
-func launchSafari(proxyAddress string, customCertPath string) (*exec.Cmd, error) {
+func launchSafari(proxyAddress string, customCertPath string, profileDir string) (*exec.Cmd, error) {
 	log.Println("[launchSafari] Starting Safari launch process")
 
 	// Safari is only available on macOS
@@ -18,20 +18,11 @@ func launchSafari(proxyAddress string, customCertPath string) (*exec.Cmd, error)
 	}
 	log.Printf("[launchSafari] Running on macOS, proceeding with Safari launch")
 
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("[launchSafari] failed to get home directory: %v", err)
-	}
-	log.Printf("[launchSafari] Home directory: %s", homeDir)
-
-	// Create Safari proxy configuration directory
-	safariConfigDir := filepath.Join(homeDir, ".proxy-safari")
+	// Use provided profile directory
+	safariConfigDir := profileDir
 	log.Printf("[launchSafari] Safari config directory: %s", safariConfigDir)
 
-	if err := os.RemoveAll(safariConfigDir); err != nil {
-		log.Printf("[launchSafari] Warning: couldn't clean up old profile: %v", err)
-	}
+	// Create config directory if it doesn't exist (keep existing profile for persistence)
 	if err := os.MkdirAll(safariConfigDir, 0755); err != nil {
 		return nil, fmt.Errorf("[launchSafari] failed to create Safari config directory: %v", err)
 	}

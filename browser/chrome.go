@@ -9,23 +9,14 @@ import (
 	"runtime"
 )
 
-func launchChrome(proxyAddress string, customCertPath string) (*exec.Cmd, error) {
+func launchChrome(proxyAddress string, customCertPath string, profileDir string) (*exec.Cmd, error) {
 	log.Println("[launchChrome] Starting Chrome launch process")
 
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("[launchChrome] failed to get home directory: %v", err)
-	}
-	log.Printf("[launchChrome] Home directory: %s", homeDir)
-
-	// Create Chrome user data directory
-	chromeDataDir := filepath.Join(homeDir, ".proxy-chrome")
+	// Use provided profile directory
+	chromeDataDir := profileDir
 	log.Printf("[launchChrome] Chrome data directory: %s", chromeDataDir)
 
-	if err := os.RemoveAll(chromeDataDir); err != nil {
-		log.Printf("[launchChrome] Warning: couldn't clean up old profile: %v", err)
-	}
+	// Create profile directory if it doesn't exist (keep existing profile for persistence)
 	if err := os.MkdirAll(chromeDataDir, 0755); err != nil {
 		return nil, fmt.Errorf("[launchChrome] failed to create Chrome data directory: %v", err)
 	}

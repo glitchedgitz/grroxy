@@ -1,0 +1,4 @@
+CUSTOM /method HTTP/1.1
+Host: example.com
+X-Custom-Header: test
+

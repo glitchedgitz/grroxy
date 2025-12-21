@@ -1,1 +1,0 @@
-(function(){"use strict";self.onmessage=function(o){const{code:n,searches:r,config:i}=o.data,g=r.map(e=>{let t=0;if(e.regexp)try{const s=new RegExp(e.search,"gi"),c=n.match(s);t=c?c.length:0}catch(s){console.error("Invalid regex:",s),t=0}else t=n.split(e.search).length-1;return{id:e.id,count:t}});self.postMessage({results:g})}})();

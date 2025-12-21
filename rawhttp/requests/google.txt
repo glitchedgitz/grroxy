@@ -1,0 +1,5 @@
+GET / HTTP/1.1
+Host: www.google.com
+User-Agent: rawhttp/1.0
+Accept: */*
+

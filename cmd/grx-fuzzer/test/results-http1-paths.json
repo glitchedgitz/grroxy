@@ -1,0 +1,83 @@
+[
+  {
+    "request": "GET / HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 305,
+    "markers": {
+      "PATH": ""
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /config HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 306,
+    "markers": {
+      "PATH": "config"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /settings HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 306,
+    "markers": {
+      "PATH": "settings"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /login HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 316,
+    "markers": {
+      "PATH": "login"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /dashboard HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 315,
+    "markers": {
+      "PATH": "dashboard"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /api HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 313,
+    "markers": {
+      "PATH": "api"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /admin HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 322,
+    "markers": {
+      "PATH": "admin"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /profile HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 322,
+    "markers": {
+      "PATH": "profile"
+    },
+    "status_code": 503
+  },
+  {
+    "request": "GET /users HTTP/1.1\r\nHost: httpbin.org\r\nUser-Agent: grx-fuzzer\r\n\r\n",
+    "response": "HTTP/1.1 503 Service Temporarily Unavailable\r\nServer: awselb/2.0\r\nDate: Sat, 13 Dec 2025 16:13:47 GMT\r\nContent-Type: text/html\r\nContent-Length: 162\r\nConnection: keep-alive\r\n\r\n\u003chtml\u003e\r\n\u003chead\u003e\u003ctitle\u003e503 Service Temporarily Unavailable\u003c/title\u003e\u003c/head\u003e\r\n\u003cbody\u003e\r\n\u003ccenter\u003e\u003ch1\u003e503 Service Temporarily Unavailable\u003c/h1\u003e\u003c/center\u003e\r\n\u003c/body\u003e\r\n\u003c/html\u003e\r\n",
+    "response_time_ms": 321,
+    "markers": {
+      "PATH": "users"
+    },
+    "status_code": 503
+  }
+]

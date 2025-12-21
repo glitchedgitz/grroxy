@@ -33,7 +33,7 @@ func (backend *Backend) handleSitemapNew(data *types.SitemapGet) error {
 
 	// Checking error if it is collection already exists
 	// This is the error "constraint failed: UNIQUE constraint failed: collections.name (2067)"
-	if err != nil && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 		collectionExists = true
 	} else {
 		collectionExists = false
@@ -188,6 +188,130 @@ func (backend *Backend) SitemapNew(e *core.ServeEvent) error {
 	return nil
 }
 
+// buildSitemapTree builds a hierarchical tree structure from flat records
+func buildSitemapTree(records []*models.Record, basePath string, host string, maxDepth int) []*types.SitemapNode {
+	// Create a map to store all nodes by their path
+	nodeMap := make(map[string]*types.SitemapNode)
+	pathChildren := make(map[string][]string) // Track children paths for each parent path
+
+	// First pass: create all nodes and track parent-child relationships
+	for _, item := range records {
+		fullPath := item.GetString("path")
+		tmpPath := strings.TrimPrefix(fullPath, basePath)
+		tmpPath = strings.TrimPrefix(tmpPath, "/")
+
+		// Skip empty paths
+		if tmpPath == "" {
+			continue
+		}
+
+		// Remove query and fragment for path processing
+		var cleanPath string
+		if index := strings.IndexAny(tmpPath, "?#"); index != -1 {
+			cleanPath = tmpPath[:index]
+		} else {
+			cleanPath = tmpPath
+		}
+
+		// Split path into segments
+		segments := strings.Split(cleanPath, "/")
+
+		// Build full path for each segment depth
+		for i := 0; i < len(segments); i++ {
+			currentSegments := segments[:i+1]
+			currentPath := strings.Join(currentSegments, "/")
+			fullCurrentPath := basePath + "/" + currentPath
+
+			// Only create node if it doesn't exist
+			if _, exists := nodeMap[fullCurrentPath]; !exists {
+				title := segments[i]
+
+				nodeMap[fullCurrentPath] = &types.SitemapNode{
+					Host:          host,
+					Path:          fullCurrentPath,
+					Title:         title,
+					Type:          item.Get("type"),
+					Ext:           item.Get("ext"),
+					Query:         item.Get("query"),
+					Children:      []*types.SitemapNode{},
+					ChildrenCount: 0,
+				}
+
+				// Track parent-child relationship
+				if i > 0 {
+					parentPath := basePath + "/" + strings.Join(segments[:i], "/")
+					pathChildren[parentPath] = append(pathChildren[parentPath], fullCurrentPath)
+				}
+			}
+		}
+	}
+
+	// Second pass: build tree structure and count children
+	for parentPath, childPaths := range pathChildren {
+		if parentNode, exists := nodeMap[parentPath]; exists {
+			uniqueChildren := make(map[string]bool)
+			for _, childPath := range childPaths {
+				uniqueChildren[childPath] = true
+			}
+
+			for childPath := range uniqueChildren {
+				if childNode, exists := nodeMap[childPath]; exists {
+					parentNode.Children = append(parentNode.Children, childNode)
+				}
+			}
+			parentNode.ChildrenCount = len(parentNode.Children)
+
+			// Sort children by title
+			sort.Slice(parentNode.Children, func(i, j int) bool {
+				return parentNode.Children[i].Title < parentNode.Children[j].Title
+			})
+		}
+	}
+
+	// Find root level nodes (direct children of basePath)
+	rootNodes := []*types.SitemapNode{}
+	for path, node := range nodeMap {
+		tmpPath := strings.TrimPrefix(path, basePath)
+		tmpPath = strings.TrimPrefix(tmpPath, "/")
+
+		// Check if this is a root level node (no slashes means it's direct child of basePath)
+		if !strings.Contains(tmpPath, "/") && tmpPath != "" {
+			rootNodes = append(rootNodes, node)
+		}
+	}
+
+	// Sort root nodes by title
+	sort.Slice(rootNodes, func(i, j int) bool {
+		return rootNodes[i].Title < rootNodes[j].Title
+	})
+
+	// Apply depth limit if specified (depth > 0)
+	if maxDepth > 0 {
+		rootNodes = limitTreeDepth(rootNodes, maxDepth, 1)
+	}
+
+	return rootNodes
+}
+
+// limitTreeDepth recursively limits the tree to specified depth
+func limitTreeDepth(nodes []*types.SitemapNode, maxDepth int, currentDepth int) []*types.SitemapNode {
+	if currentDepth >= maxDepth {
+		// Remove children at max depth
+		for _, node := range nodes {
+			node.Children = nil
+		}
+		return nodes
+	}
+
+	for _, node := range nodes {
+		if len(node.Children) > 0 {
+			node.Children = limitTreeDepth(node.Children, maxDepth, currentDepth+1)
+		}
+	}
+
+	return nodes
+}
+
 func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
@@ -207,65 +331,71 @@ func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 				return err
 			}
 
+			// Set default depth to 1 if not specified (0)
+			if data.Depth == 0 {
+				data.Depth = 1
+			}
+
 			db := utils.ParseDatabaseName(data.Host)
-
-			// Regex: '^path/([^/]+\s*)?$'
-			// regexQuery := fmt.Sprintf(`^%s/([^/]+\s*)?$`, data.Path)
-
-			// Simplier for noeWHERE path LIKE '/s/%'
 			path := data.Path + `/%`
 
-			var result []types.SitemapGet
-			// var tmpResult []map[string]interface{}
-			uniqueMap := make(map[string]map[string]interface{})
-			var titles []string
+			var result []*models.Record
 			var err error
 
+			dao := backend.App.Dao()
+
+			fmt.Println("db: ", db)
+			fmt.Println("path: ", path)
+			fmt.Println("depth: ", data.Depth)
+
+			collection, err := dao.FindCollectionByNameOrId(db)
+			if err != nil {
+				log.Println("Error fetching collection: ", err)
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+					"error": "Host doesn't exist",
+				})
+			}
+
 			if data.Path == "" {
-				err = backend.App.Dao().DB().Select("*").From(db).All(&result)
+				result, err = dao.FindRecordsByExpr(collection.Id)
+				if err != nil {
+					log.Println("Error fetching records: ", err)
+					return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+						"error":   "Failed to fetch records",
+						"message": err.Error(),
+						"data":    []interface{}{},
+					})
+				}
 			} else {
-				err = backend.App.Dao().DB().Select("*").From(db).Where(dbx.Like("path", path)).All(&result)
-			}
-
-			for _, item := range result {
-				tmpPath := strings.TrimPrefix(item.Path, data.Path)
-				tmpPath = strings.TrimPrefix(tmpPath, "/")
-
-				var part string
-				if index := strings.IndexAny(tmpPath, "?#"); index != -1 {
-					part = tmpPath[:index]
-				} else {
-					part = tmpPath
-				}
-
-				title := strings.Split(part, "/")[0]
-
-				if _, exists := uniqueMap[title]; !exists {
-					uniqueMap[title] = map[string]interface{}{
-						"host":  data.Host,
-						"path":  data.Path + "/" + title,
-						"type":  item.Type,
-						"title": title,
-						"ext":   item.Ext,
-						"query": item.Query,
-					}
-					titles = append(titles, title)
+				result, err = dao.FindRecordsByFilter(collection.Id, "path ~ {:path}", "path", 0, 0, dbx.Params{
+					"path": path,
+				})
+				if err != nil {
+					log.Println("Error fetching records: ", err)
+					return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+						"error":   "Failed to fetch records",
+						"message": err.Error(),
+						"data":    []interface{}{},
+					})
 				}
 			}
 
-			sort.Strings(titles)
-			var tmpResult2 []map[string]interface{}
-			for _, title := range titles {
-				tmpResult2 = append(tmpResult2, uniqueMap[title])
+			// Build tree structure with depth control
+			// If depth is -1, pass 0 to buildSitemapTree for unlimited depth
+			depthLimit := data.Depth
+			if depthLimit == -1 {
+				depthLimit = 0
 			}
+			treeNodes := buildSitemapTree(result, data.Path, data.Host, depthLimit)
+
 			log.Println("[SitemapFetch] Request: ", data)
-			log.Println("[SitemapFetch] Response: ", tmpResult2)
+			log.Println("[SitemapFetch] Response nodes count: ", len(treeNodes))
 
 			if err != nil {
 				apis.NewBadRequestError("Failed to fetch warehouse items", err)
 			}
 
-			return c.JSON(http.StatusOK, tmpResult2)
+			return c.JSON(http.StatusOK, treeNodes)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),

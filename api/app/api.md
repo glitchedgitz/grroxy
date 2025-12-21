@@ -6,6 +6,8 @@
 # Proxy
 POST /api/proxy/start
 POST /api/proxy/stop
+POST /api/proxy/restart
+GET  /api/proxy/list
 
 # Intercept
 POST      /api/intercept/action
@@ -47,8 +49,137 @@ POST      /api/runcommand
 # Tools
 GET       /api/tool
 
+# Fuzzer
+POST      /api/fuzzer/start
+POST      /api/fuzzer/stop
+GET       /api/fuzzer/results/:id
+
 # Certificates
 GET       /cacert.crt
+```
+
+---
+
+## Proxy
+
+### Start Proxy
+
+Starts a new proxy instance and creates a proxy record in the database. Each proxy has its own intercept setting stored in the `_proxies` collection and filter settings stored separately in the `_ui` collection.
+
+```http
+POST /api/proxy/start
+```
+
+_Request Body:_
+
+```json
+{
+  "http": "127.0.0.1:8080",
+  "browser": "chrome|firefox|safari|terminal|proxy",
+  "name": "My Proxy Instance"
+}
+```
+
+_Fields:_
+
+- `http` (string, optional): The listen address for the proxy (e.g., "127.0.0.1:8080"). If not provided with a browser, defaults to "127.0.0.1:9797". If the port is unavailable, an available port will be suggested.
+- `browser` (string, optional): Browser to launch with this proxy. Options: "chrome", "firefox", "safari", "terminal", "proxy" (no browser). Leave empty for proxy only.
+- `name` (string, optional): Custom name for the proxy instance. If not provided, a name will be auto-generated based on browser type and count (e.g., "chrome 1", "firefox 2").
+
+_Response:_
+
+```json
+{
+  "id": "______________1",
+  "listenAddr": "127.0.0.1:8080",
+  "label": "chrome 1",
+  "browser": "chrome"
+}
+```
+
+_Response Fields:_
+
+- `id` (string): The unique proxy ID (15 chars: underscores + index number, e.g., "**\*\***\_\_**\*\***1")
+- `listenAddr` (string): The address the proxy is listening on (e.g., "127.0.0.1:8080")
+- `label` (string): The display name/label for this proxy instance
+- `browser` (string): The browser type launched with this proxy
+
+_Error Response:_
+
+```json
+{
+  "error": "port not available",
+  "availableHost": "127.0.0.1:8081"
+}
+```
+
+---
+
+### Stop Proxy
+
+Stops a running proxy instance and removes it from the manager. Also terminates any associated browser or terminal process.
+
+```http
+POST /api/proxy/stop
+```
+
+_Request Body:_
+
+```json
+{
+  "id": "______________1"
+}
+```
+
+_Fields:_
+
+- `id` (string, optional): The unique proxy ID to stop (e.g., "**\*\***\_\_**\*\***1"). If not provided or empty, stops all running proxies.
+
+_Response:_
+
+```json
+{
+  "message": "Proxy stopped"
+}
+```
+
+_Notes:_
+
+- If no `id` field is provided or the request body is empty, all running proxies will be stopped
+- The proxy record in the `_proxies` collection is NOT deleted, only the runtime instance is stopped
+- When a proxy is stopped, its `state` field in the database is set to empty (`""`)
+
+---
+
+### Restart Proxy
+
+Restarts a previously stopped proxy using its existing configuration from the database. This is useful for resuming a proxy that was stopped without having to reconfigure it.
+
+```http
+POST /api/proxy/restart
+```
+
+_Request Body:_
+
+```json
+{
+  "id": "______________1"
+}
+```
+
+_Fields:_
+
+- `id` (string, required): The unique proxy ID to restart (e.g., "**\*\***\_\_**\*\***1")
+
+_Response:_
+
+```json
+{
+  "id": "______________1",
+  "listenAddr": "127.0.0.1:8080",
+  "label": "chrome 1",
+  "browser": "chrome"
+}
 ```
 
 ## Intercept
@@ -668,6 +799,147 @@ _Response:_
 
 - 200 OK with host address on success
 - 500 Internal Server Error on failure
+
+---
+
+## Fuzzer
+
+### Start Fuzzer
+
+Starts a new fuzzer instance with the specified configuration. The fuzzer will send requests with different payloads based on the markers and wordlists provided.
+
+```http
+POST /api/fuzzer/start
+```
+
+_Request Body:_
+
+```json
+{
+  "request": "GET /test?param=FUZZ HTTP/1.1\r\nHost: example.com\r\n\r\n",
+  "host": "example.com",
+  "port": "80",
+  "useTLS": false,
+  "markers": {
+    "FUZZ": "/path/to/wordlist.txt"
+  },
+  "mode": "cluster_bomb" | "pitch_fork",
+  "concurrency": 40,
+  "timeout": 10
+}
+```
+
+_Fields:_
+
+- `request` (string, required): The raw HTTP request template with markers (e.g., "FUZZ") that will be replaced with words from wordlists
+- `host` (string, required): The target hostname (http:// or https:// prefix will be stripped automatically)
+- `port` (string, optional): The target port. Defaults to 80 for HTTP or 443 for HTTPS
+- `useTLS` (boolean, optional): Whether to use TLS/HTTPS. Defaults to false
+- `markers` (object, required): Map of marker names to wordlist file paths. Each marker in the request will be replaced with words from its corresponding wordlist
+- `mode` (string, optional): Fuzzing mode. Options: "cluster_bomb" (all combinations) or "pitch_fork" (synchronized). Defaults to "cluster_bomb"
+- `concurrency` (integer, optional): Number of concurrent requests. Defaults to 40
+- `timeout` (float, optional): Request timeout in seconds. Defaults to 10
+
+_Response:_
+
+```json
+{
+  "id": "______________1"
+}
+```
+
+_Response Fields:_
+
+- `id` (string): The unique fuzzer ID used to track and stop the fuzzer
+
+_Error Responses:_
+
+- 400 Bad Request - Missing required fields or invalid configuration
+- 403 Forbidden - Unauthorized
+
+---
+
+### Stop Fuzzer
+
+Stops a running fuzzer instance.
+
+```http
+POST /api/fuzzer/stop
+```
+
+_Request Body:_
+
+```json
+{
+  "id": "______________1"
+}
+```
+
+_Fields:_
+
+- `id` (string, required): The unique fuzzer ID to stop
+
+_Response:_
+
+```json
+{
+  "status": "stopped"
+}
+```
+
+_Error Responses:_
+
+- 400 Bad Request - Missing ID
+- 403 Forbidden - Unauthorized
+- 404 Not Found - Fuzzer not found
+
+---
+
+### Get Fuzzer Results
+
+Streams fuzzer results in real-time using Server-Sent Events (SSE). Each result contains the request sent, response received, timing information, and the markers used.
+
+```http
+GET /api/fuzzer/results/:id
+```
+
+_Path Parameters:_
+
+- `id` (string, required): The unique fuzzer ID
+
+_Response:_
+
+Server-Sent Events stream with Content-Type: `text/event-stream`. Each event contains a JSON object:
+
+```json
+{
+  "request": "GET /test?param=value HTTP/1.1\r\nHost: example.com\r\n\r\n",
+  "response": "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html>...</html>",
+  "time": 1234567890,
+  "markers": {
+    "FUZZ": "value"
+  }
+}
+```
+
+_Response Fields:_
+
+- `request` (string): The actual HTTP request that was sent
+- `response` (string): The raw HTTP response received
+- `time` (integer): Response time in nanoseconds
+- `markers` (object): Map of marker names to the values that were used in this request
+
+_Error Responses:_
+
+- 400 Bad Request - Missing ID
+- 403 Forbidden - Unauthorized
+- 404 Not Found - Fuzzer not found
+
+_Notes:_
+
+- The connection will remain open until the fuzzer completes or is stopped
+- Results are streamed as they are generated
+- The stream will automatically close when the fuzzer finishes
 
 ---
 

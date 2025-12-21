@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	api "github.com/glitchedgitz/grroxy-db/api/app"
 	"github.com/glitchedgitz/grroxy-db/config"
+	_ "github.com/glitchedgitz/grroxy-db/logflags"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
@@ -22,7 +24,6 @@ var ProjectPath string
 var ProxyAddress string // removed, we use api now
 var showLogs bool
 
-
 // func printBanner() {
 // 	if !noBanner {
 // 		fmt.Fprint(os.Stderr, banner)
@@ -30,7 +31,8 @@ var showLogs bool
 // }
 
 func init() {
-	// log.SetOutput(io.Discard)
+	// Ensure timestamps are included in standard log output.
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 }
 
 func initialize() {
@@ -52,10 +54,10 @@ func initialize() {
 	}
 	conf.ProxyAddr = ProxyAddress
 
-	if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {
-		panic("GRROXY_TEMPLATE_DIR environment variable is not set")
+	// Optional override: if GRROXY_TEMPLATE_DIR isn't set, keep the default config value.
+	if templateDir := strings.TrimSpace(os.Getenv("GRROXY_TEMPLATE_DIR")); templateDir != "" {
+		conf.TemplateDirectory = templateDir
 	}
-	conf.TemplateDirectory = os.Getenv("GRROXY_TEMPLATE_DIR")
 
 	conf.Initiate()
 }

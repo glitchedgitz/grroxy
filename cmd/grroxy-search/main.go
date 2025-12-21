@@ -12,6 +12,7 @@ import (
 	"os"
 	"sync"
 
+	_ "github.com/glitchedgitz/grroxy-db/logflags"
 	"github.com/glitchedgitz/grroxy-db/sdk"
 	"github.com/glitchedgitz/grroxy-db/types"
 )

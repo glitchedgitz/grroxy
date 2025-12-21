@@ -18,11 +18,18 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/models"
-	"github.com/tomnomnom/rawhttp"
 	"golang.org/x/net/http2"
 )
 
-func SendHTTPRawRequest(data rawhttp.RawRequest) (string, string, error) {
+type RawRequest struct {
+	TLS      bool
+	Hostname string
+	Port     string
+	Request  string
+	Timeout  time.Duration
+}
+
+func SendHTTPRawRequest(data RawRequest) (string, string, error) {
 	// Connect to the server
 	var host = data.Hostname
 	var port = data.Port
@@ -84,7 +91,7 @@ func SendHTTPRawRequest(data rawhttp.RawRequest) (string, string, error) {
 	return grrhttp.DumpResponse(resp), timeTaken, nil
 }
 
-func SendHTTP2RawRequest(data rawhttp.RawRequest) (string, string, error) {
+func SendHTTP2RawRequest(data RawRequest) (string, string, error) {
 	// Connect to the server
 	var host = data.Hostname
 	var port = data.Port
@@ -99,8 +106,8 @@ func SendHTTP2RawRequest(data rawhttp.RawRequest) (string, string, error) {
 		log.Printf("could not read request: %s", err)
 	}
 	parts := strings.Split(s, " ")
-	if len(parts) < 3 {
-		log.Printf("malformed request supplied")
+	if len(parts) != 3 {
+		return "", "", fmt.Errorf("first line of the request is malformed")
 	}
 	// Set the request Method
 	Method := parts[0]
@@ -228,7 +235,7 @@ func (backend *Backend) SendRawRequest(e *core.ServeEvent) error {
 			log.Println("RawRequest Timeout: ", time.Duration(data["timeout"].(float64))*time.Second)
 			log.Println("RawRequest Request: ", request)
 
-			mappedData := rawhttp.RawRequest{
+			mappedData := RawRequest{
 				TLS:      data["tls"].(bool),
 				Hostname: host,
 				Port:     data["port"].(string),

@@ -26,11 +26,23 @@ type Label struct {
 // }
 
 type SitemapFetch struct {
-	Host string `db:"host" json:"host"`
-	Path string `db:"path" json:"path"`
+	Host  string `db:"host" json:"host"`
+	Path  string `db:"path" json:"path"`
+	Depth int    `db:"depth" json:"depth"` // Depth limit: 0 or not set = default 1 level, -1 = unlimited, positive number = specific depth
 	// ID     string `db:"id" json:"id"`
 	// Type   string `db:"type" json:"type"`
 	// Data string `db:"data" json:"data"`
+}
+
+type SitemapNode struct {
+	Host          string         `json:"host"`
+	Path          string         `json:"path"`
+	Type          interface{}    `json:"type"`
+	Title         string         `json:"title"`
+	Ext           interface{}    `json:"ext"`
+	Query         interface{}    `json:"query"`
+	Children      []*SitemapNode `json:"children,omitempty"`
+	ChildrenCount int            `json:"children_count"`
 }
 
 type SitemapRows struct {
