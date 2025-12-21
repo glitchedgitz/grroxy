@@ -1,11 +1,5 @@
-# grroxy-db
-Backend
+# Grroxy
 
-[Templates](./template.md)
-
-TODO:
-Grroxy add feature to push things in grroxy running instance
-```
-cat urls.txt | grroxy add
-cat hosts.txt | grroxy add
-```
+App Version `v2025.12.0`
+Backend `v0.18.0`
+Frontend `v0.18.0`
