@@ -34,7 +34,7 @@ function createWindow() {
         vibrancy: isWindows ? undefined : 'under-window',  // macOS only
 
         webPreferences: {
-            preload: path.join(__dirname, 'preload.ts'),
+            preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
             nodeIntegration: false,
         }
@@ -48,9 +48,8 @@ function createWindow() {
     } else {
         // Load vite dev server page 
         console.log('Development mode')
-        mainWindow.loadURL('http://127.0.0.1:8090/')
+        mainWindow.loadURL('localhost:5173')
         // mainWindow.loadFile(`${__dirname}/frontend/dist/index.html`)
-
     }
 
     // Maximize the window on startup
@@ -153,6 +152,3 @@ app.whenReady()
 app.on('window-all-closed', function () {
     if (process.platform !== 'darwin') app.quit()
 })
-
-
-

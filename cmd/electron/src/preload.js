@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     windowIsMaximized: async () => {
         return await ipcRenderer.invoke('window-is-maximized');
     },
-    onWindowMaximized: (callback: (isMaximized: boolean) => void) => {
+    onWindowMaximized: (callback) => {
         ipcRenderer.on('window-maximized', (event, isMaximized) => {
             callback(isMaximized);
         });
