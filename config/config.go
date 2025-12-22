@@ -19,9 +19,7 @@ type Config struct {
 	CacheDirectory    string
 	TemplateDirectory string
 
-	ProjectFile string
-	ProjectID   string // Project ID extracted from project path
-	AppData     JSONData
+	ProjectID string // Project ID extracted from project path
 }
 
 func (c *Config) Initiate() {
@@ -49,5 +47,4 @@ func (c *Config) ShowConfig() {
 	fmt.Println("Home:         ", c.HomeDirectory)
 	fmt.Println("Cache:        ", c.CacheDirectory)
 	fmt.Println("Config:       ", c.ProjectsDirectory)
-	fmt.Println("Project File: ", c.ProjectFile)
 }
