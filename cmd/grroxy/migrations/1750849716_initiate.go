@@ -72,13 +72,16 @@ func init() {
 			log.Println("[migration][init] Creating collectionasdf: ", db.Name)
 		}
 
-		var ind = ""
+		// Create indexes with proper error checking
 		for _, db := range schemas.Main {
-			ind += db.Index
-			dao.DB().NewQuery(db.Index).Execute()
+			if db.Index != "" && db.HasIndex {
+				log.Println("[migration][init] Creating index for: ", db.Name)
+				if _, err := dao.DB().NewQuery(db.Index).Execute(); err != nil {
+					log.Printf("[migration][init] Error creating index for %s: %v\n", db.Name, err)
+					return err
+				}
+			}
 		}
-
-		log.Println("[migration][init] Creating Indexes: ", ind)
 
 		// Setting Up Default Settings
 		// settingsCollection, err := dao.FindCollectionByNameOrId("_settings")

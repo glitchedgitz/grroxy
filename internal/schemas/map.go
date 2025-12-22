@@ -203,7 +203,7 @@ var Collections = []DB{
 		ConfigSchema,
 		true,
 		`
-		CREATE UNIQUE INDEX idx_configs_key ON _configs (key)
+		CREATE UNIQUE INDEX idx_configs_key ON _configs (key);
 		`,
 	},
 
