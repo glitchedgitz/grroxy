@@ -19,7 +19,7 @@ func (launcher *Launcher) GetFilePath(folder, fileName string) string {
 	case "cache":
 		return path.Join(launcher.Config.CacheDirectory, fileName)
 	case "config":
-		return path.Join(launcher.Config.ProjectDirectory, fileName)
+		return path.Join(launcher.Config.ProjectsDirectory, fileName)
 	case "cwd":
 		cwd, _ := os.Getwd()
 		return path.Join(strings.Trim(cwd, " "), fileName)

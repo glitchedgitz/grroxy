@@ -40,12 +40,12 @@ func initialize() {
 	os.MkdirAll(conf.CacheDirectory, 0755)
 	utils.CheckErr("", err)
 
-	conf.ProjectDirectory, err = os.UserConfigDir()
-	conf.ProjectDirectory = path.Join(conf.ProjectDirectory, "grroxy")
-	os.MkdirAll(conf.ProjectDirectory, 0755)
+	conf.ProjectsDirectory, err = os.UserConfigDir()
+	conf.ProjectsDirectory = path.Join(conf.ProjectsDirectory, "grroxy")
+	os.MkdirAll(conf.ProjectsDirectory, 0755)
 	utils.CheckErr("", err)
 
-	fmt.Println("Config directory:", conf.ProjectDirectory)
+	fmt.Println("Config directory:", conf.ProjectsDirectory)
 	fmt.Println("Cache directory:", conf.CacheDirectory)
 	fmt.Println("Home directory:", conf.HomeDirectory)
 
