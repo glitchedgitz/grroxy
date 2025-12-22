@@ -7,8 +7,8 @@ import (
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
-	api "github.com/glitchedgitz/grroxy-db/api/app"
-	"github.com/glitchedgitz/grroxy-db/process"
+	"github.com/glitchedgitz/grroxy-db/apps/app"
+	"github.com/glitchedgitz/grroxy-db/internal/process"
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -30,7 +30,7 @@ func serve(projectPath string) {
 	log.Printf("Project ID: %s", projectID)
 
 	// Create an instance of the app structure
-	API = api.Backend{
+	API = app.Backend{
 		App: pocketbase.NewWithConfig(
 			pocketbase.Config{
 				ProjectDir:      projectPath,

@@ -3,7 +3,7 @@ package migrations
 import (
 	"log"
 
-	"github.com/glitchedgitz/grroxy-db/schemas"
+	"github.com/glitchedgitz/grroxy-db/internal/schemas"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/daos"
 	m "github.com/pocketbase/pocketbase/migrations"

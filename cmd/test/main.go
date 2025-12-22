@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/glitchedgitz/grroxy-db/schemas"
-	"github.com/glitchedgitz/grroxy-db/sdk"
-	"github.com/glitchedgitz/grroxy-db/types"
+	"github.com/glitchedgitz/grroxy-db/internal/schemas"
+	"github.com/glitchedgitz/grroxy-db/internal/sdk"
+	"github.com/glitchedgitz/grroxy-db/internal/types"
 	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 
 	"github.com/pocketbase/pocketbase/models"

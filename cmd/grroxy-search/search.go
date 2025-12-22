@@ -5,7 +5,7 @@ import (
 	"log"
 	"regexp"
 
-	"github.com/glitchedgitz/grroxy-db/sdk"
+	"github.com/glitchedgitz/grroxy-db/internal/sdk"
 )
 
 var field = "resp"

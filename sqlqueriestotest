@@ -1,4 +1,0 @@
-SELECT id FROM '_data' WHERE id LIKE '%15';
-SELECT id FROM '_data' WHERE id REGEXP '15$';
-SELECT host FROM '_data' WHERE host NOT REGEXP 'google.com$' LIMIT 10;
-
