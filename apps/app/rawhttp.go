@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/rawhttp"
+	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"

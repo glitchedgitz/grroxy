@@ -27,8 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/grrhttp"
-	"github.com/glitchedgitz/grroxy-db/rawproxy"
+	"github.com/glitchedgitz/grroxy-db/grx/grrhttp"
+	"github.com/glitchedgitz/grroxy-db/grx/rawproxy"
 	"github.com/glitchedgitz/grroxy-db/types"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/pocketbase/pocketbase/daos"

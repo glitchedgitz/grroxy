@@ -11,8 +11,8 @@ import (
 
 	"log"
 
-	"github.com/glitchedgitz/grroxy-db/grrhttp"
-	"github.com/glitchedgitz/grroxy-db/rawhttp"
+	"github.com/glitchedgitz/grroxy-db/grx/grrhttp"
+	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
 	"github.com/glitchedgitz/grroxy-db/types"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/labstack/echo/v5"

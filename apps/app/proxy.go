@@ -9,7 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/glitchedgitz/grroxy-db/browser"
+	"github.com/glitchedgitz/grroxy-db/grx/browser"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"

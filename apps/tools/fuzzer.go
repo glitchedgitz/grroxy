@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/fuzzer"
-	"github.com/glitchedgitz/grroxy-db/rawhttp"
+	"github.com/glitchedgitz/grroxy-db/grx/fuzzer"
+	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
 	"github.com/glitchedgitz/grroxy-db/schemas"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/grrhttp"
+	"github.com/glitchedgitz/grroxy-db/grx/grrhttp"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"

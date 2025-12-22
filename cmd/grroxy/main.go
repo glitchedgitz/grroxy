@@ -16,7 +16,7 @@ import (
 	"github.com/glitchedgitz/grroxy-db/config"
 	_ "github.com/glitchedgitz/grroxy-db/logflags"
 	"github.com/glitchedgitz/grroxy-db/process"
-	"github.com/glitchedgitz/grroxy-db/rawproxy"
+	"github.com/glitchedgitz/grroxy-db/grx/rawproxy"
 	"github.com/glitchedgitz/grroxy-db/utils"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"

@@ -3,7 +3,7 @@ package launcher
 import (
 	"net/http"
 
-	"github.com/glitchedgitz/grroxy-db/frontend"
+	"github.com/glitchedgitz/grroxy-db/grx/frontend"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
