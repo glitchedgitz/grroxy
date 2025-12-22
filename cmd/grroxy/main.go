@@ -65,20 +65,20 @@ func setConfig() {
 
 	// Generate CA certificate on first launch
 	// This ensures users can download and install the cert before starting the proxy
-	certDir := path.Join(conf.HomeDirectory, ".config", "grroxy")
-	os.MkdirAll(certDir, 0755)
+	conf.ConfigDirectory = path.Join(conf.HomeDirectory, ".config", "grroxy")
+	os.MkdirAll(conf.ConfigDirectory, 0755)
 
-	fmt.Println("Config directory:", certDir)
+	fmt.Println("Config directory:", conf.ConfigDirectory)
 	fmt.Println("Project directory:", conf.ProjectDirectory)
 	fmt.Println("Cache directory:", conf.CacheDirectory)
 	fmt.Println("Home directory:", conf.HomeDirectory)
 
-	caCrtPath := path.Join(certDir, "ca.crt")
-	caKeyPath := path.Join(certDir, "ca.key")
+	caCrtPath := path.Join(conf.ConfigDirectory, "ca.crt")
+	caKeyPath := path.Join(conf.ConfigDirectory, "ca.key")
 
 	// If certificates don't exist, generate them using rawproxy
 	if !fileExists(caCrtPath) || !fileExists(caKeyPath) {
-		_, certPath, _, err := rawproxy.GenerateMITMCA(certDir)
+		_, certPath, _, err := rawproxy.GenerateMITMCA(conf.ConfigDirectory)
 		if err != nil {
 			log.Printf("[Warning] Failed to generate CA certificate: %v", err)
 		} else {
@@ -97,7 +97,6 @@ func fileExists(path string) bool {
 
 func initialize() {
 
-	fmt.Println("Starting grroxyy")
 	setConfig()
 
 	// if !showLogs {

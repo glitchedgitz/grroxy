@@ -13,6 +13,7 @@ type Config struct {
 	ProxyAddr         string // Deprecated: Use the API to start the proxy instead
 	HomeDirectory     string
 	CWDirectory       string
+	ConfigDirectory   string
 	ProjectDirectory  string
 	CacheDirectory    string
 	TemplateDirectory string
