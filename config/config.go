@@ -13,7 +13,7 @@ type Config struct {
 	ProxyAddr         string // Deprecated: Use the API to start the proxy instead
 	HomeDirectory     string
 	CWDirectory       string
-	ConfigDirectory   string
+	ProjectDirectory  string
 	CacheDirectory    string
 	TemplateDirectory string
 	ProjectFile       string
@@ -33,12 +33,12 @@ func (c *Config) Initiate() {
 	os.MkdirAll(c.CacheDirectory, 0755)
 	utils.CheckErr("", err)
 
-	c.ConfigDirectory, err = os.UserConfigDir()
-	c.ConfigDirectory = path.Join(c.ConfigDirectory, "grroxy")
-	os.MkdirAll(c.ConfigDirectory, 0755)
+	c.ProjectDirectory, err = os.UserConfigDir()
+	c.ProjectDirectory = path.Join(c.ProjectDirectory, "grroxy")
+	os.MkdirAll(c.ProjectDirectory, 0755)
 	utils.CheckErr("", err)
 
-	c.ProjectFile = path.Join(c.ConfigDirectory, "projects.json")
+	c.ProjectFile = path.Join(c.ProjectDirectory, "projects.json")
 
 	// c.LoadAppData()
 }
@@ -46,6 +46,6 @@ func (c *Config) Initiate() {
 func (c *Config) ShowConfig() {
 	fmt.Println("Home:         ", c.HomeDirectory)
 	fmt.Println("Cache:        ", c.CacheDirectory)
-	fmt.Println("Config:       ", c.ConfigDirectory)
+	fmt.Println("Config:       ", c.ProjectDirectory)
 	fmt.Println("Project File: ", c.ProjectFile)
 }

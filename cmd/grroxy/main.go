@@ -58,9 +58,9 @@ func setConfig() {
 	os.MkdirAll(conf.CacheDirectory, 0755)
 	utils.CheckErr("", err)
 
-	conf.ConfigDirectory, err = os.UserConfigDir()
-	conf.ConfigDirectory = path.Join(conf.ConfigDirectory, "grroxy")
-	os.MkdirAll(conf.ConfigDirectory, 0755)
+	conf.ProjectDirectory, err = os.UserConfigDir()
+	conf.ProjectDirectory = path.Join(conf.ProjectDirectory, "grroxy")
+	os.MkdirAll(conf.ProjectDirectory, 0755)
 	utils.CheckErr("", err)
 
 	// Generate CA certificate on first launch
@@ -69,7 +69,7 @@ func setConfig() {
 	os.MkdirAll(certDir, 0755)
 
 	fmt.Println("Config directory:", certDir)
-	fmt.Println("Project directory:", conf.ConfigDirectory)
+	fmt.Println("Project directory:", conf.ProjectDirectory)
 	fmt.Println("Cache directory:", conf.CacheDirectory)
 	fmt.Println("Home directory:", conf.HomeDirectory)
 
@@ -190,7 +190,7 @@ func startCore() {
 	launch = &launcher.Launcher{
 		App: pocketbase.NewWithConfig(
 			pocketbase.Config{
-				ProjectDir:      path.Join(conf.ConfigDirectory),
+				ProjectDir:      path.Join(conf.ProjectDirectory),
 				DefaultDataDir:  "grroxy-main",
 				HideStartBanner: true,
 				// DefaultDev: true,

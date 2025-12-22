@@ -186,7 +186,7 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 	}
 
 	projectId := xid.New().String()
-	projectPath := path.Join(launcher.Config.ConfigDirectory, projectId)
+	projectPath := path.Join(launcher.Config.ProjectDirectory, projectId)
 	os.MkdirAll(projectPath, 0755)
 
 	projectData := ProjectData{

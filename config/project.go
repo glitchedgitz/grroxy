@@ -107,7 +107,7 @@ func (c *Config) ListProjects() {
 
 func (c *Config) NewProject(projectName string) {
 	projectId := xid.New().String()
-	projectPath := path.Join(c.ConfigDirectory, projectId)
+	projectPath := path.Join(c.ProjectDirectory, projectId)
 	os.MkdirAll(projectPath, 0755)
 
 	currenttime := time.Now().Format(time.DateTime)

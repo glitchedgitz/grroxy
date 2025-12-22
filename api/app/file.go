@@ -19,7 +19,7 @@ func (backend *Backend) GetFilePath(folder, fileName string) string {
 	case "cache":
 		return path.Join(backend.Config.CacheDirectory, fileName)
 	case "config":
-		return path.Join(backend.Config.ConfigDirectory, fileName)
+		return path.Join(backend.Config.ProjectDirectory, fileName)
 	case "cwd":
 		cwd, _ := os.Getwd()
 		return path.Join(strings.Trim(cwd, " "), fileName)

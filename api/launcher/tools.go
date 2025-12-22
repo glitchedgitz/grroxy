@@ -108,7 +108,7 @@ func (launcher *Launcher) ToolsServer(e *core.ServeEvent) error {
 					}
 				}
 			} else {
-				path = launcher.Config.ConfigDirectory
+				path = launcher.Config.ProjectDirectory
 				hostAddress, err = utils.CheckAndFindAvailablePort("127.0.0.1:9000")
 				name = xid.New().String()
 				tool, err := launcher.NewTool(map[string]any{

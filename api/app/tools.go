@@ -91,7 +91,7 @@ func (backend *Backend) ToolsServer(e *core.ServeEvent) error {
 		Method: "GET",
 		Path:   "/api/tool/server",
 		Handler: func(c echo.Context) error {
-			path := backend.Config.ConfigDirectory
+			path := backend.Config.ProjectDirectory
 			hostAddress, err := utils.CheckAndFindAvailablePort("127.0.0.1:8090")
 			name := xid.New().String()
 
