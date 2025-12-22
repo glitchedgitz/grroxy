@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -29,15 +30,7 @@ import (
 var noProxy bool
 var MainHostAddress string = "127.0.0.1:8090"
 var MainProxyAddress string = "127.0.0.1:8888"
-var showLogs bool
-var noBanner bool
-var launchApp bool
-
-// func printBanner() {
-// 	if !noBanner {
-// 		fmt.Fprint(os.Stderr, banner)
-// 	}
-// }
+var showLogs = false
 
 func init() {
 	// Ensure timestamps are included in standard log output.
@@ -68,10 +61,12 @@ func setConfig() {
 	conf.ConfigDirectory = path.Join(conf.HomeDirectory, ".config", "grroxy")
 	os.MkdirAll(conf.ConfigDirectory, 0755)
 
-	fmt.Println("Home directory:", conf.HomeDirectory)
-	fmt.Println("Config directory:", conf.ConfigDirectory)
-	fmt.Println("Projects directory:", conf.ProjectsDirectory)
-	fmt.Println("Cache directory:", conf.CacheDirectory)
+	fmt.Println("[Project Config]")
+	fmt.Println("Home directory:     ", conf.HomeDirectory)
+	fmt.Println("Config directory:   ", conf.ConfigDirectory)
+	fmt.Println("Projects directory: ", conf.ProjectsDirectory)
+	fmt.Println("Cache directory:    ", conf.CacheDirectory)
+	fmt.Println()
 
 	caCrtPath := path.Join(conf.ConfigDirectory, "ca.crt")
 	caKeyPath := path.Join(conf.ConfigDirectory, "ca.key")
@@ -99,9 +94,9 @@ func initialize() {
 
 	setConfig()
 
-	// if !showLogs {
-	// 	log.SetOutput(io.Discard)
-	// }
+	if !showLogs {
+		log.SetOutput(io.Discard)
+	}
 
 	startCore()
 
@@ -117,12 +112,6 @@ func completionCommand() *cobra.Command {
 var rootCmd = &cobra.Command{
 	Use:   "grroxy",
 	Short: "grroxy is center of your web hacking operations",
-	// Run: func(cmd *cobra.Command, args []string) {
-	// 	if launchApp {
-	// 	} else {
-	// 		initialize()
-	// 	}
-	// },
 }
 
 func init() {
@@ -134,36 +123,11 @@ func init() {
 }
 
 func main() {
-	// initialize()
-	// go initialize()
-	// runApp()
-
-	// rootCmd.AddCommand(&cobra.Command{
-	// 	Use:   "projects [project index (optional)]",
-	// 	Short: "List all projects or open a specific project by index",
-	// 	Run: func(cmd *cobra.Command, args []string) {
-	// 		// Wait for initialization
-	// 		wg.Wait()
-
-	// 		if len(args) > 0 {
-	// 			projectIndex, err := strconv.Atoi(args[0])
-	// 			if err != nil {
-	// 				fmt.Println("Invalid project index:", err)
-	// 				return
-	// 			}
-	// 			launch.OpenProject(projectIndex)
-	// 		} else {
-	// 			initialize()
-	// 			launch.ListProjects()
-	// 		}
-	// 	},
-	// })
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "config",
 		Short: "Set config directory",
 		Run: func(cmd *cobra.Command, args []string) {
-			// fmt.Println("Config")
 			setConfig()
 		},
 	})
@@ -183,8 +147,6 @@ func main() {
 }
 
 func startCore() {
-	// Remove the defer since we want to control when we signal completion
-	// defer wg.Done()
 
 	launch = &launcher.Launcher{
 		App: pocketbase.NewWithConfig(
@@ -235,7 +197,7 @@ func startCore() {
 	}
 
 	// Signal that initialization is complete before starting the server
-	fmt.Println("Starting core at: ", host)
+	fmt.Println("Starting main app at: ", host)
 
 	_, err = apis.Serve(launch.App, apis.ServeConfig{
 		HttpAddr: host,
