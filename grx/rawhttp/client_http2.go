@@ -82,20 +82,29 @@ func (c *Client) SendHTTP2(req Request) (*Response, error) {
 		key := strings.TrimSuffix(header[0], ":") // Remove trailing colon from key
 		value := strings.TrimSpace(header[1])
 
-		// lowerKey := strings.ToLower(key)
+		lowerKey := strings.ToLower(key)
 
-		// Note: HTTP/2 spec forbids certain headers, but we allow them for testing
-		// Uncomment the block below to filter forbidden headers automatically:
-		/*
-			// Skip headers that are forbidden in HTTP/2 or handled automatically
-			if lowerKey == "host" || lowerKey == "connection" ||
-				lowerKey == "transfer-encoding" || lowerKey == "upgrade" ||
-				lowerKey == "keep-alive" || lowerKey == "proxy-connection" {
-				continue
-			}
-		*/
+		// Skip headers that are forbidden in HTTP/2 or handled automatically
+		// These headers cause INTERNAL_ERROR or PROTOCOL_ERROR from HTTP/2 servers
+		if lowerKey == "connection" ||
+			lowerKey == "transfer-encoding" ||
+			lowerKey == "upgrade" ||
+			lowerKey == "keep-alive" ||
+			lowerKey == "proxy-connection" ||
+			lowerKey == "http2-settings" {
+			continue
+		}
 
-		// For security testing, we send all headers and let the server/library decide
+		// Host header is handled separately via httpReq.Host
+		if lowerKey == "host" {
+			continue
+		}
+
+		// Skip TE header unless its value is "trailers"
+		if lowerKey == "te" && !strings.EqualFold(value, "trailers") {
+			continue
+		}
+
 		httpReq.Header.Add(key, value)
 	}
 
@@ -118,6 +127,18 @@ func (c *Client) SendHTTP2(req Request) (*Response, error) {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
+	// Decompress the body if Content-Encoding is present
+	contentEncoding := httpResp.Header.Get("Content-Encoding")
+	if contentEncoding != "" {
+		decompressedBody, err := decompressBodyByEncoding(respBody, contentEncoding)
+		if err == nil && len(decompressedBody) > 0 {
+			respBody = decompressedBody
+			// Remove Content-Encoding header since we've decoded it
+			// httpResp.Header.Del("Content-Encoding")
+		}
+		// If decompression fails, we'll just use the original body
+	}
+
 	// Convert to raw HTTP/1.x format for consistency with the rest of the codebase
 	return convertHTTP2ToRaw(httpResp, respBody, responseTime), nil
 }
@@ -131,15 +152,19 @@ func convertHTTP2ToRaw(resp *http.Response, body []byte, responseTime time.Durat
 	rawResponse.WriteString(statusLine)
 	rawResponse.WriteString("\r\n")
 
-	// Write headers
+	// Write headers (but update Content-Length to match actual body size)
 	for key, values := range resp.Header {
+		// Skip Content-Length, we'll add it after with the correct value
+		if strings.ToLower(key) == "content-length" {
+			continue
+		}
 		for _, value := range values {
 			rawResponse.WriteString(fmt.Sprintf("%s: %s\r\n", key, value))
 		}
 	}
 
-	// Add Content-Length header if not present and body exists
-	if resp.Header.Get("Content-Length") == "" && len(body) > 0 {
+	// Add Content-Length header with actual body size (after any decompression)
+	if len(body) > 0 {
 		rawResponse.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(body)))
 	}
 
