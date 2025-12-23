@@ -54,6 +54,9 @@ POST      /api/fuzzer/start
 POST      /api/fuzzer/stop
 GET       /api/fuzzer/results/:id
 
+# Repeater
+POST      /api/repeater/send
+
 # Certificates
 GET       /cacert.crt
 ```
@@ -361,6 +364,84 @@ POST /api/repeater/delete
 ```json
 { "success": true, "id": "..." }
 ```
+
+---
+
+### Send Repeater Request
+
+Sends a raw HTTP request through the repeater and saves both the request and response to the backend. This endpoint combines the functionality of sending a raw HTTP request and automatically storing the transaction in the database.
+
+```http
+POST /api/repeater/send
+```
+
+_Request Body:_
+
+```json
+{
+  "host": "example.com",
+  "port": "443",
+  "tls": true,
+  "request": "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+  "timeout": 10,
+  "http2": false,
+  "index": 1.0,
+  "url": "https://example.com"
+}
+```
+
+_Fields:_
+
+- `host` (string, required): The target hostname (without protocol prefix)
+- `port` (string, optional): The target port (defaults to 443 for TLS, 80 for non-TLS)
+- `tls` (boolean, required): Whether to use TLS/HTTPS
+- `request` (string, required): The raw HTTP request to send
+- `timeout` (float64, required): Timeout in seconds for the request
+- `http2` (boolean, optional): Whether to use HTTP/2 protocol (default: false)
+- `index` (float64, required): Primary index for organizing requests
+- `url` (string, optional): The full URL for reference
+
+**Note:** `index_minor` is automatically calculated in `SaveRequestToBackend()` using the counter system (counter key format: `"row:23"`, `"row:45"`, etc.). Each `index` has its own counter that increments for each request saved with that index.
+
+_Response:_
+
+```json
+{
+  "response": "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n...",
+  "time": "123ms",
+  "userdata": {
+    "id": "_______________",
+    "index": 1.0,
+    "index_minor": 0.0,
+    "is_https": true,
+    "host": "https://example.com",
+    "port": "443",
+    "has_resp": true,
+    "req_json": { ... },
+    "resp_json": { ... },
+    "generated_by": "repeater"
+  }
+}
+```
+
+_Response Fields:_
+
+- `response` (string): The raw HTTP response received from the server
+- `time` (string): The time taken to send the request and receive the response
+- `userdata` (object): The complete user data object stored in the database, including request and response metadata
+
+_Features:_
+
+- **Auto-increments `index_minor`** in `SaveRequestToBackend()` using the counter system (counter key format: `"row:23"`, `"row:45"`, etc.)
+- Automatically saves the request to `_req` collection
+- Automatically saves the response to `_resp` collection
+- Creates entries in `_data` and `_attached` collections
+- Updates sitemap based on the request path
+- Supports both HTTP/1.1 and HTTP/2
+- Configurable timeout
+- Marks all saved data with `generated_by: "repeater"`
+- Each `index` maintains its own counter for sequential minor indexes
+- Counter logic is centralized in `SaveRequestToBackend()` for reusability
 
 ---
 

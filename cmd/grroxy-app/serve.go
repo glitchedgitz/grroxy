@@ -124,6 +124,9 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.AddRequest)
 	API.App.OnBeforeServe().Add(API.InterceptEndpoints)
 
+	// Repeater
+	API.App.OnBeforeServe().Add(API.SendRepeater)
+
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		// Setup intercept hooks
 		err := API.SetupInterceptHooks()
