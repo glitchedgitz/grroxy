@@ -13,6 +13,8 @@ import (
 //   has_params:       true
 //   length:           1000
 //   is_https:         true
+//   http:             HTTP/1.1
+//   proxy_id:         req-00000001
 //   is_req_edited:    false
 //   is_resp_edited:   false
 //   req:              (relation to _req)
@@ -53,6 +55,14 @@ var Rows = schema.NewSchema(
 	&schema.SchemaField{
 		Name: "is_https",
 		Type: schema.FieldTypeBool,
+	},
+	&schema.SchemaField{
+		Name: "http",
+		Type: schema.FieldTypeText,
+	},
+	&schema.SchemaField{
+		Name: "proxy_id",
+		Type: schema.FieldTypeText,
 	},
 	&schema.SchemaField{
 		Name: "is_req_edited",

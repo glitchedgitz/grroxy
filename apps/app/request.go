@@ -148,6 +148,7 @@ func generateUserData(data types.AddRequestBodyType, indexMinor float64) (types.
 		Index:      index,
 		IndexMinor: indexMinor,
 		IsHTTPS:    isHttps,
+		Http:       parsed.HTTPVersion,
 		Attached:   id,
 		Req:        id,
 		Resp:       id,

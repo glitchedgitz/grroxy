@@ -433,6 +433,8 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 	// 	Port:       port,
 	// 	HasResp:    false,
 	// 	IsHTTPS:    scheme == "https",
+	// 	Http:       req.Proto,
+	// 	ProxyId:    reqData.RequestID,
 	// 	ReqJson:    requestData,
 	// 	RespJson: types.ResponseData{
 	// 		Title:      "",
@@ -460,6 +462,8 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		"has_resp":     false,
 		"has_params":   len(req.URL.Query()) > 0,
 		"is_https":     scheme == "https",
+		"http":         req.Proto,                           // HTTP version: HTTP/1.1, HTTP/2.0, etc.
+		"proxy_id":     reqData.RequestID,                   // Proxy request ID from rawproxy: req-00000001
 		"generated_by": fmt.Sprintf("proxy/%s", rp.proxyID), // Format: proxy/______________1
 		"req_json":     requestData,
 		"resp_json": map[string]any{

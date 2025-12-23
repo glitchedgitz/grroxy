@@ -46,6 +46,8 @@ type UserData struct {
 	IsReqEdited    bool           `db:"is_req_edited,omitempty" json:"is_req_edited,omitempty"`
 	IsRespEdited   bool           `db:"is_resp_edited,omitempty" json:"is_resp_edited,omitempty"`
 	IsHTTPS        bool           `db:"is_https" json:"is_https"`
+	Http           string         `db:"http" json:"http"`
+	ProxyId        string         `db:"proxy_id,omitempty" json:"proxy_id,omitempty"`
 	Req            string         `db:"req" json:"req"`
 	Resp           string         `db:"resp" json:"resp"`
 	ReqEdited      string         `db:"req_edited,omitempty" json:"req_edited,omitempty"`
