@@ -17,11 +17,12 @@ import (
 )
 
 type Backend struct {
-	App        *pocketbase.PocketBase
-	Config     *config.Config
-	Cook       *cook.CookGenerator
-	Wappalyzer *wappalyzer.Wappalyze
-	CmdChannel chan process.RunCommandData
+	App            *pocketbase.PocketBase
+	Config         *config.Config
+	Cook           *cook.CookGenerator
+	Wappalyzer     *wappalyzer.Wappalyze
+	CmdChannel     chan process.RunCommandData
+	CounterManager *CounterManager
 }
 
 func (backend *Backend) Serve() {

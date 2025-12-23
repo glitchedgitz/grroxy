@@ -753,6 +753,21 @@ func (rp *RawProxyWrapper) saveRequestToDB(reqCtx *RequestContext, requestData m
 	// Track success
 	rp.stats.RequestsSaved.Add(1)
 
+	// Increment counters (atomic operations)
+	// Total requests counter for _data (load_on_startup - recalculated from DB)
+	rp.backend.CounterManager.IncrementWithStartup("_data", "_data", "", true)
+
+	// Per-proxy counter (immediate sync for exact counts)
+	if generatedBy, ok := userdata["generated_by"].(string); ok {
+		rp.backend.CounterManager.Increment(generatedBy, "_data", "")
+	}
+
+	// Per-host counter (immediate sync for exact counts)
+	if host, ok := userdata["host"].(string); ok {
+		sitemapCollectionName := utils.ParseDatabaseName(host)
+		rp.backend.CounterManager.Increment("host:"+sitemapCollectionName, "_data", "")
+	}
+
 	log.Printf("[RawProxy][DB][COMPLETE] Request ID=%s saved successfully in %v", userdata["id"].(string), elapsed)
 }
 

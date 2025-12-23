@@ -205,6 +205,9 @@ func (backend *Backend) LabelAttach(e *core.ServeEvent) error {
 				return err
 			}
 
+			// Increment counter for this label
+			backend.CounterManager.Increment("label:"+labelRecord.Id, "_labels", "")
+
 			return c.String(http.StatusOK, "Created")
 		},
 		Middlewares: []echo.MiddlewareFunc{

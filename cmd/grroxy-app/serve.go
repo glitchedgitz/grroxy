@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"path/filepath"
+	"time"
 
 	// "github.com/pocketbase/dbx"
 
@@ -123,11 +124,44 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.AddRequest)
 	API.App.OnBeforeServe().Add(API.InterceptEndpoints)
 
-	// Setup intercept hooks
-	API.SetupInterceptHooks()
+	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+		// Setup intercept hooks
+		err := API.SetupInterceptHooks()
+		if err != nil {
+			log.Printf("[Startup] Error setting up intercept hooks: %v", err)
+			return err
+		}
 
-	// Setup filters hook
-	API.SetupFiltersHook()
+		// Setup filters hook
+		err = API.SetupFiltersHook()
+		if err != nil {
+			log.Printf("[Startup] Error setting up filters hook: %v", err)
+			return err
+		}
+
+		// Setup counter manager
+		err = API.SetupCounterManager()
+		if err != nil {
+			log.Printf("[Startup] Error setting up counter manager: %v", err)
+			return err
+		}
+
+		// Start periodic sync every 1 second
+		go func() {
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+
+			for range ticker.C {
+				if err := API.CounterManager.SyncToDB(); err != nil {
+					// log.Printf("[CounterManager] Periodic sync error: %v", err)
+				} else {
+					// log.Println("[CounterManager] Periodic sync completed")
+				}
+			}
+		}()
+
+		return nil
+	})
 
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		API.App.Dao().DB().NewQuery(`
