@@ -17,6 +17,9 @@ POST      /api/playground/new
 POST      /api/playground/add
 POST      /api/playground/delete
 
+# Filters
+POST      /api/filter/check
+
 # Templates
 GET       /api/templates/list
 POST      /api/templates/new
@@ -184,6 +187,59 @@ _Response:_
   "browser": "chrome"
 }
 ```
+
+---
+
+## Filters
+
+### Check Filter
+
+Evaluates a dadql filter expression against the provided columns map. Returns whether the filter is valid and, if valid, whether it matches the given data.
+
+```http
+POST /api/filter/check
+```
+
+_Request Body:_
+
+```json
+{
+  "filter": "status == 200 && method == 'GET'",
+  "columns": {
+    "status": 200,
+    "method": "GET",
+    "path": "/foo"
+  }
+}
+```
+
+_Fields:_
+
+- `filter` (string, required): dadql filter string to evaluate.
+- `columns` (object, required): Arbitrary key/value map passed as the evaluation context.
+
+_Response (valid filter):_
+
+```json
+{
+  "ok": true,
+  "match": true
+}
+```
+
+_Response (invalid filter):_
+
+```json
+{
+  "ok": false,
+  "error": "parse or evaluation error message"
+}
+```
+
+_Error Responses:_
+
+- 400 Bad Request - `filter` missing or empty.
+- 403 Forbidden - Unauthorized.
 
 ## Intercept
 

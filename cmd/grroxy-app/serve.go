@@ -123,6 +123,7 @@ func serve(projectPath string) {
 	// Other
 	API.App.OnBeforeServe().Add(API.AddRequest)
 	API.App.OnBeforeServe().Add(API.InterceptEndpoints)
+	API.App.OnBeforeServe().Add(API.FiltersCheck)
 
 	// Repeater
 	API.App.OnBeforeServe().Add(API.SendRepeater)
