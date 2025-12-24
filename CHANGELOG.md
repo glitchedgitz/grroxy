@@ -4,26 +4,6 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## Versioning
-
-This project uses a hybrid versioning approach:
-
-- **Semantic Versioning** (SemVer): Used for major releases and API stability
-
-  - Format: `v0.MAJOR.MINOR` (e.g., `v0.19.0`, `v0.18.0`)
-  - Used for: Core releases, breaking changes, major feature additions
-  - Examples: `v0.19.0`, `v0.18.0`
-
-- **Calendar Versioning** (CalVer): Used for frontend and feature releases
-
-  - Format: `vYYYY.MM.MINOR` (e.g., `v2025.12.0`)
-  - Used for: Frontend updates, monthly feature releases, non-breaking changes
-  - Examples: `v2025.12.0`
-
-- **Date-based entries**: Used for organizing changelog entries by month
-  - Format: `[YYYY-MON]` (e.g., `[2025-DEC]`, `[2025-OCT]`)
-  - Used for: Grouping related changes and pull requests by time period
-
 ## [2025-DEC] - v0.19.0 - Counter Table & Refactoring #27
 
 ### Added
