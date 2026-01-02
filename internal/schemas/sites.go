@@ -49,4 +49,19 @@ var Sites = schema.NewSchema(
 			MaxSize: 100000,
 		},
 	},
+	// added new columns via migration 1766714322_add_hosts_fields.go
+	//	 &schema.SchemaField{
+	//	 	Name: "labels",
+	//	 	Type: schema.FieldTypeRelation,
+	//	 	Options: &schema.RelationOptions{
+	//	 		CollectionId: "_labels",
+	//	 	},
+	//	 },
+	//	 &schema.SchemaField{
+	//	 	Name: "notes",
+	//	 	Type: schema.FieldTypeText,
+	//	 	Options: &schema.JsonOptions{
+	//	 		MaxSize: 1000000,
+	//	 	},
+	//	 },
 )

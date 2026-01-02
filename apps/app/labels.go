@@ -42,10 +42,23 @@ func (backend *Backend) LabelNew(e *core.ServeEvent) error {
 			record.Set("type", data.Type)
 
 			if err := backend.App.Dao().SaveRecord(record); err != nil {
-				return err
+				record, err2 := backend.App.Dao().FindFirstRecordByFilter(
+					"_labels", "name = {:name}",
+					dbx.Params{"name": data.Name},
+				)
+				if err2 != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err2.Error()})
+				}
+				return c.JSON(http.StatusOK, map[string]interface{}{
+					"id":            record.Id,
+					"alreadyExists": true,
+				})
 			}
 
-			return c.String(http.StatusOK, "Created")
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"id":            record.Id,
+				"alreadyExists": false,
+			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),
