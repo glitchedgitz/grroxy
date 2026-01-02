@@ -121,6 +121,9 @@ func (backend *Backend) handleSitemapNew(data *types.SitemapGet) error {
 					}
 				}
 				recordIDs = append(recordIDs, r.Id)
+
+				// Increment counter for this tech
+				backend.CounterManager.Increment("tech:"+key, "", "")
 			}
 
 			backend.SaveRecordToCollection("_hosts", map[string]interface{}{
