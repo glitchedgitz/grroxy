@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-JAN] - v0.20.1 - Labels Update
+
+- Labels and Notes for hosts
+- Tech counter
+- Disabling label collection
+
 ## [2025-DEC] - v0.20.0 - Xterm Terminal Integration
 
 ### Added

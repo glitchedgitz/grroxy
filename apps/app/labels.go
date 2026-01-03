@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/glitchedgitz/grroxy-db/internal/schemas"
 	"github.com/glitchedgitz/grroxy-db/internal/types"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
@@ -43,10 +42,23 @@ func (backend *Backend) LabelNew(e *core.ServeEvent) error {
 			record.Set("type", data.Type)
 
 			if err := backend.App.Dao().SaveRecord(record); err != nil {
-				return err
+				record, err2 := backend.App.Dao().FindFirstRecordByFilter(
+					"_labels", "name = {:name}",
+					dbx.Params{"name": data.Name},
+				)
+				if err2 != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err2.Error()})
+				}
+				return c.JSON(http.StatusOK, map[string]interface{}{
+					"id":            record.Id,
+					"alreadyExists": true,
+				})
 			}
 
-			return c.String(http.StatusOK, "Created")
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"id":            record.Id,
+				"alreadyExists": false,
+			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),
@@ -160,6 +172,7 @@ func (backend *Backend) LabelAttach(e *core.ServeEvent) error {
 			// =====================
 
 			// Fetching ID
+			// TOOD: we should have list of labels here with ids, instead of fetching it every time
 			labelRecord, err2 := backend.App.Dao().FindFirstRecordByData("_labels", "name", data.Name)
 
 			if err2 != nil {
@@ -167,29 +180,29 @@ func (backend *Backend) LabelAttach(e *core.ServeEvent) error {
 				return err
 			}
 
-			// If first error is not nil, means row just created, we need to create respective `label_[id]` collection
-			var collection = "label_" + labelRecord.Id
-			if err == nil {
-				// TODO: This is unnecessary todo everytime
-				// Create Collection if not exists
-				err = backend.CreateCollection(collection, schemas.LabelCollection)
-				if err != nil {
-					log.Println("[LabelNew]: ", err)
-					return err
-				}
-			}
+			// // If first error is not nil, means row just created, we need to create respective `label_[id]` collection
+			// var collection = "label_" + labelRecord.Id
+			// if err == nil {
+			// 	// TODO: This is unnecessary todo everytime
+			// 	// Create Collection if not exists
+			// 	err = backend.CreateCollection(collection, schemas.LabelCollection)
+			// 	if err != nil {
+			// 		log.Println("[LabelNew]: ", err)
+			// 		return err
+			// 	}
+			// }
 
-			// Inserting in the `label_[id]` Collection
-			result2, err := backend.App.Dao().DB().Insert(collection, dbx.Params{
-				"id":   data.ID,
-				"data": data.ID,
-			}).Execute()
-			if err != nil {
-				log.Println("[LabelNew]: ", err)
-				return err
-			}
+			// // Inserting in the `label_[id]` Collection
+			// result2, err := backend.App.Dao().DB().Insert(collection, dbx.Params{
+			// 	"id":   data.ID,
+			// 	"data": data.ID,
+			// }).Execute()
+			// if err != nil {
+			// 	log.Println("[LabelNew]: ", err)
+			// 	return err
+			// }
 
-			log.Println("[LabelNew]: ", result2)
+			// log.Println("[LabelNew]: ", result2)
 
 			// Attaching to the row
 			record3, err := backend.App.Dao().FindRecordById("_attached", data.ID)
