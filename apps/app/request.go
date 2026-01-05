@@ -299,7 +299,7 @@ func (backend *Backend) SaveRequestToBackend(reqBody types.AddRequestBodyType) (
 	record := models.NewRecord(collection)
 	record.Set("id", userdata.ID)
 	record.Set("labels", []string{})
-	record.Set("note", "")
+	record.Set("note", reqBody.Note)
 
 	err = backend.App.Dao().SaveRecord(record)
 	if err != nil {

@@ -13,14 +13,16 @@ import (
 )
 
 type RepeaterSendRequest struct {
-	Host    string  `json:"host"`
-	Port    string  `json:"port"`
-	TLS     bool    `json:"tls"`
-	Request string  `json:"request"`
-	Timeout float64 `json:"timeout"`
-	HTTP2   bool    `json:"http2"`
-	Index   float64 `json:"index"`
-	Url     string  `json:"url"`
+	Host        string  `json:"host"`
+	Port        string  `json:"port"`
+	TLS         bool    `json:"tls"`
+	Request     string  `json:"request"`
+	Timeout     float64 `json:"timeout"`
+	HTTP2       bool    `json:"http2"`
+	Index       float64 `json:"index"`
+	Url         string  `json:"url"`
+	GeneratedBy string  `json:"generated_by"`
+	Note        string  `json:"note,omitempty"`
 }
 
 type RepeaterSendResponse struct {
@@ -82,7 +84,8 @@ func (backend *Backend) SendRepeater(e *core.ServeEvent) error {
 				Index:       reqData.Index,
 				Request:     reqData.Request,
 				Response:    respString,
-				GeneratedBy: "repeater",
+				GeneratedBy: "repeater/" + reqData.GeneratedBy,
+				Note:        reqData.Note,
 			}
 
 			userdata, err := backend.SaveRequestToBackend(addReqBody)

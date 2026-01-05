@@ -6,4 +6,5 @@ type AddRequestBodyType struct {
 	Request     string  `json:"request"`
 	Response    string  `json:"response"`
 	GeneratedBy string  `json:"generated_by"`
+	Note        string  `json:"note,omitempty"`
 }
