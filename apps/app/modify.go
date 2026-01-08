@@ -296,11 +296,28 @@ func RequestDeleteKey(requestData map[string]any, key string) {
 
 	} else if strings.HasPrefix(key, "req.headers") {
 		header := strings.TrimPrefix(key, "req.headers")[1:]
+
 		if headers, ok := requestData["headers"].([][]string); ok {
 			newHeaders := [][]string{}
-			for _, h := range headers {
-				if h[0] != header+":" {
-					newHeaders = append(newHeaders, h)
+
+			// Check if header ends with * for wildcard deletion
+			if strings.HasSuffix(header, "*") {
+				prefix := strings.TrimSuffix(header, "*")
+				// Delete all headers starting with the prefix
+				for _, h := range headers {
+					// h[0] is the header name with colon (e.g., "Sec-Fetch-Dest:")
+					// Check if it starts with the prefix followed by colon or dash
+					headerName := strings.TrimSuffix(h[0], ":")
+					if !strings.HasPrefix(headerName, prefix) {
+						newHeaders = append(newHeaders, h)
+					}
+				}
+			} else {
+				// Exact match deletion (existing behavior)
+				for _, h := range headers {
+					if h[0] != header+":" {
+						newHeaders = append(newHeaders, h)
+					}
 				}
 			}
 			requestData["headers"] = newHeaders
