@@ -8,51 +8,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- **Browser Automation via Chrome DevTools Protocol**
-  - `/api/proxy/screenshot` - Capture screenshots from Chrome browser attached to proxy instances
-    - Support for full-page or viewport screenshots
-    - Optional file saving to cache directory
-    - Base64-encoded response for direct embedding
-  - `/api/proxy/click` - Click elements on pages using CSS selectors
-    - Optional navigation waiting after click
-    - Works with active Chrome browser instances
-  - `/api/proxy/elements` - Retrieve clickable elements information from current page
-    - Returns element details (tag, text, selector, attributes)
-    - Useful for automated interaction discovery
+- **Browser Automation via Chrome DevTools Protocol** (605f41d)
+  - `/api/proxy/screenshot` - Capture screenshots (full-page or viewport, optional file save)
+  - `/api/proxy/click` - Click elements using CSS selectors
+  - `/api/proxy/elements` - Get clickable elements from current page
 
-- **Data Extraction System**
-  - `/api/extract` - Extract specific fields from database records by host
-    - Support for extracting from `req.*`, `resp.*`, `req_edited.*`, `resp_edited.*` fields
-    - Flexible field selection (method, url, path, query, headers, body, etc.)
-    - Automatic file generation with extracted data
-    - JSONL output format for easy processing
+- **Data Extraction** (5c87dbb)
+  - `/api/extract` - Extract fields from database records by host (supports `req.*`, `resp.*`, `req_edited.*`, `resp_edited.*`)
 
-- **Request Modification API**
-  - `/api/request/modify` - Programmatically modify HTTP requests
-    - Template-based modification system
-    - Support for set, delete, and replace operations
-    - Modify method, URL, path, query parameters, headers, and body
-    - Wildcard header deletion (e.g., `req.headers.Sec-*`)
-    - Regex-based find and replace
+- **Request Modification** (386148b, fc66654)
+  - `/api/request/modify` - Modify HTTP requests (set, delete, replace operations)
+  - Wildcard header deletion support (fc66654)
 
-- **System Information Endpoint**
-  - `/api/info` - Get system and project information
-    - Returns version, working directory, project ID, cache/config/template paths
-    - Useful for tooling and automation
+- **System Info** (5c87dbb)
+  - `/api/info` - Get version, directories, and project info
 
 ### Changed
 
-- Enhanced proxy instances with Chrome browser integration
-- Improved request parsing and rebuilding for modifications
-- Better error handling and logging across all new endpoints
+- Enhanced proxy instances with Chrome browser integration (605f41d)
+- Improved request parsing and rebuilding (386148b)
 
 ### Fixed
 
-- Content-Length header handling in request modifications
-- HTTP/1.1 protocol handling improvements
-- TLS browser connection issues
-- InsecureSkipVerify set to true for testing environments
-- Zstd decoder support for compressed responses
+- Content-Length header handling (843820b)
+- HTTP/1.1 protocol improvements (797e28b)
+- TLS browser connection issues (504d8c7)
+- InsecureSkipVerify for testing (7b43171)
+- Zstd decoder support (2a691f0)
 
 ---
 
