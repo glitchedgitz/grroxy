@@ -16,9 +16,9 @@ Backend:   v0.21.0
 Frontend:   v0.21.0
 
 # Released App
-App:       v2025.12.0
-Backend:   v0.18.0
-Frontend:  v0.18.0
+App:       v2026.01.0
+Backend:   v0.21.0
+Frontend:  v0.21.0
 ```
 
 The version is maintained in the `VERSION` file at the project root. Use `internal/version` package to access version programmatically in Go code.
