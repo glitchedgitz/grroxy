@@ -263,9 +263,21 @@ func buildSitemapTree(records []*models.Record, basePath string, host string, ma
 				}
 			}
 			parentNode.ChildrenCount = len(parentNode.Children)
+			parentNode.IsFolder = parentNode.ChildrenCount > 0
 
-			// Sort children by title
+			// Set IsFolder for all children
+			for _, child := range parentNode.Children {
+				child.IsFolder = len(child.Children) > 0
+			}
+
+			// Sort children: folders first, then files, both alphabetically
 			sort.Slice(parentNode.Children, func(i, j int) bool {
+				// If one is a folder and the other is a file, folder comes first
+				if parentNode.Children[i].IsFolder != parentNode.Children[j].IsFolder {
+					return parentNode.Children[i].IsFolder
+				}
+
+				// Both are folders or both are files, sort alphabetically
 				return parentNode.Children[i].Title < parentNode.Children[j].Title
 			})
 		}
@@ -279,12 +291,22 @@ func buildSitemapTree(records []*models.Record, basePath string, host string, ma
 
 		// Check if this is a root level node (no slashes means it's direct child of basePath)
 		if !strings.Contains(tmpPath, "/") && tmpPath != "" {
+			// Set IsFolder for nodes that weren't processed as parents
+			if node.ChildrenCount == 0 {
+				node.IsFolder = false
+			}
 			rootNodes = append(rootNodes, node)
 		}
 	}
 
-	// Sort root nodes by title
+	// Sort root nodes: folders first, then files, both alphabetically
 	sort.Slice(rootNodes, func(i, j int) bool {
+		// If one is a folder and the other is a file, folder comes first
+		if rootNodes[i].IsFolder != rootNodes[j].IsFolder {
+			return rootNodes[i].IsFolder
+		}
+
+		// Both are folders or both are files, sort alphabetically
 		return rootNodes[i].Title < rootNodes[j].Title
 	})
 

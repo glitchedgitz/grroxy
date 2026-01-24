@@ -54,4 +54,12 @@ type Config struct {
 
 	// TLSMinVersion sets the minimum TLS version (default: TLS 1.0 for compatibility)
 	TLSMinVersion uint16
+
+	// UseBrowserFingerprint enables uTLS to mimic browser TLS fingerprint
+	// This helps bypass Cloudflare and other CDN bot detection that use JA3/JA4 fingerprinting
+	UseBrowserFingerprint bool
+
+	// BrowserFingerprint specifies which browser to mimic (default: Chrome)
+	// Options: "chrome", "firefox", "safari", "edge", "random"
+	BrowserFingerprint string
 }

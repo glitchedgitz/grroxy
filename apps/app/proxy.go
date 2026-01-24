@@ -1,13 +1,17 @@
 package app
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/glitchedgitz/grroxy-db/grx/browser"
 	"github.com/glitchedgitz/grroxy-db/internal/utils"
@@ -239,6 +243,169 @@ func (pm *ProxyManager) ApplyToAllProxies(fn func(proxy *RawProxyWrapper, proxyI
 	}
 }
 
+// TakeScreenshot captures a screenshot using the Chrome browser attached to a proxy instance
+// Returns: screenshot bytes, file path (if saved), error
+func (pm *ProxyManager) TakeScreenshot(proxyID string, url string, fullPage bool, savePath string) ([]byte, string, error) {
+	pm.mu.RLock()
+	inst := pm.instances[proxyID]
+	pm.mu.RUnlock()
+
+	if inst == nil {
+		return nil, "", fmt.Errorf("proxy %s not found", proxyID)
+	}
+
+	if inst.Browser != "chrome" {
+		return nil, "", fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
+	}
+
+	if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
+		return nil, "", fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+	}
+
+	// Get the profile directory from the proxy configuration
+	// The profile directory is stored in the backend config at: {configDir}/profiles/{projectID}{proxyID}
+	// We need to extract it from the browser command or reconstruct it
+	// For now, we'll look for the --user-data-dir argument in the browser command
+	var profileDir string
+	if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
+		for _, arg := range inst.BrowserCmd.Args {
+			if strings.HasPrefix(arg, "--user-data-dir=") {
+				profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
+				break
+			}
+		}
+	}
+
+	if profileDir == "" {
+		return nil, "", fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+	}
+
+	log.Printf("[TakeScreenshot] Using profile directory: %s", profileDir)
+
+	// Get the Chrome debug URL
+	debugURL, err := browser.GetChromeDebugURL(profileDir)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get Chrome debug URL: %v", err)
+	}
+
+	// Capture the screenshot
+	screenshotBytes, err := browser.TakeChromeScreenshot(debugURL, url, fullPage)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to capture screenshot: %v", err)
+	}
+
+	// Save to file if path is provided
+	var filePath string
+	if savePath != "" {
+		if err := os.WriteFile(savePath, screenshotBytes, 0644); err != nil {
+			return screenshotBytes, "", fmt.Errorf("failed to save screenshot to %s: %v", savePath, err)
+		}
+		filePath = savePath
+		log.Printf("[TakeScreenshot] Screenshot saved to: %s", filePath)
+	}
+
+	return screenshotBytes, filePath, nil
+}
+
+// ClickElement clicks an element on the page using the Chrome browser attached to a proxy instance
+func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string, waitForNavigation bool) error {
+	pm.mu.RLock()
+	inst := pm.instances[proxyID]
+	pm.mu.RUnlock()
+
+	if inst == nil {
+		return fmt.Errorf("proxy %s not found", proxyID)
+	}
+
+	if inst.Browser != "chrome" {
+		return fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
+	}
+
+	if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
+		return fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+	}
+
+	// Get the profile directory from the browser command
+	var profileDir string
+	if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
+		for _, arg := range inst.BrowserCmd.Args {
+			if strings.HasPrefix(arg, "--user-data-dir=") {
+				profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
+				break
+			}
+		}
+	}
+
+	if profileDir == "" {
+		return fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+	}
+
+	log.Printf("[ClickElement] Using profile directory: %s", profileDir)
+
+	// Get the Chrome debug URL
+	debugURL, err := browser.GetChromeDebugURL(profileDir)
+	if err != nil {
+		return fmt.Errorf("failed to get Chrome debug URL: %v", err)
+	}
+
+	// Click the element
+	if err := browser.ClickChromeElement(debugURL, url, selector, waitForNavigation); err != nil {
+		return fmt.Errorf("failed to click element: %v", err)
+	}
+
+	return nil
+}
+
+// GetElements retrieves information about clickable elements on the page
+func (pm *ProxyManager) GetElements(proxyID string, url string) ([]browser.ElementInfo, error) {
+	pm.mu.RLock()
+	inst := pm.instances[proxyID]
+	pm.mu.RUnlock()
+
+	if inst == nil {
+		return nil, fmt.Errorf("proxy %s not found", proxyID)
+	}
+
+	if inst.Browser != "chrome" {
+		return nil, fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
+	}
+
+	if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
+		return nil, fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+	}
+
+	// Get the profile directory from the browser command
+	var profileDir string
+	if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
+		for _, arg := range inst.BrowserCmd.Args {
+			if strings.HasPrefix(arg, "--user-data-dir=") {
+				profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
+				break
+			}
+		}
+	}
+
+	if profileDir == "" {
+		return nil, fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+	}
+
+	log.Printf("[GetElements] Using profile directory: %s", profileDir)
+
+	// Get the Chrome debug URL
+	debugURL, err := browser.GetChromeDebugURL(profileDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Chrome debug URL: %v", err)
+	}
+
+	// Get elements from the page
+	elements, err := browser.GetChromeElements(debugURL, url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get elements: %v", err)
+	}
+
+	return elements, nil
+}
+
 // DEPRECATED: Backward compatibility - returns first proxy or nil
 var PROXY *RawProxyWrapper
 
@@ -284,6 +451,18 @@ type ProxyBody struct {
 	Name    string `json:"name,omitempty"` // Optional name for the proxy instance
 }
 
+func (backend *Backend) InitializeProxy() error {
+	log.Println("[InitializeProxy] Initializing proxy index from database...")
+	if ProxyMgr.proxyIndex.Load() == 0 {
+		if err := ProxyMgr.initializeIndexFromDB(backend); err != nil {
+			log.Printf("[StartProxy] Warning: Failed to initialize proxy index from database: %v", err)
+			return err
+		}
+	}
+	log.Println("[InitializeProxy] Proxy index initialized from database:", ProxyMgr.index.Load())
+	return nil
+}
+
 func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 
 	e.Router.AddRoute(echo.Route{
@@ -322,14 +501,6 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusOK, map[string]interface{}{"error": "port not available", "availableHost": availableHost})
 			} else {
 				body.HTTP = availableHost
-			}
-
-			// Initialize global index from database if not already initialized
-			// This ensures all proxies use the same unique index counter
-			if ProxyMgr.index.Load() == 0 {
-				if err := ProxyMgr.initializeIndexFromDB(backend); err != nil {
-					log.Printf("[StartProxy] Warning: Failed to initialize global index from database: %v", err)
-				}
 			}
 
 			// Initialize proxy index from database if not already initialized
@@ -618,10 +789,12 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 			}
 
 			if availableHost != listenAddr {
-				return c.JSON(http.StatusConflict, map[string]interface{}{
-					"error":         "port not available",
-					"availableHost": availableHost,
-				})
+				if browserType == "" {
+					return c.JSON(http.StatusConflict, map[string]interface{}{
+						"error":         "port not available",
+						"availableHost": availableHost,
+					})
+				}
 			}
 
 			// Initialize global index from database if not already initialized
@@ -635,6 +808,8 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 			configDir := path.Join(backend.Config.ConfigDirectory)
 			outputDir := "" // Disabled
 
+			listenAddr = availableHost
+
 			newProxy, err := NewRawProxyWrapper(listenAddr, configDir, outputDir, backend, proxyID)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
@@ -642,6 +817,7 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 
 			// Update proxy record state to running
 			proxyRecord.Set("state", "running")
+			proxyRecord.Set("addr", listenAddr)
 			if err := dao.SaveRecord(proxyRecord); err != nil {
 				log.Printf("[RestartProxy][WARN] Failed to update proxy state: %v", err)
 			}
@@ -747,6 +923,188 @@ func (backend *Backend) ListProxies(e *core.ServeEvent) error {
 				"proxies": instances,
 				"count":   len(instances),
 			})
+		},
+	})
+	return nil
+}
+
+func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/screenshot",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type ScreenshotBody struct {
+				ID       string `json:"id"`                 // Proxy ID (required)
+				URL      string `json:"url,omitempty"`      // URL to navigate to (optional, empty = current tab)
+				FullPage bool   `json:"fullPage,omitempty"` // Capture full page or viewport (default: false)
+				SaveFile bool   `json:"saveFile,omitempty"` // Save to disk in cache directory (default: false)
+			}
+
+			var body ScreenshotBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+
+			log.Printf("[ScreenshotProxy] Taking screenshot for proxy %s (url=%s, fullPage=%v, saveFile=%v)",
+				body.ID, body.URL, body.FullPage, body.SaveFile)
+
+			// Generate file path if saveFile is requested
+			var savePath string
+			if body.SaveFile {
+				timestamp := time.Now().Format("20060102-150405")
+				filename := fmt.Sprintf("screenshot-%s.png", timestamp)
+				savePath = path.Join(backend.Config.CacheDirectory, filename)
+				log.Printf("[ScreenshotProxy] Will save screenshot to: %s", savePath)
+			}
+
+			// Capture the screenshot using ProxyManager
+			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.URL, body.FullPage, savePath)
+			if err != nil {
+				log.Printf("[ScreenshotProxy] Error taking screenshot: %v", err)
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			// Encode screenshot as base64 for JSON response
+			screenshotBase64 := base64.StdEncoding.EncodeToString(screenshotBytes)
+
+			response := map[string]interface{}{
+				"screenshot": screenshotBase64,
+				"size":       len(screenshotBytes),
+				"timestamp":  time.Now().Format(time.RFC3339),
+			}
+
+			if filePath != "" {
+				response["filePath"] = filePath
+			}
+
+			log.Printf("[ScreenshotProxy] Screenshot captured successfully (%d bytes)", len(screenshotBytes))
+			return c.JSON(http.StatusOK, response)
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/click",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type ClickBody struct {
+				ID                string `json:"id"`                          // Proxy ID (required)
+				URL               string `json:"url,omitempty"`               // URL to navigate to (optional, empty = current page)
+				Selector          string `json:"selector"`                    // CSS selector for element to click (required)
+				WaitForNavigation bool   `json:"waitForNavigation,omitempty"` // Wait for navigation after click (default: false)
+			}
+
+			var body ClickBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+
+			if body.Selector == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
+			}
+
+			log.Printf("[ClickProxy] Clicking element for proxy %s (url=%s, selector=%s, waitNav=%v)",
+				body.ID, body.URL, body.Selector, body.WaitForNavigation)
+
+			// Click the element using ProxyManager
+			err := ProxyMgr.ClickElement(body.ID, body.URL, body.Selector, body.WaitForNavigation)
+			if err != nil {
+				log.Printf("[ClickProxy] Error clicking element: %v", err)
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			log.Printf("[ClickProxy] Element clicked successfully")
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":   true,
+				"message":   "Element clicked successfully",
+				"selector":  body.Selector,
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+func (backend *Backend) GetElementsProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/elements",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type ElementsBody struct {
+				ID  string `json:"id"`            // Proxy ID (required)
+				URL string `json:"url,omitempty"` // URL to navigate to (optional, empty = current page)
+			}
+
+			var body ElementsBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+
+			log.Printf("[GetElementsProxy] Getting elements for proxy %s (url=%s)", body.ID, body.URL)
+
+			// Get elements using ProxyManager
+			elements, err := ProxyMgr.GetElements(body.ID, body.URL)
+			if err != nil {
+				log.Printf("[GetElementsProxy] Error getting elements: %v", err)
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			log.Printf("[GetElementsProxy] Found %d clickable elements", len(elements))
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"elements":  elements,
+				"count":     len(elements),
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil

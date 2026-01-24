@@ -67,6 +67,10 @@ func serve(projectPath string) {
 
 	// Adding custom endpoints
 
+	// Info
+	API.App.OnBeforeServe().Add(API.Info)
+	API.App.OnBeforeServe().Add(API.CWDContent)
+
 	// Labels
 	API.App.OnBeforeServe().Add(API.LabelAttach)
 	API.App.OnBeforeServe().Add(API.LabelDelete)
@@ -119,6 +123,9 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.StopProxy)
 	API.App.OnBeforeServe().Add(API.RestartProxy)
 	API.App.OnBeforeServe().Add(API.ListProxies)
+	API.App.OnBeforeServe().Add(API.ScreenshotProxy)
+	API.App.OnBeforeServe().Add(API.ClickProxy)
+	API.App.OnBeforeServe().Add(API.GetElementsProxy)
 
 	// Other
 	API.App.OnBeforeServe().Add(API.AddRequest)
@@ -128,8 +135,18 @@ func serve(projectPath string) {
 	// Repeater
 	API.App.OnBeforeServe().Add(API.SendRepeater)
 
+	// Modify
+	API.App.OnBeforeServe().Add(API.ModifyRequest)
+
+	// Extractor
+	API.App.OnBeforeServe().Add(API.ExtractDataEndpoint)
+
 	// Xterm (Terminal)
 	API.RegisterXtermRoutes()
+
+	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+		return API.InitializeProxy()
+	})
 
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		API.App.Dao().DB().NewQuery(`

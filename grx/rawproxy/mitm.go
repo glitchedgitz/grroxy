@@ -29,6 +29,9 @@ import (
 	"golang.org/x/net/http2"
 )
 
+// Note: This package uses uTLS (utls_transport.go) to mimic browser TLS fingerprints
+// for upstream connections, bypassing Cloudflare and other CDN bot detection.
+
 type MitmCA struct {
 	caCert *x509.Certificate
 	caKey  any
@@ -179,34 +182,17 @@ func MitmHTTPS(clientConn net.Conn, connectReq *http.Request, requestID string, 
 
 	log.Printf("[MITM] requestID=%s Starting TLS server for %s (advertising h2, http/1.1)", requestID, host)
 
-	// Create upstream transport with HTTP/2 support
-	transport := &http.Transport{
-		ForceAttemptHTTP2:     true, // Enable HTTP/2 for upstream
-		MaxIdleConns:          50,
-		MaxIdleConnsPerHost:   5,
-		IdleConnTimeout:       60 * time.Second,
-		TLSHandshakeTimeout:   15 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second,
-		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-		TLSClientConfig: &tls.Config{
-			ServerName:         host,
-			InsecureSkipVerify: false,
-			MinVersion:         tls.VersionTLS12,
-			MaxVersion:         tls.VersionTLS13,
-		},
-	}
+	// Create upstream round tripper with uTLS to mimic browser TLS fingerprint
+	// This bypasses Cloudflare and other CDN bot detection that use JA3/JA4 fingerprinting
+	roundTripper := GetUTLSRoundTripper(host, FingerprintChrome)
 
 	// Create a custom handler for this MITM connection
 	handler := &mitmHandler{
-		host:        host,
-		connectHost: connectReq.Host,
-		transport:   transport,
-		baseReqID:   requestID,
-		config:      config,
+		host:         host,
+		connectHost:  connectReq.Host,
+		roundTripper: roundTripper,
+		baseReqID:    requestID,
+		config:       config,
 	}
 
 	// Create HTTP server that supports both HTTP/1.1 and HTTP/2
@@ -229,12 +215,12 @@ func MitmHTTPS(clientConn net.Conn, connectReq *http.Request, requestID string, 
 
 // mitmHandler handles requests in MITM mode
 type mitmHandler struct {
-	host        string
-	connectHost string
-	transport   *http.Transport
-	baseReqID   string
-	reqCount    uint64
-	config      *Config
+	host         string
+	connectHost  string
+	roundTripper http.RoundTripper
+	baseReqID    string
+	reqCount     uint64
+	config       *Config
 }
 
 func (h *mitmHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -298,7 +284,7 @@ func (h *mitmHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	upstreamReq.Body = io.NopCloser(bytes.NewReader(body))
 
 	// Forward to upstream
-	resp, err := h.transport.RoundTrip(upstreamReq)
+	resp, err := h.roundTripper.RoundTrip(upstreamReq)
 	if err != nil {
 		log.Printf("[ERROR] requestID=%s MITM upstream request failed for %s: %v", subRequestID, req.URL.String(), err)
 		errorMsg := fmt.Sprintf("Upstream error: %v", err)
@@ -402,22 +388,13 @@ func (h *mitmHandler) handleWebSocketUpgrade(w http.ResponseWriter, req *http.Re
 		target += ":443"
 	}
 
-	log.Printf("[WEBSOCKET-MITM] requestID=%s Connecting to %s (wss)", reqData.RequestID, target)
+	log.Printf("[WEBSOCKET-MITM] requestID=%s Connecting to %s (wss) with browser TLS fingerprint", reqData.RequestID, target)
 
-	// Establish TLS connection to upstream server
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: false,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS13,
-		ServerName:         h.host, // Use the hostname for SNI
-	}
-
-	upstreamConn, err := tls.DialWithDialer(
-		&net.Dialer{Timeout: 15 * time.Second},
-		"tcp",
-		target,
-		tlsConfig,
-	)
+	// Establish TLS connection to upstream server using uTLS to mimic browser fingerprint
+	// This bypasses Cloudflare's JA3/JA4 TLS fingerprinting
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	upstreamConn, err := DialUTLS(ctx, target, h.host, FingerprintChrome)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to establish TLS connection to WebSocket server: %v", err)
 		log.Printf("[ERROR] requestID=%s %s", reqData.RequestID, errorMsg)

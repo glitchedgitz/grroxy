@@ -2,8 +2,11 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"path"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/labstack/echo/v5"
@@ -11,17 +14,68 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func (backend *Backend) FileWatcher(e *core.ServeEvent) error {
+func (backend *Backend) CWDContent(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: "GET",
+		Path:   "/api/cwd",
+		Handler: func(c echo.Context) error {
+
+			cwd := path.Join(backend.Config.ProjectsDirectory, backend.Config.ProjectID)
+
+			list := []Path{}
+
+			entries, err := os.ReadDir(cwd)
+			if err != nil {
+				fmt.Println("Error:", err)
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+			for _, entry := range entries {
+				name := entry.Name()
+
+				list = append(list, Path{
+					Name:  name,
+					Path:  path.Join(cwd, name),
+					IsDir: entry.IsDir(),
+				})
+			}
+
+			jsonData := make(map[string]any)
+			jsonData["list"] = list
+
+			json.Marshal(jsonData)
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"cwd":  cwd,
+				"list": list,
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+
+	return nil
+}
+
+func (backend *Backend) FileWatcher(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: "POST",
 		Path:   "/api/filewatcher",
 		Handler: func(c echo.Context) error {
 
-			settingsFilePath := os.Getenv("GRROXY_TEMPLATE_DIR")
-			// If GRROXY_TEMPLATE_DIR isn't configured, skip file watching instead of crashing.
-			if settingsFilePath == "" {
-				return c.NoContent(204)
+			var data map[string]interface{}
+			if err := c.Bind(&data); err != nil {
+				return err
 			}
+			filePath := data["filePath"].(string)
+
+			fmt.Println("filePath", filePath)
+
+			// settingsFilePath := os.Getenv("GRROXY_TEMPLATE_DIR")
+			// // If GRROXY_TEMPLATE_DIR isn't configured, skip file watching instead of crashing.
+			// if settingsFilePath == "" {
+			// 	return c.NoContent(204)
+			// }
 
 			c.Response().Header().Set(echo.HeaderContentType, "text/event-stream")
 			c.Response().Header().Set(echo.HeaderCacheControl, "no-cache")
@@ -37,8 +91,8 @@ func (backend *Backend) FileWatcher(e *core.ServeEvent) error {
 				defer watcher.Close()
 
 				// Create a channel to send updates
-				if err := watcher.Add(settingsFilePath); err != nil {
-					log.Printf("filewatcher: failed to watch %q: %v", settingsFilePath, err)
+				if err := watcher.Add(filePath); err != nil {
+					log.Printf("filewatcher: failed to watch %q: %v", filePath, err)
 					close(updateChan)
 					return
 				}

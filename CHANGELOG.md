@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-JAN] - v0.21.0 - Browser Automation & Data Extraction
+
+### Added
+
+- **Browser Automation via Chrome DevTools Protocol** (605f41d)
+  - `/api/proxy/screenshot` - Capture screenshots (full-page or viewport, optional file save)
+  - `/api/proxy/click` - Click elements using CSS selectors
+  - `/api/proxy/elements` - Get clickable elements from current page
+
+- **Data Extraction** (5c87dbb)
+  - `/api/extract` - Extract fields from database records by host (supports `req.*`, `resp.*`, `req_edited.*`, `resp_edited.*`)
+
+- **Request Modification** (386148b, fc66654)
+  - `/api/request/modify` - Modify HTTP requests (set, delete, replace operations)
+  - Wildcard header deletion support (fc66654)
+
+- **System Info** (5c87dbb)
+  - `/api/info` - Get version, directories, and project info
+
+### Changed
+
+- Enhanced proxy instances with Chrome browser integration (605f41d)
+- Improved request parsing and rebuilding (386148b)
+
+### Fixed
+
+- Content-Length header handling (843820b)
+- HTTP/1.1 protocol improvements (797e28b)
+- TLS browser connection issues (504d8c7)
+- InsecureSkipVerify for testing (7b43171)
+- Zstd decoder support (2a691f0)
+
+---
+
 ## [2026-JAN] - v0.20.1 - Labels Update
 
 - Labels and Notes for hosts

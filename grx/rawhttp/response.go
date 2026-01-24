@@ -12,6 +12,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/klauspost/compress/zstd"
 )
 
 func DecompressResponse(reader io.Reader, contentEncoding string) (io.Reader, error) {
@@ -135,6 +136,16 @@ func MagicDecompress(reader io.Reader) (io.Reader, error) {
 			// Success! Return a new reader with the data
 			zlibReader2, _ := zlib.NewReader(bytes.NewReader(data))
 			return zlibReader2, nil
+		}
+	}
+
+	// zstd
+	if zstdReader, err := zstd.NewReader(bytes.NewReader(data)); err == nil {
+		// Test if it's actually valid zstd by trying to read a small amount
+		testBuf := make([]byte, 1)
+		if _, readErr := zstdReader.Read(testBuf); readErr == nil {
+			// Success! Return a new reader with the data
+			return zstdReader, nil
 		}
 	}
 

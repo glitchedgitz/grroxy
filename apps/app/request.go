@@ -40,12 +40,18 @@ func generateUserData(data types.AddRequestBodyType, indexMinor float64) (types.
 	// Initiate variables
 	var (
 		index   = data.Index
-		id      = utils.FormatStringID(fmt.Sprintf("%v.%v", index, indexMinor), 15)
+		id      = ""
 		method  = http.MethodGet
 		host    = ""
 		port    = ""
 		isHttps = false
 	)
+
+	if indexMinor != -1 {
+		id = utils.FormatStringID(fmt.Sprintf("%v.%v", index, indexMinor), 15)
+	} else {
+		id = utils.FormatStringID(fmt.Sprintf("%v", index), 15)
+	}
 
 	if data.Url != "" {
 		host = data.Url
@@ -198,11 +204,23 @@ func generateResponseForUserData(userdata *types.UserData, response string) {
 
 	// Determine content length
 	var contentLen int64 = 0
-	if clStr, ok := rawhttp.GetHeaderValue(parsed.Headers, "content-length"); ok {
+	if clStr, ok := rawhttp.GetHeaderValue(parsed.Headers, "content-length:"); ok {
 		if n, err := strconv.ParseInt(strings.TrimSpace(clStr), 10, 64); err == nil {
 			contentLen = n
 		}
 	}
+
+	var contentType string
+	if ct, ok := rawhttp.GetHeaderValue(parsed.Headers, "content-type:"); ok {
+		contentType = ct
+	}
+
+	var date string
+	if d, ok := rawhttp.GetHeaderValue(parsed.Headers, "date:"); ok {
+		date = d
+	}
+
+	extractTitle, _ := utils.ExtractTitle([]byte(response))
 
 	// Cookies via Set-Cookie
 	hasCookies := false
@@ -212,16 +230,16 @@ func generateResponseForUserData(userdata *types.UserData, response string) {
 
 	userdata.RespJson = types.ResponseData{
 		HasCookies: hasCookies,
-		Title:      "",
-		Mime:       httpHdr.Get("Content-Type"),
+		Title:      extractTitle,
+		Mime:       contentType,
 		Headers:    rawhttp.GetHeaders(httpHdr),
 		Status:     parsed.Status,
 		Length:     contentLen,
-		Date:       httpHdr.Get("Date"),
+		Date:       date,
 		Time:       time.Now().Format(time.RFC3339),
 	}
 
-	log.Printf("[generateResponseForUserData] Parsed Response: %+v", parsed)
+	log.Printf("[generateResponseForUserData] Parsed Response: %+v", userdata.RespJson)
 }
 
 func (backend *Backend) AddRequest(e *core.ServeEvent) error {
@@ -264,11 +282,19 @@ func (backend *Backend) AddRequest(e *core.ServeEvent) error {
 func (backend *Backend) SaveRequestToBackend(reqBody types.AddRequestBodyType) (types.UserData, error) {
 	log.Println("[SaveRequestToBackend] Called with index:", reqBody.Index)
 
-	// Calculate index_minor using counter system automatically
-	// Each index has its own counter for minor indexes
-	counterKey := fmt.Sprintf("row:%.0f", reqBody.Index)
-	indexMinor := float64(backend.CounterManager.Increment(counterKey, "", ""))
-	log.Printf("[SaveRequestToBackend] Auto-calculated index_minor: %.0f for index: %.0f", indexMinor, reqBody.Index)
+	var newindex = float64(reqBody.Index)
+	var indexMinor float64 = -1
+
+	if reqBody.Index == 0 {
+		newindex = float64(ProxyMgr.GetNextIndex())
+		reqBody.Index = newindex
+	} else {
+		// Calculate index_minor using counter system automatically
+		// Each index has its own counter for minor indexes
+		counterKey := fmt.Sprintf("row:%.0f", reqBody.Index)
+		indexMinor = float64(backend.CounterManager.Increment(counterKey, "", ""))
+		log.Printf("[SaveRequestToBackend] Auto-calculated index_minor: %.0f for index: %.0f", indexMinor, reqBody.Index)
+	}
 
 	// Generate user data from request
 	userdata, err := generateUserData(reqBody, indexMinor)
@@ -299,7 +325,7 @@ func (backend *Backend) SaveRequestToBackend(reqBody types.AddRequestBodyType) (
 	record := models.NewRecord(collection)
 	record.Set("id", userdata.ID)
 	record.Set("labels", []string{})
-	record.Set("note", "")
+	record.Set("note", reqBody.Note)
 
 	err = backend.App.Dao().SaveRecord(record)
 	if err != nil {

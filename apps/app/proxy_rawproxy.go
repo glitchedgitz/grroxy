@@ -22,6 +22,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -359,6 +360,15 @@ func generateRequestData(req *http.Request) map[string]any {
 
 func generateResponseData(resp *http.Response) map[string]any {
 	// Dev: check with types.ResponseData
+	contentLength := resp.ContentLength
+	if clStr := strings.TrimSpace(resp.Header.Get("Content-Length")); clStr != "" {
+		if parsed, err := strconv.ParseInt(clStr, 10, 64); err == nil {
+			contentLength = parsed
+		}
+	}
+	if contentLength < 0 {
+		contentLength = 0
+	}
 
 	return map[string]any{
 		"has_cookies": len(resp.Cookies()) > 0,
@@ -366,10 +376,26 @@ func generateResponseData(resp *http.Response) map[string]any {
 		"mime":        resp.Header.Get("Content-Type"),
 		"headers":     rawhttp.GetHeaders(resp.Header),
 		"status":      resp.StatusCode,
-		"length":      resp.ContentLength,
+		"length":      contentLength,
 		"date":        resp.Header.Get("Date"),
 		"time":        time.Now().Format(time.RFC3339),
 	}
+}
+
+func updateResponseDataFromRaw(responseData map[string]any, responseRaw string) {
+	parsed := rawhttp.ParseResponse([]byte(responseRaw))
+	contentLength := int64(len(parsed.Body))
+	if clStr, ok := rawhttp.GetHeaderValue(parsed.Headers, "content-length:"); ok {
+		if parsedLen, err := strconv.ParseInt(strings.TrimSpace(clStr), 10, 64); err == nil {
+			contentLength = parsedLen
+		}
+
+		if headers, ok := responseData["headers"].(map[string]string); ok {
+			headers["Content-Length"] = strings.TrimSpace(clStr)
+		}
+	}
+
+	responseData["length"] = contentLength
 }
 
 // onRequest handles incoming HTTP requests and saves them to the database
@@ -623,6 +649,7 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 	// Extract title if HTML
 	title, _ := utils.ExtractTitle([]byte(responseInString))
 	responseData["title"] = title
+	updateResponseDataFromRaw(responseData, responseInString)
 
 	// Save response to database synchronously (not in goroutine) to ensure it completes
 	rp.saveResponseToDB(reqCtx, responseData)
@@ -683,6 +710,7 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 			}
 
 			editedResponseData := generateResponseData(respNew)
+			updateResponseDataFromRaw(editedResponseData, updatedString)
 			// Save edited response to database
 			go rp.saveEditedResponse(reqCtx, editedResponseData, updatedString)
 

@@ -1,33 +1,37 @@
 package rawproxy
 
 import (
-	"crypto/tls"
 	"io"
 	"net"
 	"net/http"
 	"time"
 )
 
-// Shared transport for connection pooling
-var sharedTransport = &http.Transport{
+// Shared transport for connection pooling (plain HTTP only)
+// For HTTPS, we use uTLS transports created per-host to mimic browser fingerprints
+var sharedHTTPTransport = &http.Transport{
 	Proxy:                 nil,
-	ForceAttemptHTTP2:     true, // Allow automatic HTTP/2 negotiation
+	ForceAttemptHTTP2:     false, // HTTP/1.1 only for plain HTTP
 	MaxIdleConns:          100,
 	MaxIdleConnsPerHost:   10,
 	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   15 * time.Second, // Increase timeout for better compatibility
 	ExpectContinueTimeout: 1 * time.Second,
-	ResponseHeaderTimeout: 30 * time.Second, // Add response timeout
+	ResponseHeaderTimeout: 30 * time.Second,
 	DialContext: (&net.Dialer{
-		Timeout:   10 * time.Second, // Increase dial timeout
+		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
 	}).DialContext,
-	TLSClientConfig: &tls.Config{
-		InsecureSkipVerify: false,
-		MinVersion:         tls.VersionTLS12, // Ensure modern TLS
-		MaxVersion:         tls.VersionTLS13,
-		ServerName:         "", // Will be set per request
-	},
+}
+
+// GetTransportForHost returns an appropriate transport for the given scheme and host
+// For HTTPS, it creates a uTLS round tripper to mimic browser TLS fingerprint
+// For HTTP, it uses the shared plain HTTP transport
+func GetTransportForHost(scheme, host string) http.RoundTripper {
+	if scheme == "https" {
+		// Use uTLS round tripper with Chrome fingerprint for HTTPS
+		return GetUTLSRoundTripper(host, FingerprintChrome)
+	}
+	return sharedHTTPTransport
 }
 
 // copyHeader copies HTTP headers from src to dst

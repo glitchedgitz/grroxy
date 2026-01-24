@@ -12,7 +12,7 @@ ORIGINAL_DIR=$(pwd)
 PROJECT_ROOT="$SCRIPT_DIR"
 
 # Array of directories to process - using Unix-style paths
-DIRS=("cmd/grroxy" "cmd/grroxy-app" "cmd/grroxy-tool")
+DIRS=("cmd/grroxy" "cmd/grroxy-app" "cmd/grroxy-tool" "cmd/grxp" "cmd/grx-fuzzer")
 
 # Loop through each directory
 for dir in "${DIRS[@]}"; do

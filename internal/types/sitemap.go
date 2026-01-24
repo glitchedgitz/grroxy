@@ -43,6 +43,7 @@ type SitemapNode struct {
 	Query         interface{}    `json:"query"`
 	Children      []*SitemapNode `json:"children,omitempty"`
 	ChildrenCount int            `json:"children_count"`
+	IsFolder      bool           `json:"is_folder"`
 }
 
 type SitemapRows struct {

@@ -2,6 +2,7 @@ package rawhttp
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -43,23 +44,34 @@ func (c *Client) SendHTTP2(req Request) (*Response, error) {
 	}
 	fullURL := fmt.Sprintf("https://%s:%s%s", req.Host, port, url)
 
-	// Create TLS config with ALPN for HTTP/2
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: c.config.InsecureSkipVerify,
-		MinVersion:         c.config.TLSMinVersion,
-		ServerName:         req.Host,
-		NextProtos:         []string{"h2"}, // HTTP/2 over TLS
-	}
+	// Create HTTP/2 transport with appropriate TLS dialer
+	var transport *http2.Transport
 
-	// Create HTTP/2 transport
-	transport := &http2.Transport{
-		TLSClientConfig: tlsConfig,
-		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
-			dialer := &net.Dialer{
-				Timeout: c.config.Timeout,
-			}
-			return tls.DialWithDialer(dialer, network, addr, cfg)
-		},
+	if c.config.UseBrowserFingerprint {
+		// Use uTLS to mimic browser TLS fingerprint (bypasses Cloudflare)
+		transport = &http2.Transport{
+			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+				return c.dialUTLSForHTTP2(ctx, network, addr, req.Host)
+			},
+		}
+	} else {
+		// Create TLS config with ALPN for HTTP/2
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: c.config.InsecureSkipVerify,
+			MinVersion:         c.config.TLSMinVersion,
+			ServerName:         req.Host,
+			NextProtos:         []string{"h2"}, // HTTP/2 over TLS
+		}
+
+		transport = &http2.Transport{
+			TLSClientConfig: tlsConfig,
+			DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+				dialer := &net.Dialer{
+					Timeout: c.config.Timeout,
+				}
+				return tls.DialWithDialer(dialer, network, addr, cfg)
+			},
+		}
 	}
 
 	// Create HTTP request

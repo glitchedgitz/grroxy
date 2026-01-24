@@ -14,6 +14,7 @@ import (
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy-db/apps/launcher"
 	"github.com/glitchedgitz/grroxy-db/grx/rawproxy"
+	"github.com/glitchedgitz/grroxy-db/grx/version"
 	"github.com/glitchedgitz/grroxy-db/internal/config"
 	_ "github.com/glitchedgitz/grroxy-db/internal/logflags"
 	"github.com/glitchedgitz/grroxy-db/internal/process"
@@ -131,8 +132,8 @@ func main() {
 
 func printBanner() {
 	fmt.Printf(`
-G R R R . . . O X Y
-`)
+G R R R . . . O X Y           v%s
+`, version.CURRENT_BACKEND_VERSION)
 }
 
 func startCore() {

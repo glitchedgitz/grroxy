@@ -3,7 +3,6 @@ package rawproxy
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
@@ -105,40 +104,12 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request, config *Config) {
 		rUpstream.URL.Host = processedRequest.Host
 	}
 
-	// Create transport with proper TLS config for this specific request
-	transport := sharedTransport.Clone()
-	if rUpstream.URL.Scheme == "https" {
-		// Set SNI hostname for proper TLS handshake
-		host := rUpstream.URL.Hostname()
-		transport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: false,
-			MinVersion:         tls.VersionTLS12,
-			MaxVersion:         tls.VersionTLS13,
-			ServerName:         host, // Critical for SNI
-		}
-	}
+	// Get transport with browser TLS fingerprint for HTTPS (bypasses Cloudflare)
+	// For HTTP, uses standard transport
+	transport := GetTransportForHost(rUpstream.URL.Scheme, rUpstream.URL.Hostname())
 
-	// First attempt with the configured transport
+	// Make the request with browser-like TLS fingerprint
 	resp, err := transport.RoundTrip(rUpstream)
-
-	// If TLS error occurs, try with more lenient settings as fallback
-	if err != nil && strings.Contains(strings.ToLower(err.Error()), "tls") && rUpstream.URL.Scheme == "https" {
-		log.Printf("[WARN] TLS error for %s, retrying with fallback config: %v", rUpstream.URL.String(), err)
-
-		// Create fallback transport with more lenient TLS settings
-		fallbackTransport := transport.Clone()
-		fallbackTransport.TLSClientConfig = &tls.Config{
-			InsecureSkipVerify: false,
-			MinVersion:         tls.VersionTLS10, // Support older TLS
-			MaxVersion:         tls.VersionTLS13,
-			ServerName:         rUpstream.URL.Hostname(),
-		}
-
-		resp, err = fallbackTransport.RoundTrip(rUpstream)
-		if err == nil {
-			log.Printf("[INFO] Fallback TLS config succeeded for %s", rUpstream.URL.String())
-		}
-	}
 
 	if err != nil {
 		// Log detailed error information for debugging

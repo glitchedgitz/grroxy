@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/andybalholm/brotli"
+	utls "github.com/refraction-networking/utls"
 )
 
 // Client is a raw HTTP client that sends requests with minimal validation
@@ -22,24 +24,133 @@ type Client struct {
 }
 
 // NewClient creates a new raw HTTP client with the given configuration
+// Always uses browser TLS fingerprint to bypass Cloudflare and other CDN bot detection
 func NewClient(config Config) *Client {
 	if config.Timeout == 0 {
 		config.Timeout = 30 * time.Second
 	}
 	if config.TLSMinVersion == 0 {
-		// Default to TLS 1.0 for maximum compatibility with older servers
-		config.TLSMinVersion = tls.VersionTLS10
+		config.TLSMinVersion = tls.VersionTLS12
+	}
+	// Always use browser fingerprint (Chrome by default)
+	config.UseBrowserFingerprint = true
+	if config.BrowserFingerprint == "" {
+		config.BrowserFingerprint = "chrome"
 	}
 	return &Client{config: config}
 }
 
 // DefaultClient returns a client with sensible defaults
+// Uses browser TLS fingerprint to bypass Cloudflare
 func DefaultClient() *Client {
 	return NewClient(Config{
 		Timeout:            30 * time.Second,
 		InsecureSkipVerify: true,
-		TLSMinVersion:      tls.VersionTLS10,
 	})
+}
+
+// getUTLSClientHelloID returns the uTLS ClientHelloID based on config
+func (c *Client) getUTLSClientHelloID() utls.ClientHelloID {
+	switch strings.ToLower(c.config.BrowserFingerprint) {
+	case "firefox":
+		return utls.HelloFirefox_Auto
+	case "safari":
+		return utls.HelloSafari_Auto
+	case "edge":
+		return utls.HelloEdge_Auto
+	case "random":
+		return utls.HelloRandomized
+	case "chrome", "":
+		return utls.HelloChrome_Auto
+	default:
+		return utls.HelloChrome_Auto
+	}
+}
+
+// dialUTLS creates a TLS connection using uTLS with browser fingerprint
+func (c *Client) dialUTLS(addr, serverName string) (net.Conn, error) {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), c.config.Timeout)
+	defer cancel()
+
+	// Dial TCP connection
+	dialer := &net.Dialer{
+		Timeout: c.config.Timeout,
+	}
+	tcpConn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial TCP %s: %w", addr, err)
+	}
+
+	// Create uTLS config
+	// Note: NextProtos here is just for the config, but browser fingerprints
+	// override this with their own ALPN extensions
+	config := &utls.Config{
+		ServerName:         serverName,
+		InsecureSkipVerify: c.config.InsecureSkipVerify,
+		MinVersion:         tls.VersionTLS12,
+		MaxVersion:         tls.VersionTLS13,
+	}
+
+	// Create uTLS connection with browser fingerprint
+	utlsConn := utls.UClient(tcpConn, config, c.getUTLSClientHelloID())
+
+	// Build handshake state first so we can modify ALPN extension
+	// Browser fingerprints include their own ALPN (typically ["h2", "http/1.1"])
+	// which would cause server to negotiate HTTP/2. We must override to force HTTP/1.1.
+	if err := utlsConn.BuildHandshakeState(); err != nil {
+		tcpConn.Close()
+		return nil, fmt.Errorf("failed to build handshake state for %s: %w", serverName, err)
+	}
+
+	// Override ALPN extension to force HTTP/1.1 only
+	// This is critical: without this, servers negotiate HTTP/2 and send binary frames
+	for _, ext := range utlsConn.Extensions {
+		if alpnExt, ok := ext.(*utls.ALPNExtension); ok {
+			alpnExt.AlpnProtocols = []string{"http/1.1"}
+			break
+		}
+	}
+
+	// Perform TLS handshake with the modified ALPN
+	if err := utlsConn.HandshakeContext(ctx); err != nil {
+		tcpConn.Close()
+		return nil, fmt.Errorf("uTLS handshake failed for %s: %w", serverName, err)
+	}
+
+	return utlsConn, nil
+}
+
+// dialUTLSForHTTP2 creates a TLS connection using uTLS with browser fingerprint for HTTP/2
+func (c *Client) dialUTLSForHTTP2(ctx context.Context, network, addr, serverName string) (net.Conn, error) {
+	// Dial TCP connection
+	dialer := &net.Dialer{
+		Timeout: c.config.Timeout,
+	}
+	tcpConn, err := dialer.DialContext(ctx, network, addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial TCP %s: %w", addr, err)
+	}
+
+	// Create uTLS config for HTTP/2
+	config := &utls.Config{
+		ServerName:         serverName,
+		InsecureSkipVerify: c.config.InsecureSkipVerify,
+		MinVersion:         tls.VersionTLS12,
+		MaxVersion:         tls.VersionTLS13,
+		NextProtos:         []string{"h2"}, // HTTP/2 ALPN
+	}
+
+	// Create uTLS connection with browser fingerprint
+	utlsConn := utls.UClient(tcpConn, config, c.getUTLSClientHelloID())
+
+	// Perform TLS handshake
+	if err := utlsConn.HandshakeContext(ctx); err != nil {
+		tcpConn.Close()
+		return nil, fmt.Errorf("uTLS handshake failed for %s: %w", serverName, err)
+	}
+
+	return utlsConn, nil
 }
 
 // Send sends a raw HTTP request and returns the raw response.
@@ -70,16 +181,21 @@ func (c *Client) Send(req Request) (*Response, error) {
 	var err error
 
 	if req.UseTLS {
-		// Use TLS with minimal validation
-		dialer := &net.Dialer{
-			Timeout: c.config.Timeout,
+		if c.config.UseBrowserFingerprint {
+			// Use uTLS to mimic browser TLS fingerprint (bypasses Cloudflare)
+			conn, err = c.dialUTLS(addr, req.Host)
+		} else {
+			// Use standard TLS with minimal validation
+			dialer := &net.Dialer{
+				Timeout: c.config.Timeout,
+			}
+			tlsConfig := &tls.Config{
+				InsecureSkipVerify: c.config.InsecureSkipVerify,
+				MinVersion:         c.config.TLSMinVersion,
+				ServerName:         req.Host, // Optional, may be empty for malformed requests
+			}
+			conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 		}
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: c.config.InsecureSkipVerify,
-			MinVersion:         c.config.TLSMinVersion,
-			ServerName:         req.Host, // Optional, may be empty for malformed requests
-		}
-		conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
 	} else {
 		// Plain TCP connection
 		conn, err = net.DialTimeout("tcp", addr, c.config.Timeout)

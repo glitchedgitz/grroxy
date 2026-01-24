@@ -260,6 +260,64 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 	return results, nil
 }
 
+func ParseTemplateActions(tasks []Actions, data map[string]any, mode string) ([]Action, error) {
+
+	var actions []Action
+	var defaultActions []Action
+
+	for _, job := range tasks {
+		// Collect default actions separately
+		if job.Id == "default" {
+			for _, action := range job.Todo {
+				for function, d := range action {
+					defaultActions = append(defaultActions, getParsedValue(data, Action{
+						ActionName: function,
+						Data:       d,
+					}))
+				}
+			}
+			continue
+		}
+
+		log.Println("[Templates.Run] Tasks: jobs: ", job)
+
+		// check condition
+		check, err := dadql.Filter(data, job.Condition)
+		if err != nil {
+			log.Printf("[Templates.Run] Filter parsing: %v", job.Condition)
+			break
+		}
+
+		log.Println("[Templates.Run] Filter: ", check)
+
+		if check {
+			log.Println("[Templates.Run] Found with:", job.Condition)
+
+			for _, action := range job.Todo {
+				for function, d := range action {
+					actions = append(actions, getParsedValue(data, Action{
+						ActionName: function,
+						Data:       d,
+					}))
+				}
+			}
+
+			if mode == "any" {
+				if len(actions) > 0 {
+					break
+				}
+			}
+		}
+	}
+
+	// If no regular actions were found, use default actions
+	if len(actions) == 0 {
+		actions = defaultActions
+	}
+
+	return actions, nil
+}
+
 func ParseVariable(d *map[string]any, value string) string {
 
 	log.Println("[ParseVariables] Using data ", value)

@@ -13,6 +13,7 @@ This is the main Grroxy application API that provides comprehensive HTTP proxy, 
 - [Proxy Management](#proxy-management)
 - [Intercept](#intercept)
 - [Playground](#playground)
+- [Request Modification](#request-modification)
 - [Repeater](#repeater)
 - [Filters](#filters)
 - [Templates](#templates)
@@ -25,8 +26,44 @@ This is the main Grroxy application API that provides comprehensive HTTP proxy, 
 - [Tools](#tools)
 - [Raw HTTP](#raw-http)
 - [Certificates](#certificates)
+- [Extractor](#extractor)
 
 ---
+
+## INFO
+
+Returns information about the running Grroxy App instance and important paths.
+
+### Get Info
+
+```http
+GET /api/info
+```
+
+**Request:**
+
+- No request body.
+- Requires authentication (admin or authenticated user).
+
+**Response:**
+
+```json
+{
+  "version": "v1.0.0",
+  "cwd": "/path/to/projects",
+  "cache": "/path/to/cache",
+  "config": "/path/to/config",
+  "template": "/path/to/templates"
+}
+```
+
+**Fields:**
+
+- `version` (string): Current backend version (`version.CURRENT_BACKEND_VERSION`).
+- `cwd` (string): Projects directory path (where project data is stored).
+- `cache` (string): Cache directory path (used for temporary/output files).
+- `config` (string): Config directory path.
+- `template` (string): Template directory path.
 
 ## Proxy Management
 
@@ -182,6 +219,320 @@ GET /api/proxy/list
   "count": 1
 }
 ```
+
+---
+
+### Take Screenshot
+
+Captures a screenshot using the Chrome browser attached to a proxy instance via Chrome DevTools Protocol.
+
+```http
+POST /api/proxy/screenshot
+```
+
+**Request Body:**
+
+```json
+{
+  "id": "______________1",
+  "url": "https://example.com",
+  "fullPage": true,
+  "saveFile": false
+}
+```
+
+**Fields:**
+
+- `id` (string, required): The proxy ID with Chrome browser attached
+- `url` (string, optional): URL to navigate to before capturing. If empty, captures the current active tab
+- `fullPage` (boolean, optional, default: false): If true, captures the entire page including scrollable content. If false, captures only the visible viewport
+- `saveFile` (boolean, optional, default: false): If true, saves the screenshot to disk in the cache directory and returns the file path
+
+**Response (Success):**
+
+```json
+{
+  "screenshot": "iVBORw0KGgoAAAANSUhEUgAAAAUA...",
+  "filePath": "/path/to/cache/screenshot-20260121-103045.png",
+  "size": 52480,
+  "timestamp": "2026-01-21T10:30:45Z"
+}
+```
+
+**Fields:**
+
+- `screenshot` (string): Base64-encoded PNG image data
+- `filePath` (string, optional): Full path to saved file (only present if `saveFile` was true)
+- `size` (number): Size of the screenshot in bytes
+- `timestamp` (string): ISO 8601 timestamp when screenshot was captured
+
+**Error Responses:**
+
+- 400 Bad Request - Missing or invalid request body
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy ID not found
+- 500 Internal Server Error - Failed to capture screenshot (see error message for details)
+
+**Error Examples:**
+
+```json
+{
+  "error": "Proxy ______________1 not found"
+}
+```
+
+```json
+{
+  "error": "proxy ______________1 does not have a Chrome browser attached (browser: firefox)"
+}
+```
+
+```json
+{
+  "error": "failed to get Chrome debug URL: open /path/to/profile/DevToolsActivePort: no such file or directory"
+}
+```
+
+**Notes:**
+
+- Only works with proxy instances that have Chrome browser attached (`"browser": "chrome"`)
+- Chrome must be launched with `--remote-debugging-port=0` flag (enabled by default)
+- If `url` is provided, the browser will navigate to that URL before capturing
+- Full page screenshots may take longer for pages with lots of content
+- Screenshot is always returned as PNG format
+- The Chrome DevTools Protocol connection uses a 30-second timeout
+
+**Requirements:**
+
+- Proxy must be running with Chrome browser
+- Chrome process must be alive and responsive
+- DevToolsActivePort file must exist in Chrome's profile directory
+
+---
+
+### Click Element
+
+Clicks an element on the page using the Chrome browser attached to a proxy instance via Chrome DevTools Protocol.
+
+```http
+POST /api/proxy/click
+```
+
+**Request Body:**
+
+```json
+{
+  "id": "______________1",
+  "url": "https://example.com",
+  "selector": "#submit-button",
+  "waitForNavigation": false
+}
+```
+
+**Fields:**
+
+- `id` (string, required): The proxy ID with Chrome browser attached
+- `url` (string, optional): URL to navigate to before clicking. If empty, operates on the current active page
+- `selector` (string, required): CSS selector for the element to click (e.g., "#button-id", ".class-name", "button[type='submit']")
+- `waitForNavigation` (boolean, optional, default: false): If true, waits for page navigation after click (useful for form submissions or links)
+
+**Response (Success):**
+
+```json
+{
+  "success": true,
+  "message": "Element clicked successfully",
+  "selector": "#submit-button",
+  "timestamp": "2026-01-21T10:30:45Z"
+}
+```
+
+**Fields:**
+
+- `success` (boolean): Always true on success
+- `message` (string): Success message
+- `selector` (string): The CSS selector that was clicked
+- `timestamp` (string): ISO 8601 timestamp when element was clicked
+
+**Error Responses:**
+
+- 400 Bad Request - Missing or invalid request body
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy ID not found
+- 500 Internal Server Error - Failed to click element (see error message for details)
+
+**Error Examples:**
+
+```json
+{
+  "error": "Proxy ______________1 not found"
+}
+```
+
+```json
+{
+  "error": "Selector is required"
+}
+```
+
+```json
+{
+  "error": "failed to click element: context deadline exceeded"
+}
+```
+
+**CSS Selector Examples:**
+
+- `#login-button` - Element with ID "login-button"
+- `.submit-btn` - Element with class "submit-btn"
+- `button[type='submit']` - Submit button by attribute
+- `a[href='/logout']` - Link with specific href
+- `input[name='username']` - Input field by name
+- `div.container > button:first-child` - Complex selector
+
+**Notes:**
+
+- Only works with proxy instances that have Chrome browser attached (`"browser": "chrome"`)
+- Chrome must be launched with `--remote-debugging-port=0` flag (enabled by default)
+- Element must be visible on the page before clicking
+- If `url` is provided, the browser will navigate to that URL before clicking
+- Use `waitForNavigation: true` for elements that trigger page navigation (form submits, links)
+- The Chrome DevTools Protocol connection uses a 30-second timeout
+- Supports all standard CSS selectors
+
+**Requirements:**
+
+- Proxy must be running with Chrome browser
+- Chrome process must be alive and responsive
+- DevToolsActivePort file must exist in Chrome's profile directory
+- Target element must be visible and clickable
+
+---
+
+### Get Clickable Elements
+
+Extracts information about all clickable elements on the page (buttons, links, inputs) to help identify what can be clicked.
+
+```http
+POST /api/proxy/elements
+```
+
+**Request Body:**
+
+```json
+{
+  "id": "______________1",
+  "url": "https://example.com"
+}
+```
+
+**Fields:**
+
+- `id` (string, required): The proxy ID with Chrome browser attached
+- `url` (string, optional): URL to navigate to before extracting elements. If empty, analyzes the current active page
+
+**Response (Success):**
+
+```json
+{
+  "elements": [
+    {
+      "selector": "#login-button",
+      "tagName": "button",
+      "id": "login-button",
+      "class": "btn btn-primary",
+      "text": "Sign In",
+      "type": "submit",
+      "href": "",
+      "name": "",
+      "aria": "Login button",
+      "placeholder": ""
+    },
+    {
+      "selector": "a.nav-link[href='/about']",
+      "tagName": "a",
+      "id": "",
+      "class": "nav-link",
+      "text": "About Us",
+      "type": "",
+      "href": "https://example.com/about",
+      "name": "",
+      "aria": "",
+      "placeholder": ""
+    },
+    {
+      "selector": "input.search[type='text']",
+      "tagName": "input",
+      "id": "",
+      "class": "search",
+      "text": "",
+      "type": "text",
+      "href": "",
+      "name": "q",
+      "aria": "Search",
+      "placeholder": "Enter search term..."
+    }
+  ],
+  "count": 3,
+  "timestamp": "2026-01-21T10:30:45Z"
+}
+```
+
+**Element Fields:**
+
+- `selector` (string): CSS selector that can be used with `/api/proxy/click` endpoint
+- `tagName` (string): HTML tag name (button, a, input, etc.)
+- `id` (string): Element ID attribute (empty if not present)
+- `class` (string): Element class attribute (empty if not present)
+- `text` (string): Visible text content or input value (truncated to 100 chars)
+- `type` (string): Input/button type (submit, button, text, etc.)
+- `href` (string): Link destination (for anchor tags)
+- `name` (string): Name attribute
+- `aria` (string): ARIA label for accessibility
+- `placeholder` (string): Placeholder text (for input fields)
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxy ID
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy ID not found
+- 500 Internal Server Error - Failed to extract elements
+
+**Notes:**
+
+- Only works with proxy instances that have Chrome browser attached
+- Extracts buttons, links, submit inputs, and elements with onclick handlers
+- Hidden elements (width/height = 0) are automatically filtered out
+- Selectors are auto-generated: prioritizes ID, then class+tag, then tag+attribute
+- Text content is truncated to 100 characters for readability
+- Use the returned `selector` field directly with `/api/proxy/click`
+
+**Use Case - AI-Assisted Clicking:**
+
+1. Call `/api/proxy/elements` to get list of clickable elements
+2. AI/User reviews the elements and their text/descriptions
+3. AI/User identifies the target element by its text or purpose
+4. Use the `selector` from that element with `/api/proxy/click`
+
+**Example Workflow:**
+
+```javascript
+// Step 1: Get elements
+POST /api/proxy/elements
+{ "id": "______________1", "url": "https://example.com" }
+
+// Response shows: { "selector": "#login-button", "text": "Sign In", ... }
+
+// Step 2: Click the identified element
+POST /api/proxy/click
+{ "id": "______________1", "selector": "#login-button" }
+```
+
+**Requirements:**
+
+- Proxy must be running with Chrome browser
+- Chrome process must be alive and responsive
+- DevToolsActivePort file must exist in Chrome's profile directory
 
 ---
 
@@ -366,6 +717,162 @@ POST /api/playground/delete
 
 ---
 
+## Request Modification
+
+### Modify Request
+
+Applies a series of transformation actions to an HTTP request without sending it. Useful for testing request modifications before sending.
+
+```http
+POST /api/request/modify
+```
+
+**Request Body:**
+
+```json
+{
+  "request": "GET /api/test HTTP/1.1\r\nHost: example.com\r\nUser-Agent: Mozilla/5.0\r\n\r\n",
+  "url": "https://example.com/api/test",
+  "tasks": [
+    {
+      "action": "set",
+      "key": "req.method",
+      "value": "POST"
+    },
+    {
+      "action": "replace",
+      "search": "Mozilla",
+      "value": "CustomAgent",
+      "regex": false
+    },
+    {
+      "action": "delete",
+      "key": "req.headers.User-Agent"
+    }
+  ]
+}
+```
+
+**Fields:**
+
+- `request` (string, required): Raw HTTP request string
+- `url` (string, required): Full URL of the request
+- `tasks` (array, required): Array of action objects to apply
+
+**Action Types:**
+
+1. **Set Action** - Sets or updates a specific field:
+
+   ```json
+   {
+     "action": "set",
+     "key": "req.method|req.url|req.path|req.query.{param}|req.headers.{header}|req.body",
+     "value": "new value"
+   }
+   ```
+
+2. **Replace Action** - Replaces text in the entire request:
+
+   ```json
+   {
+     "action": "replace",
+     "search": "search string or regex pattern",
+     "value": "replacement value",
+     "regex": false
+   }
+   ```
+
+   - `search` (string, required): Text to search for (or regex pattern if `regex: true`)
+   - `value` (string, required): Replacement text
+   - `regex` (boolean, optional): Use regex matching (default: false)
+
+3. **Delete Action** - Removes a specific field:
+   ```json
+   {
+     "action": "delete",
+     "key": "req.method|req.url|req.path|req.query.{param}|req.headers.{header}|req.body"
+   }
+   ```
+
+**Supported Keys:**
+
+- `req.method` - HTTP method (GET, POST, etc.)
+- `req.url` - Full URL
+- `req.path` - URL path
+- `req.query.{paramName}` - Specific query parameter
+- `req.headers.{headerName}` - Specific header
+- `req.body` - Request body
+
+**Response:**
+
+```json
+{
+  "success": "true",
+  "request": "POST /api/test HTTP/1.1\r\nHost: example.com\r\n\r\n"
+}
+```
+
+**Response Fields:**
+
+- `success` (string): "true" on success
+- `request` (string): The modified raw HTTP request
+
+**Features:**
+
+- Actions are applied sequentially in the order provided
+- Request is automatically re-parsed after modifications to maintain consistency
+- Headers, query parameters, and body are properly updated
+- Supports both simple string replacement and regex-based replacement
+- All request fields (method, URL, headers, etc.) stay synchronized
+
+**Example Use Cases:**
+
+1. Change request method:
+
+   ```json
+   { "action": "set", "key": "req.method", "value": "POST" }
+   ```
+
+2. Add/update a header:
+
+   ```json
+   {
+     "action": "set",
+     "key": "req.headers.Authorization",
+     "value": "Bearer token123"
+   }
+   ```
+
+3. Replace session tokens:
+
+   ```json
+   {
+     "action": "replace",
+     "search": "session=[^;]+",
+     "value": "session=newsession",
+     "regex": true
+   }
+   ```
+
+4. Remove a query parameter:
+
+   ```json
+   { "action": "delete", "key": "req.query.debug" }
+   ```
+
+5. Update request body:
+   ```json
+   { "action": "set", "key": "req.body", "value": "{\"new\":\"data\"}" }
+   ```
+
+**Error Responses:**
+
+- 400 Bad Request - Invalid request body or malformed actions
+- 403 Forbidden - Unauthorized
+- 500 Internal Server Error - Error processing actions
+
+---
+
 ## Repeater
 
 The Repeater allows you to send modified HTTP requests and analyze responses.
@@ -480,6 +987,138 @@ POST /api/filter/check
   "error": "parse or evaluation error message"
 }
 ```
+
+---
+
+## Extractor
+
+The Extractor lets you export request/response data for a specific host into a JSONL file, using the same field structure as filters and `_data` records.
+
+### Extract Data
+
+Extracts records for a host and writes selected fields to a file, one JSON object per line.
+
+```http
+POST /api/extract
+```
+
+**Request Body:**
+
+```json
+{
+  "host": "http://detectportal.firefox.com",
+  "fields": [
+    "created",
+    "host",
+    "id",
+    "index",
+    "index_minor",
+    "port",
+    "is_req_edited",
+    "is_resp_edited",
+    "is_https",
+    "has_params",
+    "has_resp",
+    "req.method",
+    "req.url",
+    "req.path",
+    "req.query",
+    "req.headers",
+    "resp.status",
+    "resp.mime",
+    "resp.title",
+    "resp.headers",
+    "req_edited.method",
+    "req_edited.url",
+    "resp_edited.status",
+    "resp_edited.mime",
+    "req.raw",
+    "resp.raw",
+    "req_edited.raw",
+    "resp_edited.raw"
+  ],
+  "outputFile": "/path/to/output.jsonl"
+}
+```
+
+**Fields:**
+
+- `host` (string, required): Host to match records on. Can be with or without scheme (e.g. `detectportal.firefox.com`, `http://detectportal.firefox.com`).
+- `fields` (array|string, optional):
+  - Array of field names or a comma-separated string.
+  - Supports:
+    - Top-level: `created`, `host`, `id`, `index`, `index_minor`, `port`, `is_req_edited`, `is_resp_edited`, `is_https`, `has_params`, `has_resp`, `http`, `proxy_id`, `generated_by`
+    - Request JSON: `req.method`, `req.url`, `req.path`, `req.query`, `req.params`, `req.fragment`, `req.ext`, `req.headers`, `req.has_cookies`, `req.has_params`, `req.length`
+    - Response JSON: `resp.status`, `resp.mime`, `resp.title`, `resp.headers`, `resp.length`, `resp.has_cookies`, `resp.date`, `resp.time`
+    - Edited request JSON: `req_edited.*` (same structure as `req.*`)
+    - Edited response JSON: `resp_edited.*` (same structure as `resp.*`)
+    - Raw bodies from related collections: `req.raw`, `resp.raw`, `req_edited.raw`, `resp_edited.raw`
+- `outputFile` (string, optional): Absolute or relative path for the output file.
+  - If omitted, a file is created under the cache directory:  
+    `cache/extract_{host}_{timestamp}.jsonl`
+
+If `fields` is omitted, the default is:
+
+```json
+["host", "req.method", "req.url", "req.path", "req.params"]
+```
+
+**Response (Success):**
+
+```json
+{
+  "success": true,
+  "filePath": "/path/to/output.jsonl",
+  "host": "detectportal.firefox.com",
+  "fields": ["host", "req.method", "req.url", "req.path", "req.params"],
+  "extractedAt": "2025-06-25T20:25:44.136Z"
+}
+```
+
+Each line in the output file is a JSON object matching the filter-style structure, for example:
+
+```json
+{
+  "created": "2025-06-25 20:25:44.136Z",
+  "host": "http://detectportal.firefox.com",
+  "id": "____________1.9",
+  "index": 1,
+  "index_minor": 9,
+  "port": "",
+  "is_req_edited": false,
+  "is_resp_edited": false,
+  "is_https": false,
+  "has_params": true,
+  "has_resp": true,
+  "req": {
+    "has_cookies": false,
+    "method": "GET",
+    "url": "/success.txt?ipv4",
+    "length": 3059,
+    "query": "alias=getPortfolioProjects",
+    "path": "/api/graphql/v1",
+    "headers": {
+      "Host": "detectportal.firefox.com",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    }
+  },
+  "resp": {
+    "length": 8,
+    "mime": "text/plain",
+    "status": 200,
+    "title": "New Page",
+    "headers": {
+      "Content-Type": "text/plain"
+    }
+  }
+}
+```
+
+**Error Responses:**
+
+- 400 Bad Request - Missing `host` or invalid body.
+- 403 Forbidden - Unauthorized.
+- 500 Internal Server Error - Failed to query or write data.
 
 ---
 
