@@ -30,7 +30,7 @@ var captureQueue = make(chan captureData, 100)
 
 func init() {
 	// Start capture writer goroutine
-	go captureWriter()
+	// go captureWriter()
 }
 
 func captureWriter() {

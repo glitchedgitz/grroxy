@@ -224,7 +224,7 @@ GET /api/proxy/list
 
 ### Take Screenshot
 
-Captures a screenshot using the Chrome browser attached to a proxy instance via Chrome DevTools Protocol.
+Captures a screenshot of the active tab using the Chrome browser attached to a proxy instance via Chrome DevTools Protocol.
 
 ```http
 POST /api/proxy/screenshot
@@ -235,7 +235,6 @@ POST /api/proxy/screenshot
 ```json
 {
   "id": "______________1",
-  "url": "https://example.com",
   "fullPage": true,
   "saveFile": false
 }
@@ -244,7 +243,6 @@ POST /api/proxy/screenshot
 **Fields:**
 
 - `id` (string, required): The proxy ID with Chrome browser attached
-- `url` (string, optional): URL to navigate to before capturing. If empty, captures the current active tab
 - `fullPage` (boolean, optional, default: false): If true, captures the entire page including scrollable content. If false, captures only the visible viewport
 - `saveFile` (boolean, optional, default: false): If true, saves the screenshot to disk in the cache directory and returns the file path
 
@@ -297,7 +295,8 @@ POST /api/proxy/screenshot
 
 - Only works with proxy instances that have Chrome browser attached (`"browser": "chrome"`)
 - Chrome must be launched with `--remote-debugging-port=0` flag (enabled by default)
-- If `url` is provided, the browser will navigate to that URL before capturing
+- Captures the currently active tab in Chrome
+- To navigate to a specific URL before capturing, use the Navigate Chrome Tab endpoint first
 - Full page screenshots may take longer for pages with lots of content
 - Screenshot is always returned as PNG format
 - The Chrome DevTools Protocol connection uses a 30-second timeout
@@ -307,6 +306,18 @@ POST /api/proxy/screenshot
 - Proxy must be running with Chrome browser
 - Chrome process must be alive and responsive
 - DevToolsActivePort file must exist in Chrome's profile directory
+
+**Example Workflow - Navigate then Screenshot:**
+
+```javascript
+// 1. Navigate to desired URL
+POST /api/proxy/chrome/tab/navigate
+{ "proxyId": "______________1", "url": "https://example.com" }
+
+// 2. Capture screenshot of that page
+POST /api/proxy/screenshot
+{ "id": "______________1", "fullPage": true }
+```
 
 ---
 
@@ -533,6 +544,481 @@ POST /api/proxy/click
 - Proxy must be running with Chrome browser
 - Chrome process must be alive and responsive
 - DevToolsActivePort file must exist in Chrome's profile directory
+
+---
+
+### List Chrome Tabs
+
+Lists all open tabs in the Chrome browser attached to a proxy instance.
+
+```http
+POST /api/proxy/chrome/tabs
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1"
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+
+**Response (Success):**
+
+```json
+{
+  "tabs": [
+    {
+      "id": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+      "title": "Example Domain",
+      "url": "https://example.com",
+      "type": "page",
+      "description": ""
+    },
+    {
+      "id": "A1B2C3D4-5678-90AB-CDEF-123456789ABC",
+      "title": "Google",
+      "url": "https://google.com",
+      "type": "page",
+      "description": ""
+    }
+  ],
+  "count": 2,
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Response Fields:**
+
+- `tabs` (array): Array of tab information objects
+  - `id` (string): Chrome target ID for the tab
+  - `title` (string): Page title
+  - `url` (string): Current URL
+  - `type` (string): Target type (usually "page")
+  - `description` (string): Additional description (usually empty)
+- `count` (number): Total number of tabs
+- `timestamp` (string): ISO 8601 timestamp
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found
+- 500 Internal Server Error - Chrome not attached or failed to list tabs
+
+**Notes:**
+
+- Only works with Chrome browser proxies
+- Returns only "page" type targets (filters out background pages, extensions, etc.)
+- Tab IDs can be used with the Navigate Chrome Tab endpoint
+
+---
+
+### Open Chrome Tab
+
+Opens a new tab in the Chrome browser attached to a proxy instance.
+
+```http
+POST /api/proxy/chrome/tab/open
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1",
+  "url": "https://example.com"
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+- `url` (string, optional): URL to open in the new tab. Defaults to "about:blank" if not provided
+
+**Response (Success):**
+
+```json
+{
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "url": "https://example.com",
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Response Fields:**
+
+- `targetId` (string): Chrome target ID of the newly created tab
+- `url` (string): URL that was opened (or "about:blank")
+- `timestamp` (string): ISO 8601 timestamp
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found
+- 500 Internal Server Error - Chrome not attached or failed to open tab
+
+**Notes:**
+
+- Only works with Chrome browser proxies
+- The new tab remains open after the operation completes
+- If URL is provided, waits for the page to be ready before returning
+- Returns the target ID which can be used for navigation
+
+---
+
+### Navigate Chrome Tab
+
+Navigates a specific tab (or the active tab) to a URL with configurable wait conditions.
+
+```http
+POST /api/proxy/chrome/tab/navigate
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1",
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "url": "https://example.com",
+  "waitUntil": "load",
+  "timeoutMs": 30000
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+- `targetId` (string, optional): Chrome target ID of the tab to navigate. If empty, navigates the active tab
+- `url` (string, required): URL to navigate to
+- `waitUntil` (string, optional): Load state to wait for - "domcontentloaded", "load", or "networkidle". Default: "load"
+  - `domcontentloaded`: Wait for DOM to be ready (faster, resources may still be loading)
+  - `load`: Wait for full page load including resources (default)
+  - `networkidle`: Wait for network to be idle (no requests for 500ms)
+- `timeoutMs` (number, optional): Timeout in milliseconds. Default: 30000
+
+**Response (Success):**
+
+```json
+{
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "url": "https://example.com",
+  "status": "success",
+  "navigationId": "nav_1739616000123456789",
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Response Fields:**
+
+- `targetId` (string): Chrome target ID of the navigated tab (empty if active tab was used)
+- `url` (string): Final URL after navigation (may differ from requested URL due to redirects)
+- `status` (string): Navigation status - "success", "timeout", or "error"
+- `navigationId` (string): Unique identifier for this navigation
+- `timestamp` (string): ISO 8601 timestamp
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId, url, or invalid waitUntil value
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found or target ID not found
+- 500 Internal Server Error - Chrome not attached or navigation failed
+
+**Notes:**
+
+- Only works with Chrome browser proxies
+- If `targetId` is empty, operates on the currently active tab
+- The `waitUntil` parameter is crucial for reliable automation:
+  - Use `domcontentloaded` for faster navigation when you only need DOM access
+  - Use `load` (default) for most cases
+  - Use `networkidle` when you need to ensure all AJAX requests have completed
+- Navigation may timeout if the page takes longer than `timeoutMs` to load
+- Returns the final URL which may differ from requested URL due to redirects
+
+---
+
+### Activate Tab
+
+Switches focus to a specific tab, making it the active tab in Chrome.
+
+```http
+POST /api/proxy/chrome/tab/activate
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1",
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678"
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+- `targetId` (string, required): Chrome target ID of the tab to activate
+
+**Response (Success):**
+
+```json
+{
+  "ok": true,
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId or targetId
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found or target ID not found
+- 500 Internal Server Error - Chrome not attached or activation failed
+
+**Notes:**
+
+- Many Chrome APIs and actions behave better when the tab is active
+- Useful for multi-tab workflows where you need to switch context
+- Does not navigate or reload the tab, only brings it to focus
+
+---
+
+### Close Tab
+
+Closes a specific tab in Chrome.
+
+```http
+POST /api/proxy/chrome/tab/close
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1",
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678"
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+- `targetId` (string, required): Chrome target ID of the tab to close
+
+**Response (Success):**
+
+```json
+{
+  "ok": true,
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId or targetId
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found or target ID not found
+- 500 Internal Server Error - Chrome not attached or close failed
+
+**Notes:**
+
+- Essential for cleanup and avoiding runaway browser sessions
+- Cannot close the last remaining tab (Chrome will prevent this)
+- Tab is immediately closed and cannot be recovered
+
+---
+
+### Reload Tab
+
+Reloads a specific tab or the active tab, optionally bypassing cache.
+
+```http
+POST /api/proxy/chrome/tab/reload
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1",
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "bypassCache": false
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+- `targetId` (string, optional): Chrome target ID of the tab to reload. If empty, reloads the active tab
+- `bypassCache` (boolean, optional): If true, reloads ignoring cache (hard refresh). Default: false
+
+**Response (Success):**
+
+```json
+{
+  "ok": true,
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found or target ID not found
+- 500 Internal Server Error - Chrome not attached or reload failed
+
+**Notes:**
+
+- Useful for refreshing page state after login or data changes
+- Set `bypassCache: true` for a hard refresh (equivalent to Ctrl+Shift+R)
+- Waits for page to reload before returning
+
+---
+
+### Go Back
+
+Navigates back in the browser history for a specific tab or the active tab.
+
+```http
+POST /api/proxy/chrome/tab/back
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1",
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678"
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+- `targetId` (string, optional): Chrome target ID of the tab. If empty, operates on the active tab
+
+**Response (Success):**
+
+```json
+{
+  "ok": true,
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found or target ID not found
+- 500 Internal Server Error - Chrome not attached, no history, or navigation failed
+
+**Notes:**
+
+- Equivalent to clicking the browser's back button
+- Will fail if there is no previous page in history
+- Useful for multi-step workflows where navigation history matters
+
+---
+
+### Go Forward
+
+Navigates forward in the browser history for a specific tab or the active tab.
+
+```http
+POST /api/proxy/chrome/tab/forward
+```
+
+**Request Body:**
+
+```json
+{
+  "proxyId": "______________1",
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678"
+}
+```
+
+**Fields:**
+
+- `proxyId` (string, required): The proxy ID with Chrome browser attached
+- `targetId` (string, optional): Chrome target ID of the tab. If empty, operates on the active tab
+
+**Response (Success):**
+
+```json
+{
+  "ok": true,
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "timestamp": "2026-02-15T17:30:00Z"
+}
+```
+
+**Error Responses:**
+
+- 400 Bad Request - Missing proxyId
+- 403 Forbidden - Not authenticated
+- 404 Not Found - Proxy not found or target ID not found
+- 500 Internal Server Error - Chrome not attached, no forward history, or navigation failed
+
+**Notes:**
+
+- Equivalent to clicking the browser's forward button
+- Will fail if there is no forward page in history
+- Only works after using Go Back
+
+---
+
+**Use Case - Complete Tab Management Workflow:**
+
+```javascript
+// 1. List all tabs
+POST /api/proxy/chrome/tabs
+{ "proxyId": "______________1" }
+// Returns: { "tabs": [{ "id": "A1B2C3D4-5678-90AB-CDEF-123456789ABC", "url": "https://old.com" }] }
+
+// 2. Open a new tab
+POST /api/proxy/chrome/tab/open
+{ "proxyId": "______________1", "url": "https://new.com" }
+// Returns: { "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678" }
+
+// 3. Activate the new tab
+POST /api/proxy/chrome/tab/activate
+{ "proxyId": "______________1", "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678" }
+
+// 4. Navigate with network idle wait
+POST /api/proxy/chrome/tab/navigate
+{
+  "proxyId": "______________1",
+  "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678",
+  "url": "https://example.com",
+  "waitUntil": "networkidle",
+  "timeoutMs": 60000
+}
+
+// 5. Go back in history
+POST /api/proxy/chrome/tab/back
+{ "proxyId": "______________1", "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678" }
+
+// 6. Reload with cache bypass
+POST /api/proxy/chrome/tab/reload
+{ "proxyId": "______________1", "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678", "bypassCache": true }
+
+// 7. Close the tab when done
+POST /api/proxy/chrome/tab/close
+{ "proxyId": "______________1", "targetId": "E4B3F8C9-1234-5678-90AB-CDEF12345678" }
+```
 
 ---
 

@@ -27,6 +27,7 @@ type ProxyInstance struct {
 	Browser    string // `json:"browser"`
 	BrowserCmd *exec.Cmd
 	Label      string // `json:"label"`
+	Chrome     *browser.ChromeRemote
 }
 
 // ProxyManager manages multiple proxy instances
@@ -139,6 +140,56 @@ func (pm *ProxyManager) GetInstance(id string) *ProxyInstance {
 	return pm.instances[id]
 }
 
+// GetChromeRemote returns a ChromeRemote instance for a proxy, initializing it if necessary
+func (pm *ProxyManager) GetChromeRemote(proxyID string) (*browser.ChromeRemote, error) {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	inst := pm.instances[proxyID]
+	if inst == nil {
+		return nil, fmt.Errorf("proxy %s not found", proxyID)
+	}
+
+	if inst.Browser != "chrome" {
+		return nil, fmt.Errorf("proxy %s does not have a Chrome browser attached", proxyID)
+	}
+
+	if inst.Chrome != nil {
+		return inst.Chrome, nil
+	}
+
+	if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
+		return nil, fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+	}
+
+	// Get profile directory
+	var profileDir string
+	for _, arg := range inst.BrowserCmd.Args {
+		if strings.HasPrefix(arg, "--user-data-dir=") {
+			profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
+			break
+		}
+	}
+
+	if profileDir == "" {
+		return nil, fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+	}
+
+	// Get debug URL
+	debugURL, err := browser.GetChromeDebugURL(profileDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Chrome debug URL: %v", err)
+	}
+
+	// Connect to Chrome
+	cr, err := browser.NewChromeRemote(debugURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to Chrome: %v", err)
+	}
+	inst.Chrome = cr
+	return cr, nil
+}
+
 // AddProxy adds a proxy to the manager
 func (pm *ProxyManager) AddProxy(id string, proxy *RawProxyWrapper) {
 	pm.mu.Lock()
@@ -215,6 +266,13 @@ func (pm *ProxyManager) StopProxy(id string) error {
 			log.Printf("[ProxyManager] %s process for %s terminated", clientType, id)
 		}
 	}
+	// close ChromeRemote if any
+	if inst.Chrome != nil {
+		log.Printf("[ProxyManager] Closing ChromeRemote for proxy %s", id)
+		inst.Chrome.Close()
+		inst.Chrome = nil
+	}
+
 	pm.mu.Unlock()
 	return err
 }
@@ -245,51 +303,60 @@ func (pm *ProxyManager) ApplyToAllProxies(fn func(proxy *RawProxyWrapper, proxyI
 
 // TakeScreenshot captures a screenshot using the Chrome browser attached to a proxy instance
 // Returns: screenshot bytes, file path (if saved), error
-func (pm *ProxyManager) TakeScreenshot(proxyID string, url string, fullPage bool, savePath string) ([]byte, string, error) {
-	pm.mu.RLock()
+func (pm *ProxyManager) TakeScreenshot(proxyID string, fullPage bool, savePath string) ([]byte, string, error) {
+	pm.mu.Lock()
 	inst := pm.instances[proxyID]
-	pm.mu.RUnlock()
-
 	if inst == nil {
+		pm.mu.Unlock()
 		return nil, "", fmt.Errorf("proxy %s not found", proxyID)
 	}
 
 	if inst.Browser != "chrome" {
+		pm.mu.Unlock()
 		return nil, "", fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
 	}
 
-	if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
-		return nil, "", fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
-	}
+	// Initialize ChromeRemote if not already present
+	if inst.Chrome == nil {
+		if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
+			pm.mu.Unlock()
+			return nil, "", fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+		}
 
-	// Get the profile directory from the proxy configuration
-	// The profile directory is stored in the backend config at: {configDir}/profiles/{projectID}{proxyID}
-	// We need to extract it from the browser command or reconstruct it
-	// For now, we'll look for the --user-data-dir argument in the browser command
-	var profileDir string
-	if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
+		// Get the profile directory from the browser command
+		var profileDir string
 		for _, arg := range inst.BrowserCmd.Args {
 			if strings.HasPrefix(arg, "--user-data-dir=") {
 				profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
 				break
 			}
 		}
-	}
 
-	if profileDir == "" {
-		return nil, "", fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
-	}
+		if profileDir == "" {
+			pm.mu.Unlock()
+			return nil, "", fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+		}
 
-	log.Printf("[TakeScreenshot] Using profile directory: %s", profileDir)
+		// Get the Chrome debug URL
+		debugURL, err := browser.GetChromeDebugURL(profileDir)
+		if err != nil {
+			pm.mu.Unlock()
+			return nil, "", fmt.Errorf("failed to get Chrome debug URL: %v", err)
+		}
 
-	// Get the Chrome debug URL
-	debugURL, err := browser.GetChromeDebugURL(profileDir)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to get Chrome debug URL: %v", err)
+		// Connect to Chrome
+		cr, err := browser.NewChromeRemote(debugURL)
+		if err != nil {
+			pm.mu.Unlock()
+			return nil, "", fmt.Errorf("failed to connect to Chrome: %v", err)
+		}
+		inst.Chrome = cr
 	}
+	chrome := inst.Chrome
+	pm.mu.Unlock()
 
 	// Capture the screenshot
-	screenshotBytes, err := browser.TakeChromeScreenshot(debugURL, url, fullPage)
+	screenshotBytes, err := chrome.TakeScreenshot("", fullPage)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to capture screenshot: %v", err)
 	}
@@ -309,47 +376,56 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, url string, fullPage bool
 
 // ClickElement clicks an element on the page using the Chrome browser attached to a proxy instance
 func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string, waitForNavigation bool) error {
-	pm.mu.RLock()
+	pm.mu.Lock()
 	inst := pm.instances[proxyID]
-	pm.mu.RUnlock()
-
 	if inst == nil {
+		pm.mu.Unlock()
 		return fmt.Errorf("proxy %s not found", proxyID)
 	}
 
 	if inst.Browser != "chrome" {
+		pm.mu.Unlock()
 		return fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
 	}
 
-	if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
-		return fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
-	}
+	// Initialize ChromeRemote if not already present
+	if inst.Chrome == nil {
+		if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
+			pm.mu.Unlock()
+			return fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+		}
 
-	// Get the profile directory from the browser command
-	var profileDir string
-	if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
+		var profileDir string
 		for _, arg := range inst.BrowserCmd.Args {
 			if strings.HasPrefix(arg, "--user-data-dir=") {
 				profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
 				break
 			}
 		}
-	}
 
-	if profileDir == "" {
-		return fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
-	}
+		if profileDir == "" {
+			pm.mu.Unlock()
+			return fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+		}
 
-	log.Printf("[ClickElement] Using profile directory: %s", profileDir)
+		debugURL, err := browser.GetChromeDebugURL(profileDir)
+		if err != nil {
+			pm.mu.Unlock()
+			return fmt.Errorf("failed to get Chrome debug URL: %v", err)
+		}
 
-	// Get the Chrome debug URL
-	debugURL, err := browser.GetChromeDebugURL(profileDir)
-	if err != nil {
-		return fmt.Errorf("failed to get Chrome debug URL: %v", err)
+		cr, err := browser.NewChromeRemote(debugURL)
+		if err != nil {
+			pm.mu.Unlock()
+			return fmt.Errorf("failed to connect to Chrome: %v", err)
+		}
+		inst.Chrome = cr
 	}
+	chrome := inst.Chrome
+	pm.mu.Unlock()
 
 	// Click the element
-	if err := browser.ClickChromeElement(debugURL, url, selector, waitForNavigation); err != nil {
+	if err := chrome.ClickElement("", url, selector, waitForNavigation); err != nil {
 		return fmt.Errorf("failed to click element: %v", err)
 	}
 
@@ -358,47 +434,56 @@ func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string
 
 // GetElements retrieves information about clickable elements on the page
 func (pm *ProxyManager) GetElements(proxyID string, url string) ([]browser.ElementInfo, error) {
-	pm.mu.RLock()
+	pm.mu.Lock()
 	inst := pm.instances[proxyID]
-	pm.mu.RUnlock()
-
 	if inst == nil {
+		pm.mu.Unlock()
 		return nil, fmt.Errorf("proxy %s not found", proxyID)
 	}
 
 	if inst.Browser != "chrome" {
+		pm.mu.Unlock()
 		return nil, fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
 	}
 
-	if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
-		return nil, fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
-	}
+	// Initialize ChromeRemote if not already present
+	if inst.Chrome == nil {
+		if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
+			pm.mu.Unlock()
+			return nil, fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+		}
 
-	// Get the profile directory from the browser command
-	var profileDir string
-	if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
+		var profileDir string
 		for _, arg := range inst.BrowserCmd.Args {
 			if strings.HasPrefix(arg, "--user-data-dir=") {
 				profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
 				break
 			}
 		}
-	}
 
-	if profileDir == "" {
-		return nil, fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
-	}
+		if profileDir == "" {
+			pm.mu.Unlock()
+			return nil, fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+		}
 
-	log.Printf("[GetElements] Using profile directory: %s", profileDir)
+		debugURL, err := browser.GetChromeDebugURL(profileDir)
+		if err != nil {
+			pm.mu.Unlock()
+			return nil, fmt.Errorf("failed to get Chrome debug URL: %v", err)
+		}
 
-	// Get the Chrome debug URL
-	debugURL, err := browser.GetChromeDebugURL(profileDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Chrome debug URL: %v", err)
+		cr, err := browser.NewChromeRemote(debugURL)
+		if err != nil {
+			pm.mu.Unlock()
+			return nil, fmt.Errorf("failed to connect to Chrome: %v", err)
+		}
+		inst.Chrome = cr
 	}
+	chrome := inst.Chrome
+	pm.mu.Unlock()
 
 	// Get elements from the page
-	elements, err := browser.GetChromeElements(debugURL, url)
+	elements, err := chrome.GetElements("", url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get elements: %v", err)
 	}
@@ -971,7 +1056,7 @@ func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
 			}
 
 			// Capture the screenshot using ProxyManager
-			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.URL, body.FullPage, savePath)
+			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.FullPage, savePath)
 			if err != nil {
 				log.Printf("[ScreenshotProxy] Error taking screenshot: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
@@ -1101,6 +1186,173 @@ func (backend *Backend) GetElementsProxy(e *core.ServeEvent) error {
 				"elements":  elements,
 				"count":     len(elements),
 				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+// ListChromeTabs endpoint - lists all open tabs in Chrome
+func (backend *Backend) ListChromeTabs(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/chrome/tabs",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type ListTabsBody struct {
+				ProxyID string `json:"proxyId"`
+			}
+
+			var body ListTabsBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ProxyID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "proxyId is required"})
+			}
+
+			// Get Chrome remote
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			// List tabs
+			tabs, err := chrome.ListTabs()
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to list tabs: %v", err)})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"tabs":      tabs,
+				"count":     len(tabs),
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+// OpenChromeTab endpoint - opens a new tab in Chrome
+func (backend *Backend) OpenChromeTab(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/chrome/tab/open",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type OpenTabBody struct {
+				ProxyID string `json:"proxyId"`
+				URL     string `json:"url"` // Optional, defaults to about:blank
+			}
+
+			var body OpenTabBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ProxyID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "proxyId is required"})
+			}
+
+			// Get Chrome remote
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			// Open new tab
+			targetID, err := chrome.OpenTab(body.URL)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to open tab: %v", err)})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"targetId":  targetID,
+				"url":       body.URL,
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+// NavigateChromeTab endpoint - navigates a tab to a URL
+func (backend *Backend) NavigateChromeTab(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/chrome/tab/navigate",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type NavigateTabBody struct {
+				ProxyID   string `json:"proxyId"`
+				TargetID  string `json:"targetId"` // Optional, empty = active tab
+				URL       string `json:"url"`
+				WaitUntil string `json:"waitUntil"` // Optional: domcontentloaded, load, networkidle
+				TimeoutMs int    `json:"timeoutMs"` // Optional: timeout in milliseconds
+			}
+
+			var body NavigateTabBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ProxyID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "proxyId is required"})
+			}
+
+			if body.URL == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "url is required"})
+			}
+
+			// Get Chrome remote
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			// Navigate tab
+			result, err := chrome.Navigate(body.TargetID, body.URL, body.WaitUntil, body.TimeoutMs)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to navigate tab: %v", err)})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"targetId":     body.TargetID,
+				"url":          result.FinalURL,
+				"status":       result.Status,
+				"navigationId": result.NavigationID,
+				"timestamp":    time.Now().Format(time.RFC3339),
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{

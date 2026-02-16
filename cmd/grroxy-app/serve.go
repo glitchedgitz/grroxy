@@ -126,6 +126,14 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.ScreenshotProxy)
 	API.App.OnBeforeServe().Add(API.ClickProxy)
 	API.App.OnBeforeServe().Add(API.GetElementsProxy)
+	API.App.OnBeforeServe().Add(API.ListChromeTabs)
+	API.App.OnBeforeServe().Add(API.OpenChromeTab)
+	API.App.OnBeforeServe().Add(API.NavigateChromeTab)
+	API.App.OnBeforeServe().Add(API.ActivateTab)
+	API.App.OnBeforeServe().Add(API.CloseTab)
+	API.App.OnBeforeServe().Add(API.ReloadTab)
+	API.App.OnBeforeServe().Add(API.GoBack)
+	API.App.OnBeforeServe().Add(API.GoForward)
 
 	// Other
 	API.App.OnBeforeServe().Add(API.AddRequest)
