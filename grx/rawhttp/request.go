@@ -47,7 +47,21 @@ func DumpRequest(req *http.Request, normalizeHTTP bool) string {
 	// Build request line: METHOD URL PROTO
 	finalReq := fmt.Sprintf("%s %s %s\n", req.Method, url, req.Proto)
 
-	// Add headers
+	// Add Host header if not already in req.Header
+	hasHost := false
+
+	for header := range req.Header {
+		if strings.EqualFold(header, "Host") {
+			hasHost = true
+			break
+		}
+	}
+
+	if !hasHost && req.Host != "" {
+		finalReq += fmt.Sprintf("Host: %s\n", req.Host)
+	}
+
+	// Add other headers
 	for header, values := range req.Header {
 		for _, value := range values {
 			finalReq += fmt.Sprintf("%s: %s\n", header, value)
