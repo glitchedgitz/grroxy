@@ -531,7 +531,7 @@ func (cr *ChromeRemote) ListTabs() ([]TabInfo, error) {
 	log.Printf("[ChromeRemote] Listing all Chrome tabs")
 
 	var tabs []TabInfo
-	if err := chromedp.Run(cr.allocCtx,
+	if err := chromedp.Run(cr.browserCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			infos, err := chromedp.Targets(ctx)
 			if err != nil {
@@ -649,7 +649,7 @@ func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, 
 // ActivateTab switches focus to a specific tab
 func (cr *ChromeRemote) ActivateTab(targetID string) error {
 	log.Printf("[ChromeRemote] Activating tab: %s", targetID)
-	return chromedp.Run(cr.allocCtx, target.ActivateTarget(target.ID(targetID)))
+	return chromedp.Run(cr.browserCtx, target.ActivateTarget(target.ID(targetID)))
 }
 
 // CloseTab closes a specific tab
