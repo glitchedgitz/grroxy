@@ -697,6 +697,27 @@ func (cr *ChromeRemote) GoForward(targetID string) error {
 	return chromedp.Run(ctx, chromedp.NavigateForward())
 }
 
+// DebugURL returns the Chrome remote debugging WebSocket URL.
+func (cr *ChromeRemote) DebugURL() string {
+	return cr.debugURL
+}
+
+// Evaluate runs a JavaScript expression in the context of the given tab
+// and unmarshals the result into dest (same semantics as chromedp.Evaluate).
+// timeoutMs controls the per-call timeout; 0 uses a 15 s default.
+func (cr *ChromeRemote) Evaluate(targetID string, jsExpr string, dest interface{}, timeoutMs int) error {
+	ctx, err := cr.getContext(targetID)
+	if err != nil {
+		return err
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 15000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+	return chromedp.Run(tctx, chromedp.Evaluate(jsExpr, dest))
+}
+
 // --- Legacy Wrappers (Deprecated) ---
 
 func TakeChromeScreenshot(debugURL string, targetID string, fullPage bool) ([]byte, error) {
