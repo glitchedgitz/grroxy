@@ -253,6 +253,8 @@ func startCore() {
 	launch.App.OnBeforeServe().Add(launch.TemplatesDelete)
 	launch.App.OnBeforeServe().Add(launch.Tools)
 	launch.App.OnBeforeServe().Add(launch.ToolsServer)
+	launch.App.OnBeforeServe().Add(launch.API_CheckUpdate)
+	launch.App.OnBeforeServe().Add(launch.API_DoUpdate)
 
 	host, err := utils.CheckAndFindAvailablePort("127.0.0.1:8090")
 	if err != nil {

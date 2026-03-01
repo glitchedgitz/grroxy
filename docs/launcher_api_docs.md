@@ -16,6 +16,7 @@ The Grroxy Launcher is a project management application that allows you to creat
 - [Cook Engine](#cook-engine)
 - [Commands](#commands)
 - [Utilities](#utilities)
+- [Update](#update)
 - [Certificates](#certificates)
 
 ---
@@ -554,6 +555,96 @@ GET /api/tool?path=/path/to/tool
 
 - 200 OK with host address
 - 500 Internal Server Error on failure
+
+---
+
+## Update
+
+### Check for Update
+
+Checks if a newer version of Grroxy is available.
+
+```http
+GET /api/update/check
+```
+
+**Response:**
+
+```json
+{
+  "current_version": "0.22.0",
+  "latest_version": "v0.25.0",
+  "update_available": true,
+  "platform": "darwin/arm64"
+}
+```
+
+**Response Fields:**
+
+- `current_version` (string): Currently installed backend version
+- `latest_version` (string): Latest release tag from GitHub
+- `update_available` (boolean): Whether an update is available
+- `platform` (string): Current OS and architecture
+
+---
+
+### Perform Update
+
+Downloads and replaces all Grroxy binaries (`grroxy`, `grroxy-app`, `grroxy-tool`) with the latest release.
+
+```http
+POST /api/update
+```
+
+**Response (Updated):**
+
+```json
+{
+  "previous_version": "0.22.0",
+  "new_version": "v0.25.0",
+  "results": [
+    {
+      "binary": "grroxy",
+      "status": "updated",
+      "path": "/usr/local/bin/grroxy"
+    },
+    {
+      "binary": "grroxy-app",
+      "status": "updated",
+      "path": "/usr/local/bin/grroxy-app"
+    },
+    {
+      "binary": "grroxy-tool",
+      "status": "skipped",
+      "error": "no asset found matching \"grroxy-tool-darwin-arm64\" in release v0.25.0"
+    }
+  ]
+}
+```
+
+**Response (Already Up to Date):**
+
+```json
+{
+  "message": "already up to date",
+  "version": "0.25.0"
+}
+```
+
+**Response Fields:**
+
+- `previous_version` (string): Version before the update
+- `new_version` (string): Version after the update
+- `results` (array): Per-binary update results
+  - `binary` (string): Binary name
+  - `status` (string): `"updated"`, `"skipped"`, or `"failed"`
+  - `path` (string): Binary path (present when updated)
+  - `error` (string): Error message (present when skipped/failed)
+
+**Notes:**
+
+- Uses `GITHUB_TOKEN` or `GH_TOKEN` environment variable for private repo access
+- Restart Grroxy after update for changes to take effect
 
 ---
 

@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-FEB] - v0.25.0 - Self-Update, Electron Launch & Proxy Improvements
+
+### Added
+
+- **Self-Update Command** (1dc12df)
+  - `grroxy update` - Fetch and replace binaries (`grroxy`, `grroxy-app`, `grroxy-tool`) from GitHub Releases
+  - Private repo support via `GITHUB_TOKEN` environment variable
+  - Cross-platform binary replacement with `.exe` handling for Windows
+
+- **Update API Endpoints**
+  - `GET /api/update/check` - Check if a newer version is available (returns current/latest version and platform info)
+  - `POST /api/update` - Perform the update for all binaries from the launcher
+
+- **Electron App Launch Integration** (3a41c75)
+  - Electron app now spawns `grroxy start` as a child process on launch
+  - Automatic backend startup when opening the desktop app
+
+- **Chrome Browser Test Suite** (31a1186)
+  - Comprehensive test cases for Chrome automation (`grx/browser/chrome_test.go`)
+  - Multi-tab workflow tests and navigation timeout fixes
+
+### Changed
+
+- **Rawproxy Protocol Handling** (da3c528)
+  - Improved protocol detection and handling per target
+  - uTLS transport caching per target for better performance
+
+- **Serve Configuration** (b3c5945)
+  - Use `.grroxy` directory and `chdir` on launch for cleaner working directory management
+
+- **Frontend Updates** (d702ab7, b621b2c)
+  - Frontend fetch improvements
+
+### Fixed
+
+- Host header handling (9ee9aad)
+- Chrome navigation timeout in MultiTabWorkflow test (2d2980d)
+
+---
+
 ## [2026-FEB] - v0.24.0 - Chrome Automation Refactor & Tab Management
 
 ### Added
