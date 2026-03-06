@@ -4,6 +4,7 @@
   import "./assets/fonts/fonts.css";
 
   let host = "../";
+  // let host = "127.0.0.1:8090";
   // import { GetHost } from "../wailsjs/go/main/App";
   // let host = GetHost();
 </script>
