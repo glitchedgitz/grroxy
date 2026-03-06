@@ -9,9 +9,9 @@ A cyber security toolkit blending manual testing with AI Agents.
 ## Installation
 
 ```bash
-go install github.com/glitchedgitz/grroxy/cmd/grroxy@latest
-go install github.com/glitchedgitz/grroxy/cmd/grroxy-app@latest
-go install github.com/glitchedgitz/grroxy/cmd/grroxy-tool@latest
+go install github.com/glitchedgitz/grroxy/cmd/grroxy@v0.26.2
+go install github.com/glitchedgitz/grroxy/cmd/grroxy-app@v0.26.2
+go install github.com/glitchedgitz/grroxy/cmd/grroxy-tool@v0.26.2
 go install -v github.com/glitchedgitz/cook/v2/cmd/cook@latest
 ```
 
