@@ -24,6 +24,6 @@ Or get your binary from [releases](https://github.com/glitchedgitz/grroxy/releas
 grroxy start
 ```
 
-The web UI is available at `http://127.0.0.1:8090` by default.
+The web UI is available at `http://127.0.0.1:8090`, (Use only with chromium browsers)
 
 Check out more on https://grroxy.com
