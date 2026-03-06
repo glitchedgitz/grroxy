@@ -8,10 +8,10 @@ import (
 
 	"github.com/glitchedgitz/grroxy/internal/schemas"
 	"github.com/glitchedgitz/grroxy/internal/utils"
+	"github.com/glitchedgitz/pocketbase"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 	"github.com/rs/xid"
 )
 

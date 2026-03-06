@@ -1,6 +1,6 @@
 package schemas
 
-import "github.com/pocketbase/pocketbase/models/schema"
+import "github.com/glitchedgitz/pocketbase/models/schema"
 
 // const LABELS_COLLECTION_SCHEMA = {
 //     "name": LABELS,

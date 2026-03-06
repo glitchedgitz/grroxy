@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase/models"
 )
 
 // InterceptUpdate represents an update to an intercept request

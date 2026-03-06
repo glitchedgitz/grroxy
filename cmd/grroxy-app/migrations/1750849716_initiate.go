@@ -7,11 +7,11 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/schemas"
 	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/grroxy/internal/utils"
+	"github.com/glitchedgitz/pocketbase/daos"
+	m "github.com/glitchedgitz/pocketbase/migrations"
+	"github.com/glitchedgitz/pocketbase/models"
+	pbTypes "github.com/glitchedgitz/pocketbase/tools/types"
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/daos"
-	m "github.com/pocketbase/pocketbase/migrations"
-	"github.com/pocketbase/pocketbase/models"
-	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 )
 
 type setting struct {

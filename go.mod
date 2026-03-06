@@ -16,13 +16,13 @@ require (
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/glitchedgitz/cook/v2 v2.3.0
 	github.com/glitchedgitz/dadql v0.0.1
+	github.com/glitchedgitz/pocketbase v0.22.1
 	github.com/glitchedgitz/wappalyzergo v0.0.2
 	github.com/go-resty/resty/v2 v2.12.0
 	github.com/jpillora/go-tld v1.2.1
 	github.com/klauspost/compress v1.17.7
 	github.com/labstack/echo/v5 v5.0.0-20230722203903-ec5b858dab61
 	github.com/pocketbase/dbx v1.10.1
-	github.com/pocketbase/pocketbase v0.22.7
 	github.com/projectdiscovery/gologger v1.1.12
 	github.com/r--w/pocketbase v0.13.0
 	github.com/refraction-networking/utls v1.8.1
@@ -69,6 +69,7 @@ require (
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/ffuf/pencode v0.0.0-20240120104927-07e33ef17d5a // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
+	github.com/ganigeorgiev/fexpr v0.4.0 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
@@ -100,6 +101,7 @@ require (
 	github.com/nwaples/rardecode v1.1.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pocketbase/pocketbase v0.13.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
@@ -136,5 +138,3 @@ require (
 	modernc.org/strutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
 )
-
-replace github.com/pocketbase/pocketbase v0.22.7 => github.com/glitchedgitz/grroxy-base v0.22.0

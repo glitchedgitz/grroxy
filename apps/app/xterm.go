@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 	"github.com/rs/xid"
 	"golang.org/x/net/websocket"
 )

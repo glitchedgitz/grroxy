@@ -8,11 +8,11 @@ import (
 
 	"github.com/glitchedgitz/grroxy/internal/schemas"
 	"github.com/glitchedgitz/grroxy/internal/types"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
+	"github.com/glitchedgitz/pocketbase/models"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/models"
 )
 
 const SORT_GAP = 1000

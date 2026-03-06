@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/glitchedgitz/grroxy/internal/utils"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase"
+	"github.com/glitchedgitz/pocketbase/models"
 )
 
 type RunCommandData struct {

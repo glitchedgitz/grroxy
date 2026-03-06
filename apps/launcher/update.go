@@ -7,9 +7,9 @@ import (
 
 	"github.com/glitchedgitz/grroxy/grx/version"
 	"github.com/glitchedgitz/grroxy/internal/updater"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 func (launcher *Launcher) API_CheckUpdate(e *core.ServeEvent) error {
@@ -31,10 +31,10 @@ func (launcher *Launcher) API_CheckUpdate(e *core.ServeEvent) error {
 			needsUpdate := updater.NeedsUpdate(current, latest)
 
 			return c.JSON(http.StatusOK, map[string]interface{}{
-				"current_version": current,
-				"latest_version":  latest,
+				"current_version":  current,
+				"latest_version":   latest,
 				"update_available": needsUpdate,
-				"platform":        runtime.GOOS + "/" + runtime.GOARCH,
+				"platform":         runtime.GOOS + "/" + runtime.GOARCH,
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{

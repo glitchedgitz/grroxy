@@ -1,7 +1,7 @@
 package schemas
 
 import (
-	"github.com/pocketbase/pocketbase/models/schema"
+	"github.com/glitchedgitz/pocketbase/models/schema"
 )
 
 var Sitemap = schema.NewSchema(

@@ -3,10 +3,10 @@ package migrations
 import (
 	"log"
 
+	"github.com/glitchedgitz/pocketbase/daos"
+	m "github.com/glitchedgitz/pocketbase/migrations"
+	"github.com/glitchedgitz/pocketbase/models/schema"
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/daos"
-	m "github.com/pocketbase/pocketbase/migrations"
-	"github.com/pocketbase/pocketbase/models/schema"
 )
 
 func init() {

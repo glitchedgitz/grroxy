@@ -9,9 +9,9 @@ import (
 	"path"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 func (backend *Backend) CWDContent(e *core.ServeEvent) error {

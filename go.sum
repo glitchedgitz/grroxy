@@ -116,12 +116,14 @@ github.com/fsnotify/fsnotify v1.8.0 h1:dAwr6QBTBZIkG8roQaJjGof0pp0EeF+tNV7YBP3F/
 github.com/fsnotify/fsnotify v1.8.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/gabriel-vasile/mimetype v1.4.3 h1:in2uUcidCuFcDKtdcBxlR0rJ1+fsokWf+uqxgUFjbI0=
 github.com/gabriel-vasile/mimetype v1.4.3/go.mod h1:d8uq/6HKRL6CGdk+aubisF/M5GcPfT7nKyLpA0lbSSk=
+github.com/ganigeorgiev/fexpr v0.4.0 h1:ojitI+VMNZX/odeNL1x3RzTTE8qAIVvnSSYPNAnQFDI=
+github.com/ganigeorgiev/fexpr v0.4.0/go.mod h1:RyGiGqmeXhEQ6+mlGdnUleLHgtzzu/VGO2WtJkF5drE=
 github.com/glitchedgitz/cook/v2 v2.3.0 h1:N9nRpB0EXZENBM0DsLAZ3dI16c7sDCUkSapcaMiNYY4=
 github.com/glitchedgitz/cook/v2 v2.3.0/go.mod h1:ZZvvvi01SxOZ+aMXLY2oLHAvUXgdQasLs7f8rY/Fmso=
 github.com/glitchedgitz/dadql v0.0.1 h1:stDfsSdIRyW+ZNTXjBum+Dbk3hB3DGJv6wKHnml3m+Q=
 github.com/glitchedgitz/dadql v0.0.1/go.mod h1:/7xjGUsFBJv4VpGTPlS78J2FGUpugNWTS1jSyVlsMCA=
-github.com/glitchedgitz/grroxy-base v0.22.0 h1:Vs/eSu1X8Y5NDbXBVIZsrLihlBuS0DjtvbgAp0q5Xlc=
-github.com/glitchedgitz/grroxy-base v0.22.0/go.mod h1:nvuM8hpj8J1+Xg/LgNTNE9WHfLHB2U6ySmWjPOxOWoM=
+github.com/glitchedgitz/pocketbase v0.22.1 h1:LwhCXvcjeq1PxMHch2/nIv78890mvfQFa+GEzQlZv2c=
+github.com/glitchedgitz/pocketbase v0.22.1/go.mod h1:LK3ce8a/tv9xCVGdggxlc/wW1hfDXjDFQoOECZi+WcY=
 github.com/glitchedgitz/wappalyzergo v0.0.2 h1:xcb2Pb/Caxdq+6QbDy2zbZNITv43fCp4V7MZuu0Vsr0=
 github.com/glitchedgitz/wappalyzergo v0.0.2/go.mod h1:BKaron6hw6U0zTDtMpYOvDePID2ZkuzLs2l/tfJhJ2o=
 github.com/go-logr/logr v1.4.1 h1:pKouT5E8xu9zeFC39JXRDukb6JFQPXM5p5I91188VAQ=
@@ -275,6 +277,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pocketbase/dbx v1.10.1 h1:cw+vsyfCJD8YObOVeqb93YErnlxwYMkNZ4rwN0G0AaA=
 github.com/pocketbase/dbx v1.10.1/go.mod h1:xXRCIAKTHMgUCyCKZm55pUOdvFziJjQfXaWKhu2vhMs=
+github.com/pocketbase/pocketbase v0.13.0 h1:9alieWiFu+9wZQknEiKZdE7UT9HW5UOY6axjj5Q8WZs=
+github.com/pocketbase/pocketbase v0.13.0/go.mod h1:rW0KXzlfkarJmueSfyoVuEfH7/SQHdZjpyVetMaKm1M=
 github.com/projectdiscovery/gologger v1.1.12 h1:uX/QkQdip4PubJjjG0+uk5DtyAi1ANPJUvpmimXqv4A=
 github.com/projectdiscovery/gologger v1.1.12/go.mod h1:DI8nywPLERS5mo8QEA9E7gd5HZ3Je14SjJBH3F5/kLw=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=

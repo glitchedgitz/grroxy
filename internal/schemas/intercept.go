@@ -1,8 +1,8 @@
 package schemas
 
 import (
-	"github.com/pocketbase/pocketbase/models/schema"
-	"github.com/pocketbase/pocketbase/tools/types"
+	"github.com/glitchedgitz/pocketbase/models/schema"
+	"github.com/glitchedgitz/pocketbase/tools/types"
 )
 
 var Intercept = schema.NewSchema(

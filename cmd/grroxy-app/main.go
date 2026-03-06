@@ -11,8 +11,8 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/config"
 	_ "github.com/glitchedgitz/grroxy/internal/logflags"
 	"github.com/glitchedgitz/grroxy/internal/utils"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/plugins/migratecmd"
+	"github.com/glitchedgitz/pocketbase"
+	"github.com/glitchedgitz/pocketbase/plugins/migratecmd"
 	"github.com/spf13/cobra"
 )
 

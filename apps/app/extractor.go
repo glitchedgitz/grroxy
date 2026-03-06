@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/glitchedgitz/grroxy/internal/utils"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
+	"github.com/glitchedgitz/pocketbase/models"
+	pbTypes "github.com/glitchedgitz/pocketbase/tools/types"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/models"
-	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 )
 
 // ExtractData extracts specified fields from database records matching the host

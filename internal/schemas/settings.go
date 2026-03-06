@@ -1,6 +1,6 @@
 package schemas
 
-import "github.com/pocketbase/pocketbase/models/schema"
+import "github.com/glitchedgitz/pocketbase/models/schema"
 
 var Settings = schema.NewSchema(
 	&schema.SchemaField{
@@ -16,8 +16,8 @@ var Settings = schema.NewSchema(
 
 var ConfigSchema = schema.NewSchema(
 	&schema.SchemaField{
-		Name: "key",
-		Type: schema.FieldTypeText,
+		Name:     "key",
+		Type:     schema.FieldTypeText,
 		Required: true,
 	},
 	&schema.SchemaField{

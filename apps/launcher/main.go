@@ -8,11 +8,11 @@ import (
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy/internal/config"
 	"github.com/glitchedgitz/grroxy/internal/process"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/models"
-	"github.com/pocketbase/pocketbase/models/schema"
-	pbTypes "github.com/pocketbase/pocketbase/tools/types"
+	"github.com/glitchedgitz/pocketbase"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase/models/schema"
+	pbTypes "github.com/glitchedgitz/pocketbase/tools/types"
 )
 
 type Launcher struct {

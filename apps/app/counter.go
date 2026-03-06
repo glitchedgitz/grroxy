@@ -5,8 +5,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase"
+	"github.com/glitchedgitz/pocketbase/models"
 )
 
 // Counter represents a counter entry with atomic operations

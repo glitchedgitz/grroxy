@@ -7,9 +7,9 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/schemas"
 	"github.com/glitchedgitz/grroxy/internal/sdk"
 	"github.com/glitchedgitz/grroxy/internal/types"
-	pbTypes "github.com/pocketbase/pocketbase/tools/types"
+	pbTypes "github.com/glitchedgitz/pocketbase/tools/types"
 
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase/models"
 )
 
 func testPlaygroundAdd(grroxydb *sdk.Client, id string, playgroundAddData string) {

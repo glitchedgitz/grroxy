@@ -1,6 +1,6 @@
 package schemas
 
-import "github.com/pocketbase/pocketbase/models/schema"
+import "github.com/glitchedgitz/pocketbase/models/schema"
 
 var Attached = schema.NewSchema(
 	&schema.SchemaField{

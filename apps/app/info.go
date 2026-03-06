@@ -5,9 +5,9 @@ import (
 	"path"
 
 	"github.com/glitchedgitz/grroxy/grx/version"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 func (backend *Backend) Info(e *core.ServeEvent) error {

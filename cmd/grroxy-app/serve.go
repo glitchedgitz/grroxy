@@ -11,10 +11,10 @@ import (
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy/apps/app"
 	"github.com/glitchedgitz/grroxy/internal/process"
+	"github.com/glitchedgitz/pocketbase"
+	"github.com/glitchedgitz/pocketbase/core"
+	"github.com/glitchedgitz/pocketbase/plugins/migratecmd"
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
 	_ "github.com/glitchedgitz/grroxy/cmd/grroxy-app/migrations"
 )

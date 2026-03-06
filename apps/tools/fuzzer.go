@@ -13,13 +13,13 @@ import (
 	"github.com/glitchedgitz/grroxy/grx/rawhttp"
 	"github.com/glitchedgitz/grroxy/internal/schemas"
 	"github.com/glitchedgitz/grroxy/internal/sdk"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
+	"github.com/glitchedgitz/pocketbase/daos"
+	"github.com/glitchedgitz/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase/models/schema"
+	pbTypes "github.com/glitchedgitz/pocketbase/tools/types"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/daos"
-	"github.com/pocketbase/pocketbase/models"
-	"github.com/pocketbase/pocketbase/models/schema"
-	pbTypes "github.com/pocketbase/pocketbase/tools/types"
 )
 
 type FuzzerManager struct {
@@ -37,7 +37,7 @@ type FuzzerStartRequest struct {
 	Host        string         `json:"host"`
 	Port        string         `json:"port"`
 	UseTLS      bool           `json:"useTLS"`
-	UseHTTP2    bool           `json:"http2"`    // Enable HTTP/2 support
+	UseHTTP2    bool           `json:"http2"`   // Enable HTTP/2 support
 	Markers     map[string]any `json:"markers"` // marker -> string (file path) or []string (inline payloads)
 	Mode        string         `json:"mode"`
 	Concurrency int            `json:"concurrency"`

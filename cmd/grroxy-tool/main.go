@@ -12,8 +12,8 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/config"
 	"github.com/glitchedgitz/grroxy/internal/process"
 	"github.com/glitchedgitz/grroxy/internal/utils"
-	"github.com/pocketbase/pocketbase"
-	"github.com/pocketbase/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase"
+	"github.com/glitchedgitz/pocketbase/apis"
 
 	_ "github.com/glitchedgitz/grroxy/cmd/grroxy-tool/migrations"
 )

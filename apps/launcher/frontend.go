@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/glitchedgitz/grroxy/grx/frontend"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
 )
 
 func (launcher *Launcher) BindFrontend(e *core.ServeEvent) error {

@@ -1,6 +1,6 @@
 package schemas
 
-import "github.com/pocketbase/pocketbase/models/schema"
+import "github.com/glitchedgitz/pocketbase/models/schema"
 
 var Wordlists = schema.NewSchema(
 	&schema.SchemaField{
@@ -13,7 +13,7 @@ var Wordlists = schema.NewSchema(
 		Type:     schema.FieldTypeText,
 		Required: true,
 	},
-	
+
 	&schema.SchemaField{
 		Name: "data",
 		Type: schema.FieldTypeJson,

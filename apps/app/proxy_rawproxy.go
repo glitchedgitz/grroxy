@@ -33,8 +33,8 @@ import (
 	"github.com/glitchedgitz/grroxy/grx/rawproxy"
 	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/grroxy/internal/utils"
-	"github.com/pocketbase/pocketbase/daos"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase/daos"
+	"github.com/glitchedgitz/pocketbase/models"
 )
 
 // RawProxyWrapper wraps the rawproxy.Proxy to match our interface

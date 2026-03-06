@@ -5,7 +5,7 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/config"
 	"github.com/glitchedgitz/grroxy/internal/process"
 	"github.com/glitchedgitz/grroxy/internal/sdk"
-	"github.com/pocketbase/pocketbase"
+	"github.com/glitchedgitz/pocketbase"
 )
 
 type Tools struct {

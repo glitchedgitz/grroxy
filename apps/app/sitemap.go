@@ -14,13 +14,13 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/schemas"
 	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/grroxy/internal/utils"
+	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
+	"github.com/glitchedgitz/pocketbase/models"
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/jpillora/go-tld"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/apis"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/models"
 )
 
 func (backend *Backend) handleSitemapNew(data *types.SitemapGet) error {

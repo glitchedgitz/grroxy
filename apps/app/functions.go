@@ -3,7 +3,7 @@ package app
 import (
 	"log"
 
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase/models"
 )
 
 func (backend *Backend) GetRecord(collectionName string, filter string) (*models.Record, error) {

@@ -3,7 +3,7 @@ package types
 import (
 	"time"
 
-	"github.com/pocketbase/pocketbase/models/schema"
+	"github.com/glitchedgitz/pocketbase/models/schema"
 )
 
 // Create types.Collection based on below information

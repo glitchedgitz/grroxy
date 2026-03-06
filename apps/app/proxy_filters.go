@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/glitchedgitz/dadql/dadql"
-	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/tools/types"
+	"github.com/glitchedgitz/pocketbase/core"
+	"github.com/glitchedgitz/pocketbase/tools/types"
 )
 
 // SetupFiltersHook sets up the event hook for filter management
