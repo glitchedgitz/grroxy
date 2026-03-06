@@ -1,24 +1,41 @@
 # Grroxy
 
-### Project Structure
+**Center of your web hacking operations**
 
-`/apps` main apps (launcher, app, tool runner)  
-`/cmd` go binaries  
-`/grx` grroxy engine (core packages)  
-`/internal` database schemas, database types, save fn, etc.  
-`/docs` documentation
+An intercepting proxy and web security toolkit with a browser-based UI.
 
-### Latest Versions
+<div >
 
-```bash
-# Current Version (see VERSION file)
-Backend:   v0.26.0
-Frontend:  v0.26.0
+[![Website](https://img.shields.io/badge/Website-grroxy.com-blue)](https://grroxy.com)
 
-# Released App
-App:       v2026.3.3
-Backend:   v0.26.0
-Frontend:  v0.26.0
+<video src="https://framerusercontent.com/assets/C7VTrJ7zEVWVftMFKQgf6mu0Wos.mp4" autoplay loop muted playsinline></video>
+
+</div>
+
+## Project Structure
+
+```
+/apps         main apps (launcher, app, tool runner)
+/cmd          go binaries
+/grx          grroxy engine (core packages: rawhttp, rawproxy, fuzzer, browser, frontend, templates)
+/internal     database schemas, types, config, utilities
+/docs         documentation
 ```
 
-The version is maintained in the `VERSION` file at the project root. Use `internal/version` package to access version programmatically in Go code.
+## Installation
+
+```bash
+go install github.com/glitchedgitz/grroxy/cmd/grroxy@latest
+go install github.com/glitchedgitz/grroxy/cmd/grroxy-app@latest
+go install github.com/glitchedgitz/grroxy/cmd/grroxy-tool@latest
+go install -v github.com/glitchedgitz/cook/v2/cmd/cook@latest
+```
+
+## Usage
+
+```bash
+# Start grroxy
+grroxy start
+```
+
+The web UI is available at `http://127.0.0.1:8090` by default.
