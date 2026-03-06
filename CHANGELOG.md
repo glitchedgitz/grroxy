@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-MAR] - v0.26.3 - Update Check & Cross-Platform Build
+
+### Added
+
+- Electron App
+- **`getVersion` IPC** — Frontend can fetch current app version.
+- **`openURL` IPC** — Open external URLs in default browser.
+- **Cross-platform Electron build** — `./build.sh all` now builds Electron app for mac, linux, and windows.
+
+---
+
 ## [2026-MAR] - v0.26.0 - Repository Rename: `grroxy-db` -> `grroxy`
 
 ### Changed

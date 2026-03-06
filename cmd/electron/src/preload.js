@@ -33,5 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('window-maximized', (event, isMaximized) => {
             callback(isMaximized);
         });
-    }
+    },
+
+    // App info
+    getVersion: () => ipcRenderer.invoke('get-version'),
+    openURL: (url) => ipcRenderer.invoke('open-url', url),
 });

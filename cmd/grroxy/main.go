@@ -33,6 +33,7 @@ import (
 
 var noProxy bool
 var MainHostAddress string = "127.0.0.1:8090"
+var hostFixed bool // if true, skip CheckAndFindAvailablePort
 var MainProxyAddress string = "127.0.0.1:8888"
 var showLogs = false
 
@@ -119,13 +120,19 @@ func main() {
 		},
 	})
 
-	rootCmd.AddCommand(&cobra.Command{
+	startCmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start grroxy",
 		Run: func(cmd *cobra.Command, args []string) {
+			if h, _ := cmd.Flags().GetString("host"); h != "" {
+				MainHostAddress = h
+				hostFixed = true
+			}
 			initialize()
 		},
-	})
+	}
+	startCmd.Flags().String("host", "", "host address to listen on (default 127.0.0.1:8090)")
+	rootCmd.AddCommand(startCmd)
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "update [binary]",
@@ -256,15 +263,19 @@ func startCore() {
 	launch.App.OnBeforeServe().Add(launch.API_CheckUpdate)
 	launch.App.OnBeforeServe().Add(launch.API_DoUpdate)
 
-	host, err := utils.CheckAndFindAvailablePort("127.0.0.1:8090")
-	if err != nil {
-		panic(err)
+	host := MainHostAddress
+	if !hostFixed {
+		var err error
+		host, err = utils.CheckAndFindAvailablePort(MainHostAddress)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	// Signal that initialization is complete before starting the server
 	fmt.Println("Starting main app at: ", host)
 
-	_, err = apis.Serve(launch.App, apis.ServeConfig{
+	_, err := apis.Serve(launch.App, apis.ServeConfig{
 		HttpAddr: host,
 	})
 
