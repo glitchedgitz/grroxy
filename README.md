@@ -1,26 +1,11 @@
-# Grroxy
 
-**Center of your web hacking operations**
-
-An intercepting proxy and web security toolkit with a browser-based UI.
-
-<div >
+# grroxy
+Cyber security toolkit for the AI ERA.
 
 [![Website](https://img.shields.io/badge/Website-grroxy.com-blue)](https://grroxy.com)
 
-<video src="https://framerusercontent.com/assets/C7VTrJ7zEVWVftMFKQgf6mu0Wos.mp4" autoplay loop muted playsinline></video>
 
-</div>
-
-## Project Structure
-
-```
-/apps         main apps (launcher, app, tool runner)
-/cmd          go binaries
-/grx          grroxy engine (core packages: rawhttp, rawproxy, fuzzer, browser, frontend, templates)
-/internal     database schemas, types, config, utilities
-/docs         documentation
-```
+<img width="1400" height="892" alt="image" src="https://github.com/user-attachments/assets/1375009a-6cda-4ff1-ad2c-85bd39f06635" />
 
 ## Installation
 
