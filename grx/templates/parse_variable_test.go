@@ -3,7 +3,7 @@ package templates_test
 import (
 	"testing"
 
-	"github.com/glitchedgitz/grroxy-db/grx/templates"
+	"github.com/glitchedgitz/grroxy/grx/templates"
 )
 
 func TestParseVariable(t *testing.T) {

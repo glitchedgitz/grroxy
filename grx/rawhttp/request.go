@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 )
 
 // DumpRequest dumps an HTTP request to a string format.

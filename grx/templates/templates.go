@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/glitchedgitz/dadql/dadql"
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 	"gopkg.in/fsnotify.v1"
 	"gopkg.in/yaml.v2"
 )

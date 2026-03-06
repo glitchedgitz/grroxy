@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/glitchedgitz/grroxy-db/grx/version"
+	"github.com/glitchedgitz/grroxy/grx/version"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"

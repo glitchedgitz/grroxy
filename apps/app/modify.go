@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
-	"github.com/glitchedgitz/grroxy-db/grx/templates"
-	"github.com/glitchedgitz/grroxy-db/grx/templates/actions"
+	"github.com/glitchedgitz/grroxy/grx/rawhttp"
+	"github.com/glitchedgitz/grroxy/grx/templates"
+	"github.com/glitchedgitz/grroxy/grx/templates/actions"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"

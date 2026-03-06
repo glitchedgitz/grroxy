@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/glitchedgitz/grroxy-db/internal/schemas"
-	"github.com/glitchedgitz/grroxy-db/internal/types"
+	"github.com/glitchedgitz/grroxy/internal/schemas"
+	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/apis"

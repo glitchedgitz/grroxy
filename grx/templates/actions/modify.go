@@ -1,6 +1,6 @@
 package actions
 
-import "github.com/glitchedgitz/grroxy-db/internal/types"
+import "github.com/glitchedgitz/grroxy/internal/types"
 
 type ModifierReplace struct {
 	Search string `yaml:"search"`

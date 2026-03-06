@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/glitchedgitz/grroxy-db/internal/types"
+	"github.com/glitchedgitz/grroxy/internal/types"
 )
 
 // Options required for file export

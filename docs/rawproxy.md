@@ -5,7 +5,7 @@ An intercepting forward proxy library in Go that saves raw HTTP requests and res
 **Package**:
 
 ```
-github.com/glitchedgitz/grroxy-db/grx/rawproxy
+github.com/glitchedgitz/grroxy/grx/rawproxy
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "log"
-    "github.com/glitchedgitz/grroxy-db/grx/rawproxy"
+    "github.com/glitchedgitz/grroxy/grx/rawproxy"
 )
 
 func main() {

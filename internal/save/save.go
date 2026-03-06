@@ -3,8 +3,8 @@ package save
 import (
 	"github.com/projectdiscovery/gologger"
 
-	"github.com/glitchedgitz/grroxy-db/internal/save/file"
-	"github.com/glitchedgitz/grroxy-db/internal/types"
+	"github.com/glitchedgitz/grroxy/internal/save/file"
+	"github.com/glitchedgitz/grroxy/internal/types"
 )
 
 // const (

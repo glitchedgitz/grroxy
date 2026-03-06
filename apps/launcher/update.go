@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/glitchedgitz/grroxy-db/grx/version"
-	"github.com/glitchedgitz/grroxy-db/internal/updater"
+	"github.com/glitchedgitz/grroxy/grx/version"
+	"github.com/glitchedgitz/grroxy/internal/updater"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"

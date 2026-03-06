@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-const releasesURL = "https://api.github.com/repos/glitchedgitz/grroxy-db/releases/latest"
+const releasesURL = "https://api.github.com/repos/glitchedgitz/grroxy/releases/latest"
 
 type Asset struct {
 	Name string `json:"name"`

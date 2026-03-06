@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/internal/sdk"
+	"github.com/glitchedgitz/grroxy/internal/sdk"
 )
 
 // Example: How to use the SDK to manage processes from external tools like grroxy-tool

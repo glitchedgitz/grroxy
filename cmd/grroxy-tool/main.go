@@ -8,14 +8,14 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/glitchedgitz/grroxy-db/apps/tools"
-	"github.com/glitchedgitz/grroxy-db/internal/config"
-	"github.com/glitchedgitz/grroxy-db/internal/process"
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/apps/tools"
+	"github.com/glitchedgitz/grroxy/internal/config"
+	"github.com/glitchedgitz/grroxy/internal/process"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-tool/migrations"
+	_ "github.com/glitchedgitz/grroxy/cmd/grroxy-tool/migrations"
 )
 
 var conf config.Config

@@ -12,9 +12,9 @@ import (
 	"os"
 	"sync"
 
-	_ "github.com/glitchedgitz/grroxy-db/internal/logflags"
-	"github.com/glitchedgitz/grroxy-db/internal/sdk"
-	"github.com/glitchedgitz/grroxy-db/internal/types"
+	_ "github.com/glitchedgitz/grroxy/internal/logflags"
+	"github.com/glitchedgitz/grroxy/internal/sdk"
+	"github.com/glitchedgitz/grroxy/internal/types"
 )
 
 // Define your flags as global variables

@@ -14,21 +14,21 @@ import (
 	"runtime"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
-	"github.com/glitchedgitz/grroxy-db/apps/launcher"
-	"github.com/glitchedgitz/grroxy-db/grx/rawproxy"
-	"github.com/glitchedgitz/grroxy-db/grx/version"
-	"github.com/glitchedgitz/grroxy-db/internal/config"
-	_ "github.com/glitchedgitz/grroxy-db/internal/logflags"
-	"github.com/glitchedgitz/grroxy-db/internal/process"
-	"github.com/glitchedgitz/grroxy-db/internal/updater"
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/apps/launcher"
+	"github.com/glitchedgitz/grroxy/grx/rawproxy"
+	"github.com/glitchedgitz/grroxy/grx/version"
+	"github.com/glitchedgitz/grroxy/internal/config"
+	_ "github.com/glitchedgitz/grroxy/internal/logflags"
+	"github.com/glitchedgitz/grroxy/internal/process"
+	"github.com/glitchedgitz/grroxy/internal/updater"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 	"github.com/spf13/cobra"
 
 	// "github.com/pocketbase/pocketbase/tools/list"
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy/migrations"
+	_ "github.com/glitchedgitz/grroxy/cmd/grroxy/migrations"
 )
 
 var noProxy bool

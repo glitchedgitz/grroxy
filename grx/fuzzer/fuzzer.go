@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
-	_ "github.com/glitchedgitz/grroxy-db/internal/logflags"
+	"github.com/glitchedgitz/grroxy/grx/rawhttp"
+	_ "github.com/glitchedgitz/grroxy/internal/logflags"
 )
 
 const ModeClusterBomb = "cluster_bomb"

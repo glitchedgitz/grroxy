@@ -45,7 +45,7 @@ This system allows you to manage processes (fuzzers, scanners, etc.) with real-t
 ### For External Tools (grroxy-tools)
 
 ```go
-import "github.com/glitchedgitz/grroxy-db/internal/sdk"
+import "github.com/glitchedgitz/grroxy/internal/sdk"
 
 // 1. Initialize SDK client
 client := sdk.NewClient(
@@ -77,7 +77,7 @@ client.CompleteProcess(processID, "Done!")
 ### For Internal Use (grroxy-app)
 
 ```go
-import "github.com/glitchedgitz/grroxy-db/internal/process"
+import "github.com/glitchedgitz/grroxy/internal/process"
 
 // Create process
 id := process.CreateProcess(app, "Fuzzer", "Fuzzing target", "fuzzer", "running", data, "")
@@ -108,7 +108,7 @@ export GRROXY_ADMIN_PASSWORD="your-secure-password"
 ```go
 import (
     "os"
-    "github.com/glitchedgitz/grroxy-db/internal/sdk"
+    "github.com/glitchedgitz/grroxy/internal/sdk"
 )
 
 // Initialize Tools struct

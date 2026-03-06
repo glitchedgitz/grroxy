@@ -12,7 +12,7 @@ go build -o grx-fuzzer
 Or install globally:
 
 ```bash
-go install github.com/glitchedgitz/grroxy-db/cmd/grx-fuzzer@latest
+go install github.com/glitchedgitz/grroxy/cmd/grx-fuzzer@latest
 ```
 
 ## Quick Start
@@ -289,4 +289,4 @@ go build -o grx-fuzzer
 
 ## License
 
-Same as grroxy-db project.
+Same as grroxy project.

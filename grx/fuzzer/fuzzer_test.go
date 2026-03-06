@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/glitchedgitz/grroxy-db/grx/fuzzer"
+	"github.com/glitchedgitz/grroxy/grx/fuzzer"
 )
 
 func TestFuzzer(t *testing.T) {

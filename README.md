@@ -12,13 +12,13 @@
 
 ```bash
 # Current Version (see VERSION file)
-Backend:   v0.22.0
-Frontend:   v0.22.0
+Backend:   v0.26.0
+Frontend:  v0.26.0
 
 # Released App
-App:       v2026.01.0
-Backend:   v0.21.0
-Frontend:  v0.21.0
+App:       v2026.3.3
+Backend:   v0.26.0
+Frontend:  v0.26.0
 ```
 
 The version is maintained in the `VERSION` file at the project root. Use `internal/version` package to access version programmatically in Go code.

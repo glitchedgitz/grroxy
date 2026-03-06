@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/internal/types"
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/internal/types"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/r--w/pocketbase/migrations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

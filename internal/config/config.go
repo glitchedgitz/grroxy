@@ -5,7 +5,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 )
 
 type Config struct {

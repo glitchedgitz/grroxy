@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/andybalholm/brotli"
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/klauspost/compress/zstd"
 )
 

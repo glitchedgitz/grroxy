@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/grx/fuzzer"
-	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
+	"github.com/glitchedgitz/grroxy/grx/fuzzer"
+	"github.com/glitchedgitz/grroxy/grx/rawhttp"
 	"github.com/spf13/cobra"
 )
 

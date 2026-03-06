@@ -1,4 +1,4 @@
-module github.com/glitchedgitz/grroxy-db
+module github.com/glitchedgitz/grroxy
 
 go 1.24
 

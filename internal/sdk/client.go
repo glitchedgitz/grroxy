@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/duke-git/lancet/v2/convertor"
-	"github.com/glitchedgitz/grroxy-db/internal/types"
+	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/go-resty/resty/v2"
 )
 

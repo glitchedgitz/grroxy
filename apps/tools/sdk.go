@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/glitchedgitz/grroxy-db/internal/sdk"
+	"github.com/glitchedgitz/grroxy/internal/sdk"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"

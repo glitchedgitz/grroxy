@@ -9,14 +9,14 @@ import (
 	// "github.com/pocketbase/dbx"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
-	"github.com/glitchedgitz/grroxy-db/apps/app"
-	"github.com/glitchedgitz/grroxy-db/internal/process"
+	"github.com/glitchedgitz/grroxy/apps/app"
+	"github.com/glitchedgitz/grroxy/internal/process"
 	wappalyzer "github.com/glitchedgitz/wappalyzergo"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
-	_ "github.com/glitchedgitz/grroxy-db/cmd/grroxy-app/migrations"
+	_ "github.com/glitchedgitz/grroxy/cmd/grroxy-app/migrations"
 )
 
 func serve(projectPath string) {

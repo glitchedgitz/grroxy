@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/glitchedgitz/grroxy-db/grx/templates"
+	"github.com/glitchedgitz/grroxy/grx/templates"
 )
 
 func TestSetup(t *testing.T) {

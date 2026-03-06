@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/grx/browser"
+	"github.com/glitchedgitz/grroxy/grx/browser"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"

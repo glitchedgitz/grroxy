@@ -1,6 +1,6 @@
 package app
 
-// RawProxy Wrapper - Integration layer between rawproxy and grroxy-db
+// RawProxy Wrapper - Integration layer between rawproxy and grroxy
 //
 // This wrapper provides:
 // - Request/response interception and database storage
@@ -29,10 +29,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
-	"github.com/glitchedgitz/grroxy-db/grx/rawproxy"
-	"github.com/glitchedgitz/grroxy-db/internal/types"
-	"github.com/glitchedgitz/grroxy-db/internal/utils"
+	"github.com/glitchedgitz/grroxy/grx/rawhttp"
+	"github.com/glitchedgitz/grroxy/grx/rawproxy"
+	"github.com/glitchedgitz/grroxy/internal/types"
+	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/pocketbase/pocketbase/daos"
 	"github.com/pocketbase/pocketbase/models"
 )

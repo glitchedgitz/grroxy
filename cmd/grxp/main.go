@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/glitchedgitz/dadql/dadql"
-	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
+	"github.com/glitchedgitz/grroxy/grx/rawhttp"
 	"github.com/spf13/cobra"
 )
 

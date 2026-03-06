@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-MAR] - v0.26.0 - Repository Rename: `grroxy-db` -> `grroxy`
+
+### Changed
+
+- **Repository renamed** from `github.com/glitchedgitz/grroxy-db` to `github.com/glitchedgitz/grroxy`
+- **Go module path updated** — All imports changed from `github.com/glitchedgitz/grroxy-db/...` to `github.com/glitchedgitz/grroxy/...`
+- **Self-update URL updated** — GitHub releases API URL in `internal/updater/updater.go` now points to the new repo
+- **Documentation updated** — All docs and READMEs reference the new repository name
+
+### Migration (for users)
+
+- The old GitHub URL (`github.com/glitchedgitz/grroxy-db`) will redirect to the new one
+- Update your git remote: `git remote set-url origin git@github.com:glitchedgitz/grroxy.git`
+- If using `go get`: `go get github.com/glitchedgitz/grroxy@latest`
+
+See `docs/RENAME_MIGRATION.md` for full migration details.
+
+---
+
 ## [2026-MAR] - Fuzzer: Unified Markers with Inline Payloads
 
 ### Added

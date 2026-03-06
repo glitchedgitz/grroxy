@@ -3,7 +3,7 @@ package rawhttp_test
 import (
 	"testing"
 
-	"github.com/glitchedgitz/grroxy-db/grx/rawhttp"
+	"github.com/glitchedgitz/grroxy/grx/rawhttp"
 )
 
 func TestRequestMalformedLinebreakLfOnly(t *testing.T) {

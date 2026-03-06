@@ -2,9 +2,9 @@ package tools
 
 import (
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
-	"github.com/glitchedgitz/grroxy-db/internal/config"
-	"github.com/glitchedgitz/grroxy-db/internal/process"
-	"github.com/glitchedgitz/grroxy-db/internal/sdk"
+	"github.com/glitchedgitz/grroxy/internal/config"
+	"github.com/glitchedgitz/grroxy/internal/process"
+	"github.com/glitchedgitz/grroxy/internal/sdk"
 	"github.com/pocketbase/pocketbase"
 )
 
