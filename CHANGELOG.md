@@ -4,14 +4,42 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [2026-MAR] - v0.26.3 - Update Check & Cross-Platform Build
+## [2026-MAR] - v0.26.4 - v2026.3.6
 
 ### Added
 
-- Electron App
+- **Cook bundled in Electron app** — `cook` binary is now built and embedded in the Electron app alongside grroxy, grroxy-app, and grroxy-tool.
+
+### Fixed
+
+- **Fuzzer** — Fixed fuzzer issues.
+
+---
+
+## [2026-MAR] - v0.26.3 - v2026.3.5 - Desktop App, Update Check & Cross-Platform Build
+
+### Added
+
+- **Electron Desktop App** — Standalone desktop application wrapping the grroxy web UI.
 - **`getVersion` IPC** — Frontend can fetch current app version.
 - **`openURL` IPC** — Open external URLs in default browser.
 - **Cross-platform Electron build** — `./build.sh all` now builds Electron app for mac, linux, and windows.
+
+---
+
+## [2026-MAR] - v0.26.2 - Fix `go install` Error
+
+### Fixed
+
+- **`go install` error** — Removed `replace` directives from `go.mod` that caused `go install` to fail for remote installs.
+
+---
+
+## [2026-MAR] - v0.26.1 - Initial Public Release
+
+### Added
+
+- **Public release of Grroxy**
 
 ---
 
