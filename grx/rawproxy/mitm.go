@@ -199,9 +199,9 @@ func MitmHTTPS(clientConn net.Conn, connectReq *http.Request, requestID string, 
 	server := &http.Server{
 		Handler:      handler,
 		TLSConfig:    tlsConfig,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  10 * time.Minute,
+		WriteTimeout: 10 * time.Minute,
+		IdleTimeout:  10 * time.Minute,
 	}
 
 	// Configure HTTP/2 support

@@ -51,13 +51,13 @@ func New(config *Config) (*Proxy, error) {
 		config.WebSocketDir = filepath.Join(config.OutputDir, "websockets")
 	}
 	if config.ReadTimeout == 0 {
-		config.ReadTimeout = 30 * time.Second
+		config.ReadTimeout = 10 * time.Minute
 	}
 	if config.WriteTimeout == 0 {
-		config.WriteTimeout = 60 * time.Second
+		config.WriteTimeout = 10 * time.Minute
 	}
 	if config.IdleTimeout == 0 {
-		config.IdleTimeout = 60 * time.Second
+		config.IdleTimeout = 10 * time.Minute
 	}
 	if config.ReqCounter == nil {
 		config.ReqCounter = &atomic.Uint64{}

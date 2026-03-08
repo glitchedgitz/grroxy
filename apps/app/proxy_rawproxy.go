@@ -116,9 +116,9 @@ func NewRawProxyWrapper(listenAddr, configDir, outputDir string, backend *Backen
 		ListenAddr:   listenAddr,
 		ConfigFolder: configDir,
 		OutputDir:    outputDir,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  10 * time.Minute,
+		WriteTimeout: 10 * time.Minute,
+		IdleTimeout:  10 * time.Minute,
 	}
 
 	// Create the proxy instance

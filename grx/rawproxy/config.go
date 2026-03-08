@@ -39,9 +39,9 @@ type Config struct {
 
 	// Server settings (optional - defaults provided)
 	ListenAddr   string        // Address to listen on (default: ":8080")
-	ReadTimeout  time.Duration // HTTP read timeout (default: 30s)
-	WriteTimeout time.Duration // HTTP write timeout (default: 60s)
-	IdleTimeout  time.Duration // HTTP idle timeout (default: 60s)
+	ReadTimeout  time.Duration // HTTP read timeout (default: 10m, high to support intercept)
+	WriteTimeout time.Duration // HTTP write timeout (default: 10m, high to support intercept)
+	IdleTimeout  time.Duration // HTTP idle timeout (default: 10m, high to support intercept)
 
 	// Output settings (optional - defaults provided)
 	OutputDir    string // Directory for HTTP/HTTPS captures (default: "captures")
