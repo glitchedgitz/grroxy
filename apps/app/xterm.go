@@ -29,6 +29,9 @@ type XtermManager struct {
 // scrollbackBufferSize is the max bytes of PTY output kept for replay on reconnect.
 const scrollbackBufferSize = 256 * 1024 // 256 KB
 
+// maxClientsPerSession limits concurrent WebSocket clients per terminal session.
+const maxClientsPerSession = 10
+
 // XtermSession represents a single terminal session
 type XtermSession struct {
 	ID        string
@@ -255,6 +258,14 @@ func (m *XtermManager) CloseSession(sessionID string) error {
 		}
 	}
 
+	// Close all connected WebSocket clients so their HandleWebSocket goroutines unblock
+	session.clientsMu.Lock()
+	for ws := range session.clients {
+		ws.Close()
+		delete(session.clients, ws)
+	}
+	session.clientsMu.Unlock()
+
 	log.Printf("[Xterm] Closed session %s", sessionID)
 	return nil
 }
@@ -312,9 +323,11 @@ func (s *XtermSession) readPtyLoop() {
 		// Append to scrollback buffer
 		s.scrollbackMu.Lock()
 		s.scrollback = append(s.scrollback, data...)
-		// Trim to max size, keeping the most recent output
+		// Compact in-place to avoid unbounded underlying array growth
 		if len(s.scrollback) > scrollbackBufferSize {
-			s.scrollback = s.scrollback[len(s.scrollback)-scrollbackBufferSize:]
+			keep := s.scrollback[len(s.scrollback)-scrollbackBufferSize:]
+			copy(s.scrollback[:scrollbackBufferSize], keep)
+			s.scrollback = s.scrollback[:scrollbackBufferSize]
 		}
 		s.scrollbackMu.Unlock()
 
@@ -336,7 +349,8 @@ func (s *XtermSession) readPtyLoop() {
 }
 
 // addClient registers a WebSocket connection and replays the scrollback buffer.
-func (s *XtermSession) addClient(ws *websocket.Conn) {
+// Returns false if the session already has maxClientsPerSession connections.
+func (s *XtermSession) addClient(ws *websocket.Conn) bool {
 	// Take a snapshot of the scrollback while holding the lock,
 	// then register the client before releasing, so no output is lost
 	// between replay and going live.
@@ -346,6 +360,11 @@ func (s *XtermSession) addClient(ws *websocket.Conn) {
 	// Register client while still holding scrollbackMu so the PTY reader
 	// will start broadcasting to this client before we release.
 	s.clientsMu.Lock()
+	if len(s.clients) >= maxClientsPerSession {
+		s.clientsMu.Unlock()
+		s.scrollbackMu.Unlock()
+		return false
+	}
 	s.clients[ws] = struct{}{}
 	s.clientsMu.Unlock()
 	s.scrollbackMu.Unlock()
@@ -360,6 +379,7 @@ func (s *XtermSession) addClient(ws *websocket.Conn) {
 			log.Printf("[Xterm] Error replaying scrollback (session %s): %v", s.ID, err)
 		}
 	}
+	return true
 }
 
 // removeClient unregisters a WebSocket connection.
@@ -384,7 +404,11 @@ func (m *XtermManager) HandleWebSocket(ws *websocket.Conn, sessionID string) {
 	log.Printf("[Xterm] WebSocket connected for session %s", sessionID)
 
 	// Register client and replay scrollback buffer
-	session.addClient(ws)
+	if !session.addClient(ws) {
+		log.Printf("[Xterm] Rejected client for session %s: max clients (%d) reached", sessionID, maxClientsPerSession)
+		websocket.Message.Send(ws, `{"type":"error","data":"Too many clients connected to this session"}`)
+		return
+	}
 	defer session.removeClient(ws)
 
 	// Read from WebSocket and write to PTY
