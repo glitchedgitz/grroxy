@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.glitchedgitz.grroxy",
-    "productName": "Grroxy",
+    "productName": "grroxy",
     "extraResources": [
       {
         "from": "bin/${os}/${arch}/",
@@ -29,6 +29,7 @@
       "src/preload.js",
       "src/icons/**/*"
     ],
+    "artifactName": "${productName}-${os}-${arch}-${version}.${ext}",
     "mac": {
       "icon": "src/icons/grroxy.png",
       "target": ["dmg"]
