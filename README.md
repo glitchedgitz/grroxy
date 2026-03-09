@@ -4,7 +4,7 @@ A cyber security toolkit blending manual testing with AI Agents.
 Focusing on product taste and user experience. Keeping it hacky and adaptable how things changes in this era, idea is to have a toolkit that prioritise how hackers work.
 
 ## Why grrrr...?
-Grroxy was started 4 years back before AI was a thing, I had.. and have some pain points with the proxy tools, the initial [idea](https://x.com/glitchedgitz/status/1750176261475840215) was different and didn't workout very well, here we are with the new [one](https://grroxy.com).
+Grroxy was started 4 years back before AI was a thing, I had.. and have some pain points with the proxy tools, the initial [idea](https://x.com/glitchedgitz/status/1750176261475840215) was different and didn't workout very well, so here we are with the new [one](https://grroxy.com).
 
 [![Website](https://img.shields.io/badge/Website-grroxy.com-blue)](https://grroxy.com) [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/K8pGK6XatC)
 
