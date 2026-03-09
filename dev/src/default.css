@@ -1,0 +1,149 @@
+* {
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  box-sizing: border-box;
+  /* overscroll-behavior: none !important; */
+}
+
+html,
+body {
+  /* font-family: 'JetBrains Mono', Consolas, 'Fira Code'; */
+  /* font-family: "Segoe UI"; */
+  /* font-family: "Jetbrain Mono", sans-serif; */
+  font-family: "Geist", sans-serif;
+  /* font-weight: 300; */
+  font-size: 12px;
+  height: 100%;
+  color: var(--text);
+  overflow: hidden;
+}
+
+html {
+  background-color: var(--shade1);
+  /* scroll-behavior: smooth; */
+}
+
+body {
+  margin: 0;
+  /* font-weight: 500; */
+  -webkit-user-select: none;
+  /* Safari */
+  -moz-user-select: none;
+  /* Firefox */
+  -ms-user-select: none;
+  /* IE10+/Edge */
+  user-select: none;
+}
+
+#app {
+  height: 100vh;
+  /* text-align: center; */
+}
+
+.full {
+  width: 100%;
+  height: 100%;
+}
+
+/* a {
+    text-decoration: none;
+} */
+
+input {
+  background: none;
+}
+
+textarea {
+  background: none;
+  border: none;
+}
+
+.content_center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.hidden {
+  display: none;
+}
+
+.visible {
+  display: block;
+  height: 100%;
+}
+
+/* .cm-editor * { */
+/* font-family: 'Fira Code'; */
+/* } */
+
+.disable-hover * {
+  /* pointer-events: none; */
+}
+
+/* .focused .selected {
+    border-top: 1px solid rgba(var(--_green3), 0.3);
+    border-bottom: 1px solid rgba(var(--_green3), 0.3);
+} */
+
+.masked-overflow {
+  /* scroll bar width, for use in mask calculations */
+  --scrollbar-width: 8px;
+
+  /* mask fade distance, for use in mask calculations */
+  --mask-height: 32px;
+
+  /* If content exceeds height of container, overflow! */
+  overflow-y: auto;
+
+  /* Our height limit */
+  height: 300px;
+
+  /* Need to make sure container has bottom space,
+  otherwise content at the bottom is always faded out */
+  padding-bottom: var(--mask-height);
+
+  /* Keep some space between content and scrollbar */
+  padding-right: 20px;
+
+  /* The CSS mask */
+
+  /* The content mask is a linear gradient from top to bottom */
+  --mask-image-content: linear-gradient(
+    to bottom,
+    transparent,
+    black var(--mask-height),
+    black calc(100% - var(--mask-height)),
+    transparent
+  );
+
+  /* Here we scale the content gradient to the width of the container 
+  minus the scrollbar width. The height is the full container height */
+  --mask-size-content: calc(100% - var(--scrollbar-width)) 100%;
+
+  /* The scrollbar mask is a black pixel */
+  --mask-image-scrollbar: linear-gradient(black, black);
+
+  /* The width of our black pixel is the width of the scrollbar.
+  The height is the full container height */
+  --mask-size-scrollbar: var(--scrollbar-width) 100%;
+
+  /* Apply the mask image and mask size variables */
+  mask-image: var(--mask-image-content), var(--mask-image-scrollbar);
+  mask-size: var(--mask-size-content), var(--mask-size-scrollbar);
+
+  /* Position the content gradient in the top left, and the 
+  scroll gradient in the top right */
+  mask-position:
+    0 0,
+    100% 0;
+
+  /* We don't repeat our mask images */
+  mask-repeat: no-repeat, no-repeat;
+}
+
+.logo-halo {
+  filter: drop-shadow(0 0 0.5px rgba(255, 255, 255, 0.9));
+}

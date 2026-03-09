@@ -1,0 +1,82 @@
+@import url('https://use.typekit.net/bek8faf.css');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&family=Geist:wght@100..900&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+@font-face {
+    font-family: 'CascadiaCode';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaCode.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaCodeItalic';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaCodeItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaCodePL';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaCodePL.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaCodePLItalic';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaCodePLItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMono';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaMono.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMonoItalic';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaMonoItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMonoPL';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaMonoPL.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'CascadiaMonoPLItalic';
+    src:
+        local(''),
+        url('./fonts/Cascadia/CascadiaMonoPLItalic.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Roboto Mono';
+    src:
+        local(''),
+        url('./fonts/RobotoMono/RobotoMono-VariableFont_wght.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Inter';
+    src:
+        local(''),
+        url('./fonts/Inter-VariableFont.ttf') format('truetype');
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
