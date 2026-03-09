@@ -989,16 +989,16 @@ export const xterm_api = [
 		name: 'Terminal WebSocket',
 		method: 'GET',
 		path: '/api/xterm/ws/:id',
-		description: 'WebSocket endpoint for terminal I/O (input, resize, ping)',
+		description: 'WebSocket endpoint for terminal I/O (input, resize, ping). On connect, replays up to 256KB of scrollback buffer as {type:"output"} messages before streaming live output. Supports multiple concurrent WebSocket clients per session.',
 		category: '/api/xterm',
 		examples: [
 			{
 				name: 'Connect to terminal',
-				description: 'Upgrades to WebSocket for bidirectional terminal communication',
+				description: 'Upgrades to WebSocket for bidirectional terminal communication. Buffered scrollback is replayed on reconnect so the terminal restores previous output after page reload.',
 				request: {},
 				response: {
 					status: 101,
-					body: 'WebSocket upgrade'
+					body: 'WebSocket upgrade → replays scrollback as {type:"output", data:"..."} then streams live output'
 				}
 			}
 		]
