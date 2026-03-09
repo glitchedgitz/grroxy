@@ -2,6 +2,7 @@
   import Logo from "$lib/Logo.svelte";
   import SidebarCategory from "$lib/SidebarCategory.svelte";
   import CodeEditor from "$lib/CodeEditor.svelte";
+  import { Splitpanes, Pane } from "$lib/Splitpanes/splitpanes";
   import {
     APP_ENDPOINTS,
     getEndpoints,
@@ -141,10 +142,12 @@
   });
 </script>
 
-<div class="flex h-screen overflow-hidden">
+<div class="h-screen overflow-hidden">
+  <Splitpanes>
+  <Pane size={20} minSize={15} maxSize={30}>
   <!-- Sidebar -->
   <nav
-    class="flex h-full w-[280px] overflow-hidden min-w-[280px] flex-col bg-dark border-r border-white/5"
+    class="flex h-full overflow-hidden flex-col bg-dark"
   >
     <!-- Logo + Config -->
     <div class="p-24 pb-8 relative">
@@ -192,13 +195,15 @@
       </div>
     {/if}
   </nav>
+  </Pane>
 
+  <Pane>
   <!-- Main Content -->
-  <div class="flex-1 flex flex-col overflow-hidden bg-dark">
+  <div class="h-full flex flex-col overflow-hidden bg-dark">
     {#if selectedEndpoint}
       <div class=" w-[600px] flex gap-8 shadow rounded">
         <div class=" flex gap-4 p-4 rounded">
-          {#each ["app", "launcher", "tool"] as type}
+          {#each ["launcher", "app", "tool"] as type}
             <button
               onclick={() => {
                 appType = type as AppType;
@@ -216,25 +221,25 @@
             type="text"
             bind:value={baseUrl}
             placeholder="http://127.0.0.1:8090"
-            class="input-variant-1"
+            class="input-variant-1 h-24"
           />
           {#if !loggedIn}
             <input
               type="text"
               bind:value={authEmail}
               placeholder="Email"
-              class="input-variant-1"
+              class="input-variant-1 h-24"
             />
             <input
               type="password"
               bind:value={authPassword}
               placeholder="Password"
-              class="input-variant-1"
+              class="input-variant-1 h-24"
             />
             <button
               onclick={doLogin}
               disabled={authLoading}
-              class="btn-green-dim {authLoading ? 'cursor-not-allowed opacity-50' : ''}"
+              class="btn-green-dim btn-sm {authLoading ? 'cursor-not-allowed opacity-50' : ''}"
             >
               {authLoading ? "..." : "Login"}
             </button>
@@ -254,27 +259,29 @@
         </div>
       </div>
       <!-- Request / Response Split -->
-      <div class="flex-1 flex overflow-hidden">
+      <div class="flex-1 overflow-hidden">
+        <Splitpanes>
+        <Pane size={50}>
         <!-- Request Panel -->
         <div
-          class="w-1/2 bg-surface flex flex-col border-r border-white/5 overflow-hidden"
+          class="h-full bg-surface rounded flex flex-col overflow-hidden"
         >
           <div class="p-12 border-b border-white/5">
-            <div class="flex items-center gap-8">
-              <span
-                class="{getMethodColor(selectedEndpoint.method)}  text-[13px]"
+            <div class="flex relative items-center gap-8">
+              <div
+                class="absolute px-12  {getMethodColor(selectedEndpoint.method)}  text-sm font-semi-bold tracking-widest"
               >
                 {selectedEndpoint.method}
-              </span>
+              </div>
               <input
                 type="text"
                 bind:value={requestPath}
-                class="input-variant-1 flex-1"
+                class="input-variant-1 h-24 pl-64 flex-1"
               />
               <button
                 onclick={send}
                 disabled={loading}
-                class="btn-green {loading ? 'cursor-not-allowed opacity-50' : ''}"
+                class="btn-green btn-sm {loading ? 'cursor-not-allowed opacity-50' : ''}"
               >
                 {loading ? "..." : "Send"}
               </button>
@@ -298,8 +305,11 @@
           {/if}
         </div>
 
+        </Pane>
+
+        <Pane size={50}>
         <!-- Response Panel -->
-        <div class="w-1/2 flex flex-col bg-surface overflow-hidden">
+        <div class="h-full flex flex-col bg-surface rounded overflow-hidden">
           <div
             class="px-12 py-8 border-b border-white/5 flex items-center justify-between"
           >
@@ -366,6 +376,8 @@
             {/if}
           </div>
         </div>
+        </Pane>
+        </Splitpanes>
       </div>
     {/if}
 
@@ -397,4 +409,6 @@
       </div>
     {/if}
   </div>
+  </Pane>
+  </Splitpanes>
 </div>
