@@ -49,6 +49,7 @@ function startGrroxy(host) {
     grroxyProcess = spawn(grroxyPath, ['start', '--host', host], {
         stdio: 'pipe',
         env: env,
+        detached: true,
     })
 
     grroxyProcess.stdout.on('data', (data) => {
@@ -72,8 +73,10 @@ function startGrroxy(host) {
 
 function stopGrroxy() {
     if (grroxyProcess) {
-        grroxyProcess.kill()
+        const pid = grroxyProcess.pid
         grroxyProcess = null
+        // Kill the entire process group (grroxy + grroxy-app + grroxy-tool)
+        try { process.kill(-pid, 'SIGTERM') } catch { /* already dead */ }
     }
 }
 
