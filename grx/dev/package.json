@@ -28,6 +28,7 @@
 		"@codemirror/state": "^6.5.4",
 		"@codemirror/theme-one-dark": "^6.1.3",
 		"@codemirror/view": "^6.39.16",
+		"@sveltejs/adapter-static": "^3.0.10",
 		"clsx": "^2.1.1",
 		"codemirror": "^6.0.2",
 		"tailwind-merge": "^3.5.0"
