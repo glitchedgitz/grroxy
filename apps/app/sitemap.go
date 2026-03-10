@@ -337,6 +337,57 @@ func limitTreeDepth(nodes []*types.SitemapNode, maxDepth int, currentDepth int) 
 	return nodes
 }
 
+func (backend *Backend) sitemapFetchLogic(data *types.SitemapFetch) ([]*types.SitemapNode, error) {
+	// Set default depth to 1 if not specified (0)
+	if data.Depth == 0 {
+		data.Depth = 1
+	}
+
+	db := utils.ParseDatabaseName(data.Host)
+	path := data.Path + `/%`
+
+	var result []*models.Record
+	var err error
+
+	dao := backend.App.Dao()
+
+	fmt.Println("db: ", db)
+	fmt.Println("path: ", path)
+	fmt.Println("depth: ", data.Depth)
+
+	collection, err := dao.FindCollectionByNameOrId(db)
+	if err != nil {
+		log.Println("Error fetching collection: ", err)
+		return nil, fmt.Errorf("host doesn't exist")
+	}
+
+	if data.Path == "" {
+		result, err = dao.FindRecordsByExpr(collection.Id)
+	} else {
+		result, err = dao.FindRecordsByFilter(collection.Id, "path ~ {:path}", "path", 0, 0, dbx.Params{
+			"path": path,
+		})
+	}
+
+	if err != nil {
+		log.Println("Error fetching records: ", err)
+		return nil, fmt.Errorf("failed to fetch records: %w", err)
+	}
+
+	// Build tree structure with depth control
+	// If depth is -1, pass 0 to buildSitemapTree for unlimited depth
+	depthLimit := data.Depth
+	if depthLimit == -1 {
+		depthLimit = 0
+	}
+	treeNodes := buildSitemapTree(result, data.Path, data.Host, depthLimit)
+
+	log.Println("[SitemapFetch] Request: ", data)
+	log.Println("[SitemapFetch] Response nodes count: ", len(treeNodes))
+
+	return treeNodes, nil
+}
+
 func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
@@ -356,68 +407,13 @@ func (backend *Backend) SitemapFetch(e *core.ServeEvent) error {
 				return err
 			}
 
-			// Set default depth to 1 if not specified (0)
-			if data.Depth == 0 {
-				data.Depth = 1
-			}
-
-			db := utils.ParseDatabaseName(data.Host)
-			path := data.Path + `/%`
-
-			var result []*models.Record
-			var err error
-
-			dao := backend.App.Dao()
-
-			fmt.Println("db: ", db)
-			fmt.Println("path: ", path)
-			fmt.Println("depth: ", data.Depth)
-
-			collection, err := dao.FindCollectionByNameOrId(db)
+			treeNodes, err := backend.sitemapFetchLogic(&data)
 			if err != nil {
-				log.Println("Error fetching collection: ", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-					"error": "Host doesn't exist",
+					"error":   err.Error(),
+					"message": err.Error(),
+					"data":    []interface{}{},
 				})
-			}
-
-			if data.Path == "" {
-				result, err = dao.FindRecordsByExpr(collection.Id)
-				if err != nil {
-					log.Println("Error fetching records: ", err)
-					return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-						"error":   "Failed to fetch records",
-						"message": err.Error(),
-						"data":    []interface{}{},
-					})
-				}
-			} else {
-				result, err = dao.FindRecordsByFilter(collection.Id, "path ~ {:path}", "path", 0, 0, dbx.Params{
-					"path": path,
-				})
-				if err != nil {
-					log.Println("Error fetching records: ", err)
-					return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-						"error":   "Failed to fetch records",
-						"message": err.Error(),
-						"data":    []interface{}{},
-					})
-				}
-			}
-
-			// Build tree structure with depth control
-			// If depth is -1, pass 0 to buildSitemapTree for unlimited depth
-			depthLimit := data.Depth
-			if depthLimit == -1 {
-				depthLimit = 0
-			}
-			treeNodes := buildSitemapTree(result, data.Path, data.Host, depthLimit)
-
-			log.Println("[SitemapFetch] Request: ", data)
-			log.Println("[SitemapFetch] Response nodes count: ", len(treeNodes))
-
-			if err != nil {
-				apis.NewBadRequestError("Failed to fetch warehouse items", err)
 			}
 
 			return c.JSON(http.StatusOK, treeNodes)

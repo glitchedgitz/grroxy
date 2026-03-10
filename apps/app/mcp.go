@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,6 +17,10 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
+// ---------------------------------------------------------------------------
+// MCP state
+// ---------------------------------------------------------------------------
+
 type MCP struct {
 	server    *mcpserver.MCPServer
 	sseServer *mcpserver.SSEServer
@@ -25,26 +28,61 @@ type MCP struct {
 	conns     atomic.Int64
 }
 
+// ---------------------------------------------------------------------------
+// Tool registration
+// ---------------------------------------------------------------------------
+
 func (backend *Backend) mcpInit() {
 	s := mcpserver.NewMCPServer(
 		"grroxy",
 		version.CURRENT_BACKEND_VERSION,
-		mcpserver.WithToolCapabilities(false),
+		mcpserver.WithToolCapabilities(true),
 	)
 
-	helloTool := mcp.NewTool("hello",
-		mcp.WithDescription("Say hello"),
-		mcp.WithString("name",
-			mcp.Required(),
-			mcp.Description("Name to greet"),
+	// --- Utility tools ---
+
+	s.AddTool(
+		mcp.NewTool("version",
+			mcp.WithDescription("Get grroxy version information (backend, frontend, release)"),
 		),
+		backend.versionHandler,
 	)
-	s.AddTool(helloTool, backend.helloHandler)
 
-	versionTool := mcp.NewTool("version",
-		mcp.WithDescription("Get grroxy version information"),
+	// --- Data tools ---
+
+	s.AddTool(
+		mcp.NewTool("getRequestResponseFromID",
+			mcp.WithDescription("Get the full request and response for a given record ID from the proxy history"),
+			mcp.WithInputSchema[GetRequestResponseArgs](),
+		),
+		backend.getRequestResponseFromIDHandler,
 	)
-	s.AddTool(versionTool, backend.versionHandler)
+
+	s.AddTool(
+		mcp.NewTool("hostPrintSitemap",
+			mcp.WithDescription("Print the sitemap tree for a given host showing all discovered paths and endpoints"),
+			mcp.WithInputSchema[HostPrintSitemapArgs](),
+		),
+		backend.hostPrintSitemapHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("hostPrintRowsInDetails",
+			mcp.WithDescription("Print detailed rows (method, URL, status, content-type, length) for a given host from the proxy history"),
+			mcp.WithInputSchema[HostPrintRowsArgs](),
+		),
+		backend.hostPrintRowsInDetailsHandler,
+	)
+
+	// --- Action tools ---
+
+	s.AddTool(
+		mcp.NewTool("sendRequest",
+			mcp.WithDescription("Send a raw HTTP request to a host and return the response"),
+			mcp.WithInputSchema[SendRequestArgs](),
+		),
+		backend.sendRequestHandler,
+	)
 
 	sseServer := mcpserver.NewSSEServer(s,
 		mcpserver.WithStaticBasePath("/mcp"),
@@ -57,6 +95,10 @@ func (backend *Backend) mcpInit() {
 		active:    true,
 	}
 }
+
+// ---------------------------------------------------------------------------
+// HTTP endpoints
+// ---------------------------------------------------------------------------
 
 func (backend *Backend) MCPEndpoint(e *core.ServeEvent) error {
 	backend.mcpInit()
@@ -92,9 +134,7 @@ func (backend *Backend) MCPEndpoint(e *core.ServeEvent) error {
 		Path:   "/mcp/health",
 		Handler: func(c echo.Context) error {
 			if backend.MCP == nil || !backend.MCP.active {
-				return c.JSON(http.StatusOK, map[string]any{
-					"active": false,
-				})
+				return c.JSON(http.StatusOK, map[string]any{"active": false})
 			}
 
 			tools := backend.MCP.server.ListTools()
@@ -110,6 +150,34 @@ func (backend *Backend) MCPEndpoint(e *core.ServeEvent) error {
 				"version":     version.CURRENT_BACKEND_VERSION,
 				"tools":       toolNames,
 				"connections": backend.MCP.conns.Load(),
+			})
+		},
+	})
+
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodGet,
+		Path:   "/mcp/listtools",
+		Handler: func(c echo.Context) error {
+			if backend.MCP == nil || !backend.MCP.active {
+				return c.JSON(http.StatusServiceUnavailable, map[string]any{"error": "MCP server not active"})
+			}
+
+			tools := backend.MCP.server.ListTools()
+			type toolInfo struct {
+				Name        string `json:"name"`
+				Description string `json:"description"`
+			}
+			result := make([]toolInfo, 0, len(tools))
+			for name, t := range tools {
+				result = append(result, toolInfo{
+					Name:        name,
+					Description: t.Tool.Description,
+				})
+			}
+
+			return c.JSON(http.StatusOK, map[string]any{
+				"tools": result,
+				"count": len(result),
 			})
 		},
 	})
@@ -154,7 +222,6 @@ func (backend *Backend) MCPEndpoint(e *core.ServeEvent) error {
 			cwd, _ := os.Getwd()
 			mcpSseURL := fmt.Sprintf("http://%s/mcp/sse", backend.Config.HostAddr)
 
-			// 1. Write .claude/.mcp.json
 			mcpSettings := map[string]any{
 				"mcpServers": map[string]any{
 					"grroxy": map[string]any{
@@ -167,15 +234,6 @@ func (backend *Backend) MCPEndpoint(e *core.ServeEvent) error {
 			mcpJSON, _ := json.MarshalIndent(mcpSettings, "", "  ")
 			save.WriteFile(".mcp.json", mcpJSON)
 
-			// // 2. Build tools section for CLAUDE.md
-			// toolsSection := "\n<toolsList>\n\n"
-			// tools := backend.MCP.server.ListTools()
-			// for name, t := range tools {
-			// 	toolsSection += fmt.Sprintf(" `%s` — %s\n", name, t.Tool.Description)
-			// }
-			// toolsSection = "</toolsList>"
-
-			// 3. Write CLAUDE.md (user-provided content + tools)
 			claudeMDPath := filepath.Join(cwd, "CLAUDE.md")
 			claudeContent := body.ClaudeMD
 			save.WriteFile(claudeMDPath, []byte(claudeContent))
@@ -189,21 +247,4 @@ func (backend *Backend) MCPEndpoint(e *core.ServeEvent) error {
 
 	log.Println("[MCP] Endpoints registered at /mcp/")
 	return nil
-}
-
-func (backend *Backend) helloHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name, err := request.RequireString("name")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return mcp.NewToolResultText(fmt.Sprintf("Hello, %s!", name)), nil
-}
-
-func (backend *Backend) versionHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	info := fmt.Sprintf("Grroxy Version Info:\n  Backend:  v%s\n  Frontend: v%s\n  Release:  v%s",
-		version.CURRENT_BACKEND_VERSION,
-		version.CURRENT_FRONTEND_VERSION,
-		version.RELEASED_APP_VERSION,
-	)
-	return mcp.NewToolResultText(info), nil
 }

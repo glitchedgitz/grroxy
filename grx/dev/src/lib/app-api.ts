@@ -1363,6 +1363,31 @@ export const mcp_api = [
 	},
 	{
 		id: 'mcp',
+		name: 'MCP List Tools',
+		method: 'GET',
+		path: '/mcp/listtools',
+		description: 'List all registered MCP tools with their names and descriptions',
+		category: '/mcp',
+		examples: [
+			{
+				name: 'List tools',
+				description: 'Returns all registered MCP tools with name and description',
+				request: {},
+				response: {
+					status: 200,
+					body: {
+						tools: [
+							{ name: 'hello', description: 'Say hello — use this to test MCP connectivity' },
+							{ name: 'version', description: 'Get grroxy version information' }
+						],
+						count: 2
+					}
+				}
+			}
+		]
+	},
+	{
+		id: 'mcp',
 		name: 'MCP SSE',
 		method: 'GET',
 		path: '/mcp/sse',
