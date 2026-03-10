@@ -27,32 +27,31 @@ func trimHost(host string) string {
 // ---------------------------------------------------------------------------
 
 type GetRequestResponseArgs struct {
-	ID string `json:"id" jsonschema:"required" jsonschema_description:"The record ID to fetch request/response for"`
+	ActiveID string `json:"activeID" jsonschema:"required" jsonschema_description:"The active ID"`
 }
 
 type HostPrintSitemapArgs struct {
-	Host  string `json:"host" jsonschema:"required" jsonschema_description:"The host to print the sitemap for (e.g. https://example.com)"`
-	Path  string `json:"path" jsonschema:"required" jsonschema_description:"Base path to fetch sitemap from (empty string for root)"`
-	Depth int    `json:"depth" jsonschema:"required" jsonschema_description:"Depth of the sitemap tree (0 or 1 = 1 level, -1 = unlimited, positive = specific depth)"`
+	Host  string `json:"host" jsonschema:"required" jsonschema_description:"the host to get the sitemap for"`
+	Path  string `json:"path" jsonschema:"required" jsonschema_description:"the path to get the sitemap for, use empty string to get the root sitemap"`
+	Depth int    `json:"depth" jsonschema:"required" jsonschema_description:"the depth to get the sitemap for, default is -1, use -1 to get the full sitemap"`
 }
 
 type HostPrintRowsArgs struct {
-	Host   string `json:"host" jsonschema:"required" jsonschema_description:"The host to fetch rows for (e.g. https://example.com)"`
-	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"PocketBase filter expression (e.g. 'data.req_json.method = \"POST\"'), empty string for no filter"`
-	Limit  int    `json:"limit" jsonschema:"required,minimum=1,maximum=500" jsonschema_description:"Maximum number of rows to return"`
-	Offset int    `json:"offset" jsonschema:"required,minimum=0" jsonschema_description:"Number of rows to skip"`
+	Host   string `json:"host" jsonschema:"required" jsonschema_description:"the host to get the table for"`
+	Page   int    `json:"page" jsonschema:"required" jsonschema_description:"the page to get the data from, start from 1"`
+	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search"`
 }
 
 type SendRequestArgs struct {
-	Host    string  `json:"host" jsonschema:"required" jsonschema_description:"Target host (e.g. example.com)"`
-	Port    string  `json:"port" jsonschema:"required" jsonschema_description:"Target port (e.g. 443)"`
-	TLS     bool    `json:"tls" jsonschema:"required" jsonschema_description:"Use TLS"`
-	Request string  `json:"request" jsonschema:"required" jsonschema_description:"Raw HTTP request string"`
-	Timeout float64 `json:"timeout" jsonschema:"required,minimum=1,maximum=120" jsonschema_description:"Request timeout in seconds"`
-	HTTP2   bool    `json:"http2" jsonschema:"required" jsonschema_description:"Use HTTP/2"`
-	Index   float64 `json:"index" jsonschema:"required" jsonschema_description:"Request index number"`
-	Url     string  `json:"url" jsonschema:"required" jsonschema_description:"Full URL of the request (e.g. https://example.com/path)"`
-	Note    string  `json:"note" jsonschema:"required" jsonschema_description:"Note for this request"`
+	TLS                    bool     `json:"tls" jsonschema:"required" jsonschema_description:"use https or http"`
+	Host                   string   `json:"host" jsonschema:"required" jsonschema_description:"the host to send the request to"`
+	Port                   int      `json:"port" jsonschema:"required" jsonschema_description:"the port to send the request to"`
+	HttpVersion            int      `json:"httpVersion" jsonschema:"required" jsonschema_description:"1 or 2"`
+	AttachToIndex          float64  `json:"attachToIndex" jsonschema:"required" jsonschema_description:"origin index of request you are modifying"`
+	Request                string   `json:"request" jsonschema:"required" jsonschema_description:"raw request"`
+	Note                   string   `json:"note" jsonschema:"required" jsonschema_description:"the note to attach to the request"`
+	Labels                 []string `json:"labels,omitempty" jsonschema_description:"the labels to attach to the request"`
+	AutoUpdateContentLength bool    `json:"autoUpdateContentLength" jsonschema:"required" jsonschema_description:"auto update content length, default: true"`
 }
 
 // ---------------------------------------------------------------------------
@@ -77,7 +76,7 @@ func (backend *Backend) getRequestResponseFromIDHandler(ctx context.Context, req
 	dao := backend.App.Dao()
 
 	// Pad ID to 15 chars with leading underscores
-	id := utils.FormatStringID(args.ID, 15)
+	id := utils.FormatStringID(args.ActiveID, 15)
 
 	reqRecord, _ := dao.FindRecordById("_req", id)
 	respRecord, _ := dao.FindRecordById("_resp", id)
@@ -134,11 +133,17 @@ func (backend *Backend) hostPrintRowsInDetailsHandler(ctx context.Context, reque
 		return mcp.NewToolResultError(fmt.Sprintf("host not found: %s", host)), nil
 	}
 
+	perPage := 50
+	offset := 0
+	if args.Page > 1 {
+		offset = (args.Page - 1) * perPage
+	}
+
 	var records []*models.Record
 	if args.Filter == "" {
-		records, err = dao.FindRecordsByExpr(collection.Id)
+		records, err = dao.FindRecordsByFilter(collection.Id, "", "-created", perPage, offset)
 	} else {
-		records, err = dao.FindRecordsByFilter(collection.Id, args.Filter, "-created", args.Limit, args.Offset)
+		records, err = dao.FindRecordsByFilter(collection.Id, args.Filter, "-created", perPage, offset)
 	}
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to fetch records: %v", err)), nil
@@ -201,15 +206,18 @@ func (backend *Backend) sendRequestHandler(ctx context.Context, request mcp.Call
 		host = u.Hostname()
 	}
 
+	port := fmt.Sprintf("%d", args.Port)
+	http2 := args.HttpVersion == 2
+
 	resp, err := backend.sendRepeaterLogic(&RepeaterSendRequest{
 		Host:        host,
-		Port:        args.Port,
+		Port:        port,
 		TLS:         args.TLS,
 		Request:     args.Request,
-		Timeout:     args.Timeout,
-		HTTP2:       args.HTTP2,
-		Index:       args.Index,
-		Url:         args.Url,
+		Timeout:     30,
+		HTTP2:       http2,
+		Index:       args.AttachToIndex,
+		Url:         fmt.Sprintf("%s://%s:%d", map[bool]string{true: "https", false: "http"}[args.TLS], host, args.Port),
 		Note:        args.Note,
 		GeneratedBy: "ai/mcp/claudecode",
 	})

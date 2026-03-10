@@ -42,8 +42,8 @@ func (backend *Backend) mcpInit() {
 	// --- Utility tools ---
 
 	s.AddTool(
-		mcp.NewTool("version",
-			mcp.WithDescription("Get grroxy version information (backend, frontend, release)"),
+		mcp.NewTool("grroxyStatus",
+			mcp.WithDescription("Check if the grroxy is active"),
 		),
 		backend.versionHandler,
 	)
@@ -52,7 +52,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("getRequestResponseFromID",
-			mcp.WithDescription("Get the full request and response for a given record ID from the proxy history"),
+			mcp.WithDescription("Get the active request and response for active ID"),
 			mcp.WithInputSchema[GetRequestResponseArgs](),
 		),
 		backend.getRequestResponseFromIDHandler,
@@ -60,7 +60,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("hostPrintSitemap",
-			mcp.WithDescription("Print the sitemap tree for a given host showing all discovered paths and endpoints"),
+			mcp.WithDescription("Get the sitemap for a host"),
 			mcp.WithInputSchema[HostPrintSitemapArgs](),
 		),
 		backend.hostPrintSitemapHandler,
@@ -68,7 +68,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("hostPrintRowsInDetails",
-			mcp.WithDescription("Print detailed rows (method, URL, status, content-type, length) for a given host from the proxy history"),
+			mcp.WithDescription("Get the table for a host"),
 			mcp.WithInputSchema[HostPrintRowsArgs](),
 		),
 		backend.hostPrintRowsInDetailsHandler,
@@ -78,7 +78,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("sendRequest",
-			mcp.WithDescription("Send a raw HTTP request to a host and return the response"),
+			mcp.WithDescription("Send a request via http. Mind the terminating the request with \\r\\n\\r\\n or \\n\\n if there are no body, mind the content length of the body, it should exactly match"),
 			mcp.WithInputSchema[SendRequestArgs](),
 		),
 		backend.sendRequestHandler,
