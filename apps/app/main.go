@@ -24,6 +24,7 @@ type Backend struct {
 	CmdChannel     chan process.RunCommandData
 	CounterManager *CounterManager
 	XtermManager   *XtermManager
+	MCP            *MCP
 }
 
 func (backend *Backend) Serve() {

@@ -1,6 +1,6 @@
 {
   "name": "grroxy",
-  "version": "2026.3.6",
+  "version": "2026.3.7",
   "author": {
     "name": "Gitesh Sharma",
     "email": "gitesh@grroxy.com"
@@ -16,12 +16,15 @@
   },
   "build": {
     "appId": "com.glitchedgitz.grroxy",
-    "productName": "Grroxy",
+    "productName": "grroxy",
     "extraResources": [
       {
         "from": "bin/${os}/${arch}/",
         "to": "bin",
-        "filter": ["grroxy*", "cook*"]
+        "filter": [
+          "grroxy*",
+          "cook*"
+        ]
       }
     ],
     "files": [
@@ -29,17 +32,24 @@
       "src/preload.js",
       "src/icons/**/*"
     ],
+    "artifactName": "${productName}-${os}-${arch}-${version}.${ext}",
     "mac": {
       "icon": "src/icons/grroxy.png",
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ]
     },
     "win": {
       "icon": "src/icons/grroxy.png",
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "linux": {
       "icon": "src/icons/grroxy.png",
-      "target": ["AppImage"]
+      "target": [
+        "AppImage"
+      ]
     }
   }
 }

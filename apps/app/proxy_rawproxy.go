@@ -1081,10 +1081,11 @@ func (rp *RawProxyWrapper) saveWebSocketMessageToDB(msg *rawproxy.WebSocketMessa
 		generatedBy = dataRecord.GetString("generated_by")
 	}
 
-	id = fmt.Sprintf("%s.%d", dataIndex, msg.Index)
+	// id = fmt.Sprintf("%s.%d", dataIndex, msg.Index)
+	id = utils.FormatStringID(fmt.Sprintf("%v.%v", dataIndex, msg.Index), 15)
 
 	record := models.NewRecord(rp.wsCollection)
-	record.Set("id", utils.AddUnderscore(id))
+	record.Set("id", id)
 	record.Set("index", msg.Index)
 	record.Set("host", msg.Host)
 	record.Set("path", msg.Path)

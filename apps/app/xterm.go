@@ -26,6 +26,12 @@ type XtermManager struct {
 	sessionsMu sync.RWMutex
 }
 
+// scrollbackBufferSize is the max bytes of PTY output kept for replay on reconnect.
+const scrollbackBufferSize = 256 * 1024 // 256 KB
+
+// maxClientsPerSession limits concurrent WebSocket clients per terminal session.
+const maxClientsPerSession = 10
+
 // XtermSession represents a single terminal session
 type XtermSession struct {
 	ID        string
@@ -37,6 +43,14 @@ type XtermSession struct {
 	Env       []string
 	mu        sync.Mutex
 	closed    bool
+
+	// Scrollback ring buffer for replay on reconnect
+	scrollback   []byte
+	scrollbackMu sync.Mutex
+
+	// Connected WebSocket clients
+	clients   map[*websocket.Conn]struct{}
+	clientsMu sync.Mutex
 }
 
 // XtermMessage represents WebSocket messages between client and server
@@ -165,14 +179,16 @@ func (m *XtermManager) CreateSession(shell, workDir string, envVars map[string]s
 	}
 
 	session := &XtermSession{
-		ID:        sessionID,
-		Cmd:       cmd,
-		Pty:       ptmx,
-		CreatedAt: time.Now(),
-		Shell:     shell,
-		WorkDir:   workDir,
-		Env:       cmd.Env,
-		closed:    false,
+		ID:         sessionID,
+		Cmd:        cmd,
+		Pty:        ptmx,
+		CreatedAt:  time.Now(),
+		Shell:      shell,
+		WorkDir:    workDir,
+		Env:        cmd.Env,
+		closed:     false,
+		scrollback: make([]byte, 0, scrollbackBufferSize),
+		clients:    make(map[*websocket.Conn]struct{}),
 	}
 
 	// Store session
@@ -181,6 +197,9 @@ func (m *XtermManager) CreateSession(shell, workDir string, envVars map[string]s
 	m.sessionsMu.Unlock()
 
 	log.Printf("[Xterm] Created session %s with shell %s in %s", sessionID, shell, workDir)
+
+	// Start persistent PTY reader that buffers output and broadcasts to clients
+	go session.readPtyLoop()
 
 	// Start goroutine to clean up when process exits
 	go func() {
@@ -239,6 +258,14 @@ func (m *XtermManager) CloseSession(sessionID string) error {
 		}
 	}
 
+	// Close all connected WebSocket clients so their HandleWebSocket goroutines unblock
+	session.clientsMu.Lock()
+	for ws := range session.clients {
+		ws.Close()
+		delete(session.clients, ws)
+	}
+	session.clientsMu.Unlock()
+
 	log.Printf("[Xterm] Closed session %s", sessionID)
 	return nil
 }
@@ -278,6 +305,90 @@ func (m *XtermManager) CleanupAllSessions() {
 	}
 }
 
+// readPtyLoop is a persistent goroutine that reads from the PTY,
+// appends to the scrollback buffer, and broadcasts to all connected WebSocket clients.
+func (s *XtermSession) readPtyLoop() {
+	buf := make([]byte, 8192)
+	for {
+		n, err := s.Pty.Read(buf)
+		if err != nil {
+			if err != io.EOF {
+				log.Printf("[Xterm] Error reading from PTY (session %s): %v", s.ID, err)
+			}
+			return
+		}
+
+		data := buf[:n]
+
+		// Append to scrollback buffer
+		s.scrollbackMu.Lock()
+		s.scrollback = append(s.scrollback, data...)
+		// Compact in-place to avoid unbounded underlying array growth
+		if len(s.scrollback) > scrollbackBufferSize {
+			keep := s.scrollback[len(s.scrollback)-scrollbackBufferSize:]
+			copy(s.scrollback[:scrollbackBufferSize], keep)
+			s.scrollback = s.scrollback[:scrollbackBufferSize]
+		}
+		s.scrollbackMu.Unlock()
+
+		// Broadcast to all connected clients
+		msg := map[string]interface{}{
+			"type": "output",
+			"data": string(data),
+		}
+
+		s.clientsMu.Lock()
+		for ws := range s.clients {
+			if err := websocket.JSON.Send(ws, msg); err != nil {
+				log.Printf("[Xterm] Error broadcasting to client (session %s): %v", s.ID, err)
+				delete(s.clients, ws)
+			}
+		}
+		s.clientsMu.Unlock()
+	}
+}
+
+// addClient registers a WebSocket connection and replays the scrollback buffer.
+// Returns false if the session already has maxClientsPerSession connections.
+func (s *XtermSession) addClient(ws *websocket.Conn) bool {
+	// Take a snapshot of the scrollback while holding the lock,
+	// then register the client before releasing, so no output is lost
+	// between replay and going live.
+	s.scrollbackMu.Lock()
+	snapshot := make([]byte, len(s.scrollback))
+	copy(snapshot, s.scrollback)
+	// Register client while still holding scrollbackMu so the PTY reader
+	// will start broadcasting to this client before we release.
+	s.clientsMu.Lock()
+	if len(s.clients) >= maxClientsPerSession {
+		s.clientsMu.Unlock()
+		s.scrollbackMu.Unlock()
+		return false
+	}
+	s.clients[ws] = struct{}{}
+	s.clientsMu.Unlock()
+	s.scrollbackMu.Unlock()
+
+	// Replay buffered output
+	if len(snapshot) > 0 {
+		msg := map[string]interface{}{
+			"type": "output",
+			"data": string(snapshot),
+		}
+		if err := websocket.JSON.Send(ws, msg); err != nil {
+			log.Printf("[Xterm] Error replaying scrollback (session %s): %v", s.ID, err)
+		}
+	}
+	return true
+}
+
+// removeClient unregisters a WebSocket connection.
+func (s *XtermSession) removeClient(ws *websocket.Conn) {
+	s.clientsMu.Lock()
+	delete(s.clients, ws)
+	s.clientsMu.Unlock()
+}
+
 // HandleWebSocket handles WebSocket connections for terminal I/O
 func (m *XtermManager) HandleWebSocket(ws *websocket.Conn, sessionID string) {
 	defer ws.Close()
@@ -292,36 +403,13 @@ func (m *XtermManager) HandleWebSocket(ws *websocket.Conn, sessionID string) {
 
 	log.Printf("[Xterm] WebSocket connected for session %s", sessionID)
 
-	// Channel to signal completion
-	done := make(chan struct{})
-
-	// Goroutine to read from PTY and send to WebSocket
-	go func() {
-		defer func() {
-			done <- struct{}{}
-		}()
-
-		buf := make([]byte, 8192)
-		for {
-			n, err := session.Pty.Read(buf)
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("[Xterm] Error reading from PTY: %v", err)
-				}
-				return
-			}
-
-			// Send output to WebSocket
-			msg := map[string]interface{}{
-				"type": "output",
-				"data": string(buf[:n]),
-			}
-			if err := websocket.JSON.Send(ws, msg); err != nil {
-				log.Printf("[Xterm] Error sending to WebSocket: %v", err)
-				return
-			}
-		}
-	}()
+	// Register client and replay scrollback buffer
+	if !session.addClient(ws) {
+		log.Printf("[Xterm] Rejected client for session %s: max clients (%d) reached", sessionID, maxClientsPerSession)
+		websocket.Message.Send(ws, `{"type":"error","data":"Too many clients connected to this session"}`)
+		return
+	}
+	defer session.removeClient(ws)
 
 	// Read from WebSocket and write to PTY
 	for {
@@ -379,8 +467,6 @@ func (m *XtermManager) HandleWebSocket(ws *websocket.Conn, sessionID string) {
 		}
 	}
 
-	// Wait for PTY reader to finish
-	<-done
 	log.Printf("[Xterm] WebSocket disconnected for session %s", sessionID)
 }
 

@@ -31,6 +31,48 @@ type RepeaterSendResponse struct {
 	UserData types.UserData `json:"userdata"`
 }
 
+// sendRepeaterLogic contains the core logic for sending a raw HTTP request and saving to backend.
+func (backend *Backend) sendRepeaterLogic(reqData *RepeaterSendRequest) (*RepeaterSendResponse, error) {
+	timeout := time.Duration(reqData.Timeout) * time.Second
+	respString, timeTaken, err := SendRawHTTPRequest(
+		reqData.Host,
+		reqData.Port,
+		reqData.TLS,
+		reqData.Request,
+		timeout,
+		reqData.HTTP2,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	addReqBody := types.AddRequestBodyType{
+		Url:         reqData.Url,
+		Index:       reqData.Index,
+		Request:     reqData.Request,
+		Response:    respString,
+		GeneratedBy: "repeater/" + reqData.GeneratedBy,
+		Note:        reqData.Note,
+	}
+
+	userdata, err := backend.SaveRequestToBackend(addReqBody)
+	if err != nil {
+		log.Printf("[sendRepeaterLogic] Error saving to backend: %v", err)
+		// Still return the response even if save fails
+		return &RepeaterSendResponse{
+			Response: respString,
+			Time:     timeTaken,
+		}, nil
+	}
+
+	return &RepeaterSendResponse{
+		Response: respString,
+		Time:     timeTaken,
+		UserData: userdata,
+	}, nil
+}
+
 // SendRepeater handles the /api/repeater/send endpoint
 func (backend *Backend) SendRepeater(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
@@ -39,7 +81,6 @@ func (backend *Backend) SendRepeater(e *core.ServeEvent) error {
 		Handler: func(c echo.Context) error {
 			log.Println("[SendRepeater] Handler called")
 
-			// Check authentication
 			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
 			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
 
@@ -49,7 +90,6 @@ func (backend *Backend) SendRepeater(e *core.ServeEvent) error {
 				return c.String(http.StatusForbidden, "")
 			}
 
-			// Bind request body
 			var reqData RepeaterSendRequest
 			if err := c.Bind(&reqData); err != nil {
 				log.Printf("[SendRepeater] Error binding body: %v", err)
@@ -58,55 +98,14 @@ func (backend *Backend) SendRepeater(e *core.ServeEvent) error {
 
 			log.Printf("[SendRepeater] Request data: %+v", reqData)
 
-			// Send the raw HTTP request using function from rawhttp.go
-			timeout := time.Duration(reqData.Timeout) * time.Second
-			respString, timeTaken, err := SendRawHTTPRequest(
-				reqData.Host,
-				reqData.Port,
-				reqData.TLS,
-				reqData.Request,
-				timeout,
-				reqData.HTTP2,
-			)
-
+			resp, err := backend.sendRepeaterLogic(&reqData)
 			if err != nil {
 				log.Printf("[SendRepeater] Error sending request: %v", err)
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-					"error": err.Error(),
-					"time":  timeTaken,
-				})
-			}
-
-			// Save to backend using function from request.go
-			// index_minor will be auto-calculated in SaveRequestToBackend
-			addReqBody := types.AddRequestBodyType{
-				Url:         reqData.Url,
-				Index:       reqData.Index,
-				Request:     reqData.Request,
-				Response:    respString,
-				GeneratedBy: "repeater/" + reqData.GeneratedBy,
-				Note:        reqData.Note,
-			}
-
-			userdata, err := backend.SaveRequestToBackend(addReqBody)
-			if err != nil {
-				log.Printf("[SendRepeater] Error saving to backend: %v", err)
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-					"error":    "Failed to save to backend",
-					"response": respString,
-					"time":     timeTaken,
-				})
-			}
-
-			// Return response
-			response := RepeaterSendResponse{
-				Response: respString,
-				Time:     timeTaken,
-				UserData: userdata,
+				return c.JSON(http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			}
 
 			log.Printf("[SendRepeater] Successfully processed request")
-			return c.JSON(http.StatusOK, response)
+			return c.JSON(http.StatusOK, resp)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),

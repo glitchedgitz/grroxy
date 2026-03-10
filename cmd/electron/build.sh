@@ -95,6 +95,22 @@ else
     npm run build
 fi
 
+# --- Step 4: Rename mac artifacts to include chip name ---
+
+echo "=== Step 4: Rename mac artifacts ==="
+for f in "${SCRIPT_DIR}"/dist/grroxy-mac-arm64-*; do
+    [ -e "$f" ] || continue
+    newname="${f/mac-arm64-/mac-arm64-applechip-}"
+    echo "  Renaming $(basename "$f") -> $(basename "$newname")"
+    mv "$f" "$newname"
+done
+for f in "${SCRIPT_DIR}"/dist/grroxy-mac-x64-*; do
+    [ -e "$f" ] || continue
+    newname="${f/mac-x64-/mac-x64-intelchip-}"
+    echo "  Renaming $(basename "$f") -> $(basename "$newname")"
+    mv "$f" "$newname"
+done
+
 echo
 echo "=== Done ==="
 echo "Output in: ${SCRIPT_DIR}/dist/"

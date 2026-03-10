@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-MAR] - v0.27.0 - MCP (Model Context Protocol) Support
+
+### Added
+
+- **MCP server** — Built-in MCP server using `mcp-go` with SSE transport for AI tool integration.
+- **MCP tools** — `version`, `getRequestResponseFromID`, `hostPrintSitemap`, `hostPrintRowsInDetails`, `sendRequest` tools for AI agents to interact with proxy data.
+- **MCP endpoints** — `/mcp/start`, `/mcp/stop`, `/mcp/health`, `/mcp/listtools`, `/mcp/sse`, `/mcp/message`, `/mcp/setup/claude`.
+- **Claude Code integration** — `/mcp/setup/claude` endpoint writes `.mcp.json` and `CLAUDE.md` auto setup.
+
+---
+
 ## [2026-MAR] - v0.26.5 - Dev UI, Xterm Improvements & Proxy Timeout Fix
 
 ### Added
@@ -16,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination.
 - **[IMP][PERFORMANCE] Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination. 
 - **Proxy timeouts increased to 10 minutes** — Prevents intercepted request connection failures when requests are held for manual review (`rawproxy` config, MITM, and proxy server timeouts all updated).
 - **Stale WebSocket cleanup on session close** — All connected WebSocket clients are now closed when a terminal session is closed, preventing hanging goroutines.
