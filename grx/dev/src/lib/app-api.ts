@@ -1269,6 +1269,218 @@ export const proxy_api = [
 	}
 ];
 
+export const mcp_api = [
+	{
+		id: 'mcp',
+		name: 'MCP Start',
+		method: 'POST',
+		path: '/mcp/start',
+		description: 'Start the MCP server (re-initializes if already stopped)',
+		category: '/mcp',
+		examples: [
+			{
+				name: 'Start MCP server',
+				description: 'Starts the MCP server and registers tools',
+				request: {},
+				response: {
+					status: 200,
+					body: { message: 'MCP server started' }
+				}
+			},
+			{
+				name: 'Already active',
+				description: 'Returns message if the MCP server is already running',
+				request: {},
+				response: {
+					status: 200,
+					body: { message: 'MCP server already active' }
+				}
+			}
+		]
+	},
+	{
+		id: 'mcp',
+		name: 'MCP Stop',
+		method: 'POST',
+		path: '/mcp/stop',
+		description: 'Stop the MCP server',
+		category: '/mcp',
+		examples: [
+			{
+				name: 'Stop MCP server',
+				description: 'Stops the MCP server and marks it as inactive',
+				request: {},
+				response: {
+					status: 200,
+					body: { message: 'MCP server stopped' }
+				}
+			},
+			{
+				name: 'Already stopped',
+				description: 'Returns message if the MCP server is already stopped',
+				request: {},
+				response: {
+					status: 200,
+					body: { message: 'MCP server already stopped' }
+				}
+			}
+		]
+	},
+	{
+		id: 'mcp',
+		name: 'MCP Health',
+		method: 'GET',
+		path: '/mcp/health',
+		description: 'Get MCP server health status, active connections, and registered tools',
+		category: '/mcp',
+		examples: [
+			{
+				name: 'Health when active',
+				description: 'Returns full health info when the MCP server is running',
+				request: {},
+				response: {
+					status: 200,
+					body: {
+						active: true,
+						status: 'ok',
+						server: 'grroxy',
+						version: '2026.3.6',
+						tools: ['hello', 'version'],
+						connections: 2
+					}
+				}
+			},
+			{
+				name: 'Health when inactive',
+				description: 'Returns minimal response when the MCP server is stopped',
+				request: {},
+				response: {
+					status: 200,
+					body: { active: false }
+				}
+			}
+		]
+	},
+	{
+		id: 'mcp',
+		name: 'MCP SSE',
+		method: 'GET',
+		path: '/mcp/sse',
+		description: 'Server-Sent Events endpoint for MCP (Model Context Protocol) communication',
+		category: '/mcp',
+		examples: [
+			{
+				name: 'Connect to MCP SSE',
+				description: 'Opens an SSE stream for MCP client-server communication. Returns an endpoint URL for sending messages.',
+				request: {},
+				response: {
+					status: 200,
+					body: 'event: endpoint\ndata: /mcp/message?sessionId=...\n\n'
+				}
+			}
+		]
+	},
+	{
+		id: 'mcp',
+		name: 'MCP Message',
+		method: 'POST',
+		path: '/mcp/message',
+		description: 'Send JSON-RPC messages to the MCP server (use sessionId from SSE endpoint)',
+		category: '/mcp',
+		defaultBody: {
+			jsonrpc: '2.0',
+			id: 1,
+			method: 'tools/list',
+			params: {}
+		},
+		examples: [
+			{
+				name: 'List available tools',
+				description: 'Lists all MCP tools registered on the server',
+				request: {
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'tools/list',
+					params: {}
+				},
+				response: {
+					status: 200,
+					body: { tools: [{ name: 'hello', description: 'Say hello' }, { name: 'version', description: 'Get grroxy version information' }] }
+				}
+			},
+			{
+				name: 'Call hello tool',
+				description: 'Calls the hello tool with a name parameter',
+				request: {
+					jsonrpc: '2.0',
+					id: 2,
+					method: 'tools/call',
+					params: { name: 'hello', arguments: { name: 'World' } }
+				},
+				response: {
+					status: 200,
+					body: { content: [{ type: 'text', text: 'Hello, World!' }] }
+				}
+			},
+			{
+				name: 'Call version tool',
+				description: 'Returns grroxy version information',
+				request: {
+					jsonrpc: '2.0',
+					id: 3,
+					method: 'tools/call',
+					params: { name: 'version', arguments: {} }
+				},
+				response: {
+					status: 200,
+					body: { content: [{ type: 'text', text: 'Grroxy Version Info:\n  Backend:  v...\n  Frontend: v...\n  Release:  v...' }] }
+				}
+			}
+		]
+	},
+	{
+		id: 'mcp',
+		name: 'MCP Setup Claude',
+		method: 'POST',
+		path: '/mcp/setup/claude',
+		description: 'Configure Claude Code integration — writes .claude/.mcp.json (auto-generated) and CLAUDE.md (user-provided)',
+		category: '/mcp',
+		defaultBody: {
+			claude_md: ''
+		},
+		examples: [
+			{
+				name: 'Setup with custom CLAUDE.md',
+				description: 'Writes .mcp.json with grroxy MCP SSE config and CLAUDE.md with user-provided content',
+				request: {
+					claude_md: 'You are operating inside Grroxy...'
+				},
+				response: {
+					status: 200,
+					body: {
+						success: true,
+						message: 'Claude Code integration configured'
+					}
+				}
+			},
+			{
+				name: 'Setup without CLAUDE.md',
+				description: 'Only writes .mcp.json, skips CLAUDE.md if claude_md is empty',
+				request: {
+					claude_md: ''
+				},
+				response: {
+					status: 200,
+					body: {
+						success: true,
+						message: 'Claude Code integration configured'
+					}
+				}
+			}
+		]
+	}
+];
+
 export const appEndpoints = [
 	...cert_api,
 	...commands_api,
@@ -1281,6 +1493,7 @@ export const appEndpoints = [
 	...info_api,
 	...intercept_api,
 	...labels_api,
+	...mcp_api,
 	...modify_api,
 	...playground_api,
 	...proxy_api,

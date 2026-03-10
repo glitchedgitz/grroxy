@@ -153,6 +153,9 @@ func serve(projectPath string) {
 	// Extractor
 	API.App.OnBeforeServe().Add(API.ExtractDataEndpoint)
 
+	// MCP
+	API.App.OnBeforeServe().Add(API.MCPEndpoint)
+
 	// Xterm (Terminal)
 	API.RegisterXtermRoutes()
 
