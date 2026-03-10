@@ -548,6 +548,149 @@ func (backend *Backend) InitializeProxy() error {
 	return nil
 }
 
+// startProxyLogic contains the core proxy start logic, shared by the HTTP handler and MCP tool.
+// Returns a result map on success, or an error.
+func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error) {
+	log.Println("[startProxyLogic] begins", body)
+
+	if body.HTTP == "" && body.Browser != "" {
+		body.HTTP = "127.0.0.1:9797"
+	}
+
+	availableHost, err := utils.CheckAndFindAvailablePort(body.HTTP)
+	if err != nil {
+		return nil, fmt.Errorf("port check failed: %w", err)
+	}
+
+	if body.Browser == "" && availableHost != body.HTTP {
+		return map[string]any{"error": "port not available", "availableHost": availableHost}, nil
+	}
+	body.HTTP = availableHost
+
+	// Initialize proxy index from database if not already initialized
+	if ProxyMgr.proxyIndex.Load() == 0 {
+		if err := ProxyMgr.initializeProxyIndexFromDB(backend); err != nil {
+			log.Printf("[startProxyLogic] Warning: Failed to initialize proxy index from database: %v", err)
+		}
+	}
+
+	// Generate unique proxy ID (this will be the primary ID, not the listen address)
+	proxyID := ProxyMgr.GetNextProxyID()
+	log.Printf("[startProxyLogic] Generated proxy ID: %s for address: %s", proxyID, body.HTTP)
+
+	// Create new rawproxy wrapper
+	configDir := path.Join(backend.Config.ConfigDirectory)
+
+	// Disable file captures by passing empty string (we save to database instead)
+	outputDir := "" // Empty = disabled
+
+	newProxy, err := NewRawProxyWrapper(body.HTTP, configDir, outputDir, backend, proxyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create proxy: %w", err)
+	}
+
+	// Generate label if not provided
+	label := body.Name
+	browserType := body.Browser
+	if browserType == "" {
+		label = body.HTTP
+	} else if label == "" {
+		// Generate label in format: {browser} {instance_number}
+		ProxyMgr.mu.RLock()
+		count := 0
+		for _, inst := range ProxyMgr.instances {
+			if inst != nil && (inst.Browser == browserType || (browserType == "proxy" && inst.Browser == "")) {
+				count++
+			}
+		}
+		ProxyMgr.mu.RUnlock()
+		count++
+
+		if count > 1 {
+			label = fmt.Sprintf("%s %d", browserType, count)
+		} else {
+			label = browserType
+		}
+	}
+
+	// Create complete proxy instance with all fields
+	proxyInstance := &ProxyInstance{
+		Proxy:      newProxy,
+		Browser:    body.Browser,
+		BrowserCmd: nil, // Will be set later if browser is launched
+		Label:      label,
+	}
+
+	// Add complete instance to manager using the formatted ID as key
+	ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
+
+	// Update PROXY for backward compatibility
+	updateProxyVar()
+
+	// Start the proxy
+	if err := newProxy.RunProxy(); err != nil {
+		return nil, fmt.Errorf("failed to start proxy: %w", err)
+	}
+
+	if body.Browser != "" {
+		// Use the certificate path from the rawproxy
+		certPath := newProxy.GetCertPath()
+
+		// Generate browser profile directory: [projectid]+[proxyid]
+		profileID := backend.Config.ProjectID + proxyID
+		profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
+		log.Printf("[startProxyLogic] Browser profile directory: %s", profileDir)
+
+		go func(proxyID, browserType, listenAddr, cert, profDir string) {
+			cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir)
+			if err != nil {
+				log.Println("Error launching browser:", err)
+				return
+			}
+			ProxyMgr.mu.Lock()
+			if inst := ProxyMgr.instances[proxyID]; inst != nil {
+				inst.Browser = browserType
+				inst.BrowserCmd = cmd
+			}
+			ProxyMgr.mu.Unlock()
+		}(proxyID, body.Browser, body.HTTP, certPath, profileDir)
+	}
+
+	// Create proxy record in database
+	dao := backend.App.Dao()
+	proxiesCollection, err := dao.FindCollectionByNameOrId("_proxies")
+	if err != nil {
+		return nil, fmt.Errorf("failed to find _proxies collection: %v", err)
+	}
+
+	proxyRecord := models.NewRecord(proxiesCollection)
+	proxyRecord.Set("id", proxyID)
+	proxyRecord.Set("label", label)
+	proxyRecord.Set("addr", body.HTTP)
+	proxyRecord.Set("browser", body.Browser)
+	proxyRecord.Set("intercept", false) // Default to false
+	proxyRecord.Set("state", "running")
+	proxyRecord.Set("color", "")
+	proxyRecord.Set("profile", "")
+
+	// Initialize data column (filters are now stored separately in _ui collection)
+	proxyData := map[string]interface{}{}
+	proxyRecord.Set("data", proxyData)
+
+	if err := dao.SaveRecord(proxyRecord); err != nil {
+		return nil, fmt.Errorf("failed to save proxy record: %v", err)
+	}
+
+	log.Printf("[startProxyLogic] Created proxy record in database with ID: %s", proxyID)
+
+	return map[string]any{
+		"id":         proxyID,
+		"listenAddr": body.HTTP,
+		"label":      label,
+		"browser":    body.Browser,
+	}, nil
+}
+
 func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 
 	e.Router.AddRoute(echo.Route{
@@ -563,163 +706,17 @@ func (backend *Backend) StartProxy(e *core.ServeEvent) error {
 				return c.String(http.StatusForbidden, "")
 			}
 
-			log.Println("/api/proxy/start begins")
-
 			var body ProxyBody
 			if err := c.Bind(&body); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			log.Println("/api/proxy/start body", body)
-
-			if body.HTTP == "" && body.Browser != "" {
-				body.HTTP = "127.0.0.1:9797"
-			}
-
-			availableHost, err := utils.CheckAndFindAvailablePort(body.HTTP)
-
+			result, err := backend.startProxyLogic(&body)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			if body.Browser == "" && availableHost != body.HTTP {
-				return c.JSON(http.StatusOK, map[string]interface{}{"error": "port not available", "availableHost": availableHost})
-			} else {
-				body.HTTP = availableHost
-			}
-
-			// Initialize proxy index from database if not already initialized
-			if ProxyMgr.proxyIndex.Load() == 0 {
-				if err := ProxyMgr.initializeProxyIndexFromDB(backend); err != nil {
-					log.Printf("[StartProxy] Warning: Failed to initialize proxy index from database: %v", err)
-				}
-			}
-
-			// Generate unique proxy ID (this will be the primary ID, not the listen address)
-			proxyID := ProxyMgr.GetNextProxyID()
-			log.Printf("[StartProxy] Generated proxy ID: %s for address: %s", proxyID, body.HTTP)
-
-			// Create new rawproxy wrapper
-			configDir := path.Join(backend.Config.ConfigDirectory)
-
-			// Disable file captures by passing empty string (we save to database instead)
-			// To enable file captures for testing, uncomment the line below:
-			// outputDir := path.Join(backend.Config.ConfigDirectory, "captures")
-			outputDir := "" // Empty = disabled
-
-			newProxy, err := NewRawProxyWrapper(body.HTTP, configDir, outputDir, backend, proxyID)
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-			}
-
-			// Generate label if not provided
-			label := body.Name
-			browserType := body.Browser
-			if browserType == "" {
-				label = body.HTTP
-			} else if label == "" {
-				// Generate label in format: {browser} {instance_number}
-
-				// Count existing instances of this browser type
-				ProxyMgr.mu.RLock()
-				count := 0
-				for _, inst := range ProxyMgr.instances {
-					if inst != nil && (inst.Browser == browserType || (browserType == "proxy" && inst.Browser == "")) {
-						count++
-					}
-				}
-				ProxyMgr.mu.RUnlock()
-				count++
-
-				if count > 1 {
-					label = fmt.Sprintf("%s %d", browserType, count)
-				} else {
-					label = browserType
-				}
-			}
-
-			// Create complete proxy instance with all fields
-			proxyInstance := &ProxyInstance{
-				Proxy:      newProxy,
-				Browser:    body.Browser,
-				BrowserCmd: nil, // Will be set later if browser is launched
-				Label:      label,
-			}
-
-			// Add complete instance to manager using the formatted ID as key
-			ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
-
-			// Update PROXY for backward compatibility
-			updateProxyVar()
-
-			// // Load initial intercept and filter settings from proxy record
-			// if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
-			// 	log.Printf("[StartProxy] Warning: Failed to load proxy settings: %v", err)
-			// }
-
-			// Start the proxy
-			if err := newProxy.RunProxy(); err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-			}
-
-			if body.Browser != "" {
-				// Use the certificate path from the rawproxy
-				certPath := newProxy.GetCertPath()
-
-				// Generate browser profile directory: [projectid]+[proxyid]
-				// This ensures each browser instance has its own isolated profile
-				profileID := backend.Config.ProjectID + proxyID
-				profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
-				log.Printf("[StartProxy] Browser profile directory: %s", profileDir)
-
-				go func(proxyID, browserType, listenAddr, cert, profDir string) {
-					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir)
-					if err != nil {
-						log.Println("Error launching browser:", err)
-						return
-					}
-					ProxyMgr.mu.Lock()
-					if inst := ProxyMgr.instances[proxyID]; inst != nil {
-						inst.Browser = browserType
-						inst.BrowserCmd = cmd
-					}
-					ProxyMgr.mu.Unlock()
-				}(proxyID, body.Browser, body.HTTP, certPath, profileDir)
-			}
-
-			// Create proxy record in database
-			dao := backend.App.Dao()
-			proxiesCollection, err := dao.FindCollectionByNameOrId("_proxies")
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to find _proxies collection: %v", err)})
-			}
-
-			proxyRecord := models.NewRecord(proxiesCollection)
-			proxyRecord.Set("id", proxyID)
-			proxyRecord.Set("label", label)
-			proxyRecord.Set("addr", body.HTTP)
-			proxyRecord.Set("browser", body.Browser)
-			proxyRecord.Set("intercept", false) // Default to false
-			proxyRecord.Set("state", "running")
-			proxyRecord.Set("color", "")
-			proxyRecord.Set("profile", "")
-
-			// Initialize data column (filters are now stored separately in _ui collection)
-			proxyData := map[string]interface{}{}
-			proxyRecord.Set("data", proxyData)
-
-			if err := dao.SaveRecord(proxyRecord); err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to save proxy record: %v", err)})
-			}
-
-			log.Printf("[StartProxy] Created proxy record in database with ID: %s", proxyID)
-
-			return c.JSON(http.StatusOK, map[string]any{
-				"id":         proxyID,
-				"listenAddr": body.HTTP,
-				"label":      label,
-				"browser":    body.Browser,
-			})
+			return c.JSON(http.StatusOK, result)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),

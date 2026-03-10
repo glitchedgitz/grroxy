@@ -10,12 +10,12 @@
 | 6 | ✅ | `getRequestResponseFromID` | Get Request/Response | Data | Easy | Takes record ID, pads to 15 chars, fetches raw req/resp from _req/_resp collections |
 | 7 | ✅ | `hostPrintSitemap` | Print Sitemap Tree | Target | Medium | Takes host+path+depth, calls sitemapFetchLogic, returns tree of discovered paths |
 | 8 | ✅ | `hostPrintRowsInDetails` | Get Host Rows | Target | Easy | Takes host+filter+limit+offset, expands _data relations, returns rows with req/resp JSON (headers stripped) |
-| 9 | - | `getNoteForHost` | Reading Note | Target | Very Easy | Single host lookup |
-| 10 | - | `setNoteForHost` | Writing Note | Target | Easy | Line-level edits on stored notes |
-| 11 | - | `listHosts` | List Hosts | Target | Easy | Paginated list with search |
-| 12 | - | `getHostInfo` | Get Host Info | Target | Easy | Single host lookup, aggregates stored data |
-| 13 | - | `modifyHostLabels` | Update Host Label | Target | Medium | Add/remove/toggle actions with color/type |
-| 14 | - | `modifyHostNotes` | Update Host Notes | Target | Medium | Add/update/remove with index management |
+| 9 | ✅ | `getNoteForHost` | Reading Note | Target | Very Easy | Fetches notes from _hosts by host filter |
+| 10 | ✅ | `setNoteForHost` | Writing Note | Target | Easy | Line-level edits on stored notes array |
+| 11 | ✅ | `listHosts` | List Hosts | Target | Easy | Paginated list with search, expands tech/labels to names |
+| 12 | ✅ | `getHostInfo` | Get Host Info | Target | Easy | Expands tech/labels to names, returns full host details |
+| 13 | ✅ | `modifyHostLabels` | Update Host Label | Target | Medium | Add/remove/toggle labels, auto-creates label if missing |
+| 14 | ✅ | `modifyHostNotes` | Update Host Notes | Target | Medium | Add/update/remove notes array on _hosts record |
 | 15 | - | `getQuickSearchSets` | Get Quick Searches | Search | Very Easy | No params, list stored data |
 | 16 | - | `addQuickSearchSet` | Add Quick Search | Search | Easy | Name + regex string save |
 | 17 | - | `deleteQuickSearchSet` | Delete Quick Search | Search | Very Easy | Single ID delete |
@@ -25,17 +25,17 @@
 | 21 | - | `fuzzRequestWithWordlist` | Fuzz Request with Wordlist | Fuzzer | Hard | Same as fuzzRequest + file streaming |
 | 22 | - | `fuzzReadTable` | Get Fuzzer Table | Fuzzer | Easy | Paginated read with filter |
 | 23 | - | `fuzzReadRequestFromTable` | Get Fuzzer Request | Fuzzer | Easy | Single row lookup by IDs |
-| 24 | - | `proxyList` | List Proxies | Proxy | Very Easy | No params, list running instances |
-| 25 | - | `proxyStart` | Start Proxy | Proxy | Hard | Process spawning, port allocation, browser launch |
-| 26 | - | `proxyStop` | Stop Proxy | Proxy | Medium | Process cleanup, graceful shutdown |
-| 27 | - | `proxyScreenshot` | Take Screenshot | Proxy | Medium | CDP connection, image capture and encoding |
-| 28 | - | `proxyClick` | Click Element | Proxy | Medium | CDP DOM interaction, selector resolution |
-| 29 | - | `proxyElements` | Get Clickable Elements | Proxy | Medium | CDP DOM query, element extraction |
-| 30 | - | `proxyListTabs` | List Chrome Tabs | Proxy Tabs | Easy | CDP target list query |
-| 31 | - | `proxyOpenTab` | Open Chrome Tab | Proxy Tabs | Easy | CDP createTarget call |
-| 32 | - | `proxyNavigateTab` | Navigate Chrome Tab | Proxy Tabs | Medium | CDP navigation with wait conditions |
-| 33 | - | `proxyActivateTab` | Activate Chrome Tab | Proxy Tabs | Easy | CDP activateTarget call |
-| 34 | - | `proxyCloseTab` | Close Chrome Tab | Proxy Tabs | Easy | CDP closeTarget call |
-| 35 | - | `proxyReloadTab` | Reload Chrome Tab | Proxy Tabs | Easy | CDP Page.reload call |
-| 36 | - | `proxyGoBack` | Go Back in Chrome | Proxy Tabs | Easy | CDP history navigation |
-| 37 | - | `proxyGoForward` | Go Forward in Chrome | Proxy Tabs | Easy | CDP history navigation |
+| 24 | ✅ | `proxyList` | List Proxies | Proxy | Very Easy | Wraps ProxyMgr, lists running instances |
+| 25 | ✅ | `proxyStart` | Start Proxy | Proxy | Easy | Wraps ProxyMgr.GetInstance, returns proxy info |
+| 26 | ✅ | `proxyStop` | Stop Proxy | Proxy | Easy | Wraps ProxyMgr.StopProxy / StopAllProxies |
+| 27 | ✅ | `proxyScreenshot` | Take Screenshot | Proxy | Easy | Wraps ProxyMgr.TakeScreenshot, returns base64 |
+| 28 | ✅ | `proxyClick` | Click Element | Proxy | Easy | Wraps ProxyMgr.ClickElement |
+| 29 | ✅ | `proxyElements` | Get Clickable Elements | Proxy | Easy | Wraps ProxyMgr.GetElements |
+| 30 | ✅ | `proxyListTabs` | List Chrome Tabs | Proxy Tabs | Easy | Wraps ChromeRemote.ListTabs |
+| 31 | ✅ | `proxyOpenTab` | Open Chrome Tab | Proxy Tabs | Easy | Wraps ChromeRemote.OpenTab |
+| 32 | ✅ | `proxyNavigateTab` | Navigate Chrome Tab | Proxy Tabs | Easy | Wraps ChromeRemote.Navigate |
+| 33 | ✅ | `proxyActivateTab` | Activate Chrome Tab | Proxy Tabs | Easy | Wraps ChromeRemote.ActivateTab |
+| 34 | ✅ | `proxyCloseTab` | Close Chrome Tab | Proxy Tabs | Easy | Wraps ChromeRemote.CloseTab |
+| 35 | ✅ | `proxyReloadTab` | Reload Chrome Tab | Proxy Tabs | Easy | Wraps ChromeRemote.ReloadTab |
+| 36 | ✅ | `proxyGoBack` | Go Back in Chrome | Proxy Tabs | Easy | Wraps ChromeRemote.GoBack |
+| 37 | ✅ | `proxyGoForward` | Go Forward in Chrome | Proxy Tabs | Easy | Wraps ChromeRemote.GoForward |
