@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - **Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination.
+- **[IMP][PERFORMANCE] Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination. 
 - **Proxy timeouts increased to 10 minutes** — Prevents intercepted request connection failures when requests are held for manual review (`rawproxy` config, MITM, and proxy server timeouts all updated).
 - **Stale WebSocket cleanup on session close** — All connected WebSocket clients are now closed when a terminal session is closed, preventing hanging goroutines.
 - **Scrollback buffer memory compaction** — Buffer uses in-place `copy()` to prevent unbounded underlying array growth.
