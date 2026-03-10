@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-MAR] - v0.26.5 - Dev UI, Xterm Improvements & Proxy Timeout Fix
+
+### Added
+
+- **Dev UI (SvelteKit testing interface)** — Full SvelteKit app (`grx/dev`) for interactive API testing and development.
+- **Xterm scrollback replay** — Reconnecting WebSocket clients receive up to 256KB of buffered terminal output, restoring previous output on page reload.
+- **Multi-client terminal sessions** — Multiple WebSocket clients can view the same terminal session concurrently (up to 10 per session).
+- **Persistent PTY reader** — Single goroutine per session reads PTY output and broadcasts to all connected clients, replacing per-connection readers.
+- **Electron build script updated** — Updated `cmd/electron/build.sh` and `package.json`.
+
+### Fixed
+
+- **[IMP][PERFORMANCE] Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination. 
+- **Proxy timeouts increased to 10 minutes** — Prevents intercepted request connection failures when requests are held for manual review (`rawproxy` config, MITM, and proxy server timeouts all updated).
+- **Stale WebSocket cleanup on session close** — All connected WebSocket clients are now closed when a terminal session is closed, preventing hanging goroutines.
+- **Scrollback buffer memory compaction** — Buffer uses in-place `copy()` to prevent unbounded underlying array growth.
+- **Client limit per session** — Capped at 10 concurrent WebSocket connections per terminal session to prevent resource exhaustion.
+
+---
+
 ## [2026-MAR] - v0.26.4 - v2026.3.6
 
 ### Added
