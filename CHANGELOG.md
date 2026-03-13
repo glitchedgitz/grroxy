@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2026-MAR] - v0.27.1 - MCP Fixes, Proxy Endpoints & HTTP/2 Parsing
+
+### Added
+
+- **Proxy HTTP endpoints** — `/api/proxy/typetext`, `/api/proxy/waitforselector`, `/api/proxy/evaluate` for browser automation via API.
+- **MCP tools** — `listHosts`, `getHostInfo`, `getNoteForHost`, `setNoteForHost`, `modifyHostLabels`, `modifyHostNotes`, `interceptToggle`, `interceptPrintRowsInDetails`, `interceptGetRawRequestAndResponse`, `interceptAction`, `proxyList`, `proxyStart`, `proxyStop`, `proxyScreenshot`, `proxyClick`, `proxyElements`, `proxyType`, `proxyEval`, `proxyWaitForSelector`, `proxyListTabs`, `proxyOpenTab`, `proxyNavigateTab`, `proxyActivateTab`, `proxyCloseTab`, `proxyReloadTab`, `proxyGoBack`, `proxyGoForward`.
+- **Frontend: AI tools** — `proxyTypeText`, `proxyWaitForSelector`, `proxyEvaluate` tool definitions and handlers in AI tools panel.
+- **Frontend: backend API methods** — `proxyTypeText`, `proxyWaitForSelector`, `proxyEvaluate` in `backend_app.ts`.
+- **Frontend: MCP tools sorted alphabetically** in HudTerminal.
+- **Frontend: CWD File Explorer** — VSCode-style file/folder explorer for browsing, opening, and previewing files from the current working directory.
+- **File watcher** — `fsnotify`-based file watcher for CWD explorer live updates.
+- **Chrome `GetElements` improved** — Added input/textarea/select to interactive element selectors; unique CSS selector paths using `nth-of-type`.
+
+### Changed
+
+- **`proxyStart` MCP tool** — Removed `browser` and `http` options; hardcoded to Chrome with auto-assigned HTTP port.
+
+### Fixed
+
+- **MCP `interceptToggle` not intercepting** — `dao.SaveRecord()` doesn't trigger `OnRecordAfterUpdateRequest` hooks; now sets `inst.Proxy.Intercept` directly in memory.
+- **Edited request parsing: `HTTP/2` rejected** — `http.ReadRequest` requires `major.minor` format; normalizes `HTTP/2` → `HTTP/2.0`.
+- **Edited request parsing: unexpected EOF** — Detects linebreak style (`\r\n` vs `\n`) and ensures request ends with double linebreak.
+
+---
+
 ## [2026-MAR] - v0.27.0 - MCP (Model Context Protocol) Support
 
 ### Added

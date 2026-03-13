@@ -39,3 +39,10 @@
 | 35 | ✅ | `proxyReloadTab` | Reload Chrome Tab | Proxy Tabs | Easy | Wraps ChromeRemote.ReloadTab |
 | 36 | ✅ | `proxyGoBack` | Go Back in Chrome | Proxy Tabs | Easy | Wraps ChromeRemote.GoBack |
 | 37 | ✅ | `proxyGoForward` | Go Forward in Chrome | Proxy Tabs | Easy | Wraps ChromeRemote.GoForward |
+| 38 | ✅ | `interceptToggle` | Toggle Intercept | Intercept | Easy | Enable/disable request/response interception on a proxy, auto-forwards pending when disabled |
+| 39 | ✅ | `interceptPrintRowsInDetails` | List Intercepted Rows | Intercept | Easy | List intercepted requests/responses with full metadata (host, port, method, path, status, headers) |
+| 40 | ✅ | `interceptGetRawRequestAndResponse` | Get Raw Intercept | Intercept | Easy | Get raw HTTP request/response strings for a specific intercepted record |
+| 41 | ✅ | `interceptAction` | Intercept Action | Intercept | Medium | Forward (optionally with edits) or drop a pending intercept |
+| 42 | ✅ | `proxyType` | Type in Browser | Proxy | Easy | Type text into form fields, clicks to focus, optionally clears, dispatches real key events |
+| 43 | ✅ | `proxyEval` | Evaluate JS | Proxy | Medium | Execute arbitrary JavaScript in page context and return result |
+| 44 | ✅ | `proxyWaitForSelector` | Wait for Selector | Proxy | Easy | Wait for a CSS selector to become visible, useful for SPA transitions |

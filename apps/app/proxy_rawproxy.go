@@ -621,7 +621,21 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 
 			// Convert string back to request
 			req.Body.Close()
-			requestNew, err := http.ReadRequest(bufio.NewReader(strings.NewReader(updatedString)))
+
+			// Detect line break style
+			lineBreak := "\n"
+			if strings.Contains(updatedString, "\r\n") {
+				lineBreak = "\r\n"
+			}
+
+			// Normalize "HTTP/2" to "HTTP/2.0" since http.ReadRequest requires major.minor format
+			normalizedString := strings.Replace(updatedString, " HTTP/2"+lineBreak, " HTTP/2.0"+lineBreak, 1)
+
+			// Ensure request ends with double line break (required by http.ReadRequest)
+			if !strings.HasSuffix(normalizedString, lineBreak+lineBreak) {
+				normalizedString += lineBreak + lineBreak
+			}
+			requestNew, err := http.ReadRequest(bufio.NewReader(strings.NewReader(normalizedString)))
 			if err != nil {
 				log.Printf("[RawProxy][Intercept][%s][ERROR] Failed to parse edited request: %v\n", id, err)
 				return req, fmt.Errorf("failed to parse edited request: %w", err)

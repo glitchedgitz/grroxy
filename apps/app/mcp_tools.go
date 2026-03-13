@@ -110,9 +110,7 @@ type HostNoteAction struct {
 // --- Proxy arg structs ---
 
 type ProxyStartArgs struct {
-	HTTP    string `json:"http,omitempty" jsonschema_description:"Listen address (e.g. 127.0.0.1:8080). Auto-assigned if empty when browser is specified"`
-	Browser string `json:"browser,omitempty" jsonschema_description:"Browser to launch (e.g. chrome, firefox). Leave empty for proxy-only mode"`
-	Name    string `json:"name,omitempty" jsonschema_description:"Optional label for the proxy instance"`
+	Name string `json:"name,omitempty" jsonschema_description:"Optional label for the proxy instance"`
 }
 
 type ProxyStopArgs struct {
@@ -176,6 +174,52 @@ type ProxyGoBackArgs struct {
 type ProxyGoForwardArgs struct {
 	ProxyID  string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	TargetID string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab. If empty, operates on the active tab"`
+}
+
+// --- Intercept arg structs ---
+
+type InterceptToggleArgs struct {
+	ID     string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID to enable/disable interception on"`
+	Enable bool   `json:"enable" jsonschema:"required" jsonschema_description:"true to enable interception, false to disable (forwards all pending)"`
+}
+
+type InterceptActionArgs struct {
+	ID           string `json:"id" jsonschema:"required" jsonschema_description:"The intercept record ID (from interceptList)"`
+	Action       string `json:"action" jsonschema:"required" jsonschema_description:"Action to take: forward (pass through) or drop (block)"`
+	IsReqEdited  bool   `json:"isReqEdited,omitempty" jsonschema_description:"If true, the request has been edited"`
+	IsRespEdited bool   `json:"isRespEdited,omitempty" jsonschema_description:"If true, the response has been edited"`
+	ReqEdited    string `json:"reqEdited,omitempty" jsonschema_description:"Raw edited HTTP request string (only if isReqEdited is true)"`
+	RespEdited   string `json:"respEdited,omitempty" jsonschema_description:"Raw edited HTTP response string (only if isRespEdited is true)"`
+}
+
+type InterceptReadArgs struct {
+	ProxyID string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID to read intercepted rows from"`
+}
+
+type InterceptGetRawArgs struct {
+	ID string `json:"id" jsonschema:"required" jsonschema_description:"The intercept record ID (from interceptPrintRowsInDetails)"`
+}
+
+// --- Browser tool arg structs ---
+
+type ProxyTypeArgs struct {
+	ID         string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	Selector   string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector for the input element to type into"`
+	Text       string `json:"text" jsonschema:"required" jsonschema_description:"The text to type into the element"`
+	ClearFirst bool   `json:"clearFirst,omitempty" jsonschema_description:"If true, clears the existing value before typing (default: false)"`
+	TimeoutMs  int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
+}
+
+type ProxyEvalArgs struct {
+	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	Js        string `json:"js" jsonschema:"required" jsonschema_description:"JavaScript expression to evaluate in the page context. The result is returned as JSON."`
+	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
+}
+
+type ProxyWaitForSelectorArgs struct {
+	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector to wait for"`
+	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 30000"`
 }
 
 // ---------------------------------------------------------------------------
@@ -414,7 +458,12 @@ func (backend *Backend) listHostsHandler(ctx context.Context, request mcp.CallTo
 	}
 
 	// Get total count
-	total, _ := dao.FindRecordsByFilter("_hosts", filter, "", 0, 0)
+	var total []*models.Record
+	if filter == "" {
+		total, _ = dao.FindRecordsByExpr("_hosts")
+	} else {
+		total, _ = dao.FindRecordsByFilter("_hosts", filter, "", 0, 0)
+	}
 
 	result := map[string]any{
 		"page":       args.Page,
@@ -695,6 +744,7 @@ func (backend *Backend) proxyListHandler(ctx context.Context, request mcp.CallTo
 				"label":      inst.Label,
 				"browser":    inst.Browser,
 				"browserPid": browserPid,
+				"intercept":  inst.Proxy.Intercept,
 			})
 		}
 	}
@@ -713,8 +763,7 @@ func (backend *Backend) proxyStartHandler(ctx context.Context, request mcp.CallT
 	}
 
 	body := &ProxyBody{
-		HTTP:    args.HTTP,
-		Browser: args.Browser,
+		Browser: "chrome",
 		Name:    args.Name,
 	}
 
@@ -987,6 +1036,215 @@ func (backend *Backend) proxyGoForwardHandler(ctx context.Context, request mcp.C
 	return mcpJSONResult(map[string]any{
 		"ok":       true,
 		"targetId": args.TargetID,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Intercept tool handlers
+// ---------------------------------------------------------------------------
+
+func (backend *Backend) interceptToggleHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args InterceptToggleArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	dao := backend.App.Dao()
+	proxyRecord, err := dao.FindRecordById("_proxies", args.ID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("proxy not found: %s", args.ID)), nil
+	}
+
+	proxyRecord.Set("intercept", args.Enable)
+	if err := dao.SaveRecord(proxyRecord); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to update intercept setting: %v", err)), nil
+	}
+
+	// dao.SaveRecord doesn't trigger OnRecordAfterUpdateRequest hooks,
+	// so update the in-memory proxy state directly
+	ProxyMgr.mu.RLock()
+	inst := ProxyMgr.instances[args.ID]
+	ProxyMgr.mu.RUnlock()
+
+	if inst != nil && inst.Proxy != nil {
+		inst.Proxy.Intercept = args.Enable
+		if !args.Enable {
+			go backend.forwardProxyIntercepts(args.ID)
+		}
+	}
+
+	action := "enabled"
+	if !args.Enable {
+		action = "disabled"
+	}
+
+	return mcpJSONResult(map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Interception %s for proxy %s", action, args.ID),
+		"proxyId": args.ID,
+		"enabled": args.Enable,
+	})
+}
+
+func (backend *Backend) interceptActionHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args InterceptActionArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.Action != "forward" && args.Action != "drop" {
+		return mcp.NewToolResultError("action must be 'forward' or 'drop'"), nil
+	}
+	if args.ID == "" {
+		return mcp.NewToolResultError("intercept ID is required"), nil
+	}
+
+	update := InterceptUpdate{
+		Action:        args.Action,
+		IsReqEdited:   args.IsReqEdited,
+		IsRespEdited:  args.IsRespEdited,
+		ReqEditedRaw:  args.ReqEdited,
+		RespEditedRaw: args.RespEdited,
+	}
+	NotifyInterceptUpdate(args.ID, update)
+
+	return mcpJSONResult(map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Intercept %s: %s", args.ID, args.Action),
+		"id":      args.ID,
+		"action":  args.Action,
+	})
+}
+
+func (backend *Backend) interceptReadHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args InterceptReadArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	dao := backend.App.Dao()
+
+	generatedBy := fmt.Sprintf("proxy/%s", args.ProxyID)
+	records, err := dao.FindRecordsByFilter("_intercept", "generated_by ~ {:gb}", "-created", 100, 0, dbx.Params{"gb": generatedBy})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read intercepted rows: %v", err)), nil
+	}
+
+	rows := make([]map[string]any, 0, len(records))
+	for _, rec := range records {
+		rows = append(rows, map[string]any{
+			"id":       rec.GetString("id"),
+			"host":     rec.GetString("host"),
+			"port":     rec.GetString("port"),
+			"index":    rec.GetFloat("index"),
+			"has_resp": rec.GetBool("has_resp"),
+			"http":     rec.GetString("http"),
+			"req":      rec.Get("req_json"),
+			"resp":     rec.Get("resp_json"),
+		})
+	}
+
+	return mcpJSONResult(map[string]any{
+		"proxyId": args.ProxyID,
+		"rows":    rows,
+		"count":   len(rows),
+	})
+}
+
+func (backend *Backend) interceptGetRawHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args InterceptGetRawArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	dao := backend.App.Dao()
+
+	result := map[string]any{"id": args.ID}
+
+	reqRecord, _ := dao.FindRecordById("_req", args.ID)
+	if reqRecord != nil {
+		result["raw_request"] = reqRecord.GetString("raw")
+	}
+
+	respRecord, _ := dao.FindRecordById("_resp", args.ID)
+	if respRecord != nil {
+		result["raw_response"] = respRecord.GetString("raw")
+	}
+
+	if reqRecord == nil && respRecord == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("no request/response found for ID: %s", args.ID)), nil
+	}
+
+	return mcpJSONResult(result)
+}
+
+// ---------------------------------------------------------------------------
+// Browser tool handlers
+// ---------------------------------------------------------------------------
+
+func (backend *Backend) proxyTypeHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxyTypeArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.Selector == "" {
+		return mcp.NewToolResultError("selector is required"), nil
+	}
+	if args.Text == "" {
+		return mcp.NewToolResultError("text is required"), nil
+	}
+
+	if err := ProxyMgr.TypeText(args.ID, args.Selector, args.Text, args.ClearFirst, args.TimeoutMs); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(map[string]any{
+		"success":  true,
+		"message":  "Text typed successfully",
+		"selector": args.Selector,
+	})
+}
+
+func (backend *Backend) proxyEvalHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxyEvalArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.Js == "" {
+		return mcp.NewToolResultError("js expression is required"), nil
+	}
+
+	result, err := ProxyMgr.Evaluate(args.ID, args.Js, args.TimeoutMs)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(map[string]any{
+		"success": true,
+		"result":  result,
+	})
+}
+
+func (backend *Backend) proxyWaitForSelectorHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxyWaitForSelectorArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.Selector == "" {
+		return mcp.NewToolResultError("selector is required"), nil
+	}
+
+	if err := ProxyMgr.WaitForSelector(args.ID, args.Selector, args.TimeoutMs); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(map[string]any{
+		"success":  true,
+		"message":  fmt.Sprintf("Selector %s found", args.Selector),
+		"selector": args.Selector,
 	})
 }
 

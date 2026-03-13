@@ -491,6 +491,37 @@ func (pm *ProxyManager) GetElements(proxyID string, url string) ([]browser.Eleme
 	return elements, nil
 }
 
+// TypeText types text into an element on the page using the Chrome browser attached to a proxy instance
+func (pm *ProxyManager) TypeText(proxyID string, selector string, text string, clearFirst bool, timeoutMs int) error {
+	chrome, err := pm.GetChromeRemote(proxyID)
+	if err != nil {
+		return err
+	}
+	return chrome.TypeText("", selector, text, clearFirst, timeoutMs)
+}
+
+// WaitForSelector waits for a CSS selector to become visible on the page
+func (pm *ProxyManager) WaitForSelector(proxyID string, selector string, timeoutMs int) error {
+	chrome, err := pm.GetChromeRemote(proxyID)
+	if err != nil {
+		return err
+	}
+	return chrome.WaitForSelector("", selector, timeoutMs)
+}
+
+// Evaluate runs arbitrary JavaScript in the page context
+func (pm *ProxyManager) Evaluate(proxyID string, jsExpr string, timeoutMs int) (any, error) {
+	chrome, err := pm.GetChromeRemote(proxyID)
+	if err != nil {
+		return nil, err
+	}
+	var result any
+	if err := chrome.Evaluate("", jsExpr, &result, timeoutMs); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // DEPRECATED: Backward compatibility - returns first proxy or nil
 var PROXY *RawProxyWrapper
 
@@ -1350,6 +1381,150 @@ func (backend *Backend) NavigateChromeTab(e *core.ServeEvent) error {
 				"status":       result.Status,
 				"navigationId": result.NavigationID,
 				"timestamp":    time.Now().Format(time.RFC3339),
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+func (backend *Backend) TypeTextProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/typetext",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type TypeTextBody struct {
+				ID         string `json:"id"`
+				Selector   string `json:"selector"`
+				Text       string `json:"text"`
+				ClearFirst bool   `json:"clearFirst,omitempty"`
+				TimeoutMs  int    `json:"timeoutMs,omitempty"`
+			}
+
+			var body TypeTextBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+			if body.Selector == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
+			}
+
+			if err := ProxyMgr.TypeText(body.ID, body.Selector, body.Text, body.ClearFirst, body.TimeoutMs); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":  true,
+				"selector": body.Selector,
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+func (backend *Backend) WaitForSelectorProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/waitforselector",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type WaitForSelectorBody struct {
+				ID        string `json:"id"`
+				Selector  string `json:"selector"`
+				TimeoutMs int    `json:"timeoutMs,omitempty"`
+			}
+
+			var body WaitForSelectorBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+			if body.Selector == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
+			}
+
+			if err := ProxyMgr.WaitForSelector(body.ID, body.Selector, body.TimeoutMs); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":  true,
+				"selector": body.Selector,
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+func (backend *Backend) EvaluateProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/evaluate",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type EvaluateBody struct {
+				ID        string `json:"id"`
+				JS        string `json:"js"`
+				TimeoutMs int    `json:"timeoutMs,omitempty"`
+			}
+
+			var body EvaluateBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+			if body.JS == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "JS expression is required"})
+			}
+
+			result, err := ProxyMgr.Evaluate(body.ID, body.JS, body.TimeoutMs)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success": true,
+				"result":  result,
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{

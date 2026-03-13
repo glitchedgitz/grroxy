@@ -132,6 +132,40 @@ func (backend *Backend) mcpInit() {
 		backend.sendRequestHandler,
 	)
 
+	// --- Intercept tools ---
+
+	s.AddTool(
+		mcp.NewTool("interceptToggle",
+			mcp.WithDescription("Enable or disable request/response interception on a proxy. When disabled, all pending intercepts are automatically forwarded"),
+			mcp.WithInputSchema[InterceptToggleArgs](),
+		),
+		backend.interceptToggleHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("interceptPrintRowsInDetails",
+			mcp.WithDescription("List intercepted requests/responses for a proxy with full metadata (host, port, method, path, status, headers)"),
+			mcp.WithInputSchema[InterceptReadArgs](),
+		),
+		backend.interceptReadHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("interceptGetRawRequestAndResponse",
+			mcp.WithDescription("Get the raw HTTP request and response strings for a specific intercepted record, for reading or editing before forwarding"),
+			mcp.WithInputSchema[InterceptGetRawArgs](),
+		),
+		backend.interceptGetRawHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("interceptAction",
+			mcp.WithDescription("Take action on a pending intercept: forward (pass through, optionally with edits) or drop (block the request/response)"),
+			mcp.WithInputSchema[InterceptActionArgs](),
+		),
+		backend.interceptActionHandler,
+	)
+
 	// --- Proxy tools ---
 
 	s.AddTool(
@@ -175,10 +209,34 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyElements",
-			mcp.WithDescription("Extract information about all clickable elements on the page (buttons, links, inputs) to help identify what can be clicked"),
+			mcp.WithDescription("Extract information about all interactive elements on the page (buttons, links, inputs, textareas, selects). Returns unique CSS selectors for each element using nth-of-type paths"),
 			mcp.WithInputSchema[ProxyElementsArgs](),
 		),
 		backend.proxyElementsHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyType",
+			mcp.WithDescription("Type text into a form field (input, textarea) on the page. Clicks to focus, optionally clears existing value, then dispatches real key events"),
+			mcp.WithInputSchema[ProxyTypeArgs](),
+		),
+		backend.proxyTypeHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyEval",
+			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools"),
+			mcp.WithInputSchema[ProxyEvalArgs](),
+		),
+		backend.proxyEvalHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyWaitForSelector",
+			mcp.WithDescription("Wait for a CSS selector to become visible on the page. Useful for SPA transitions where waitForNavigation doesn't work"),
+			mcp.WithInputSchema[ProxyWaitForSelectorArgs](),
+		),
+		backend.proxyWaitForSelectorHandler,
 	)
 
 	// --- Chrome Tab tools ---
