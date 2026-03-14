@@ -75,6 +75,11 @@ func (backend *Backend) SetupInterceptHooks() error {
 			log.Printf("[InterceptManager] Intercept disabled for proxy %s - forwarding pending requests", proxyDBID)
 			inst.Proxy.Intercept = false
 
+			// Reset the per-proxy intercept counter to 0 immediately
+			proxyInterceptKey := fmt.Sprintf("proxy/%s/intercept", proxyDBID)
+			backend.CounterManager.Set(proxyInterceptKey, "_intercept", "", 0)
+			go backend.CounterManager.SyncOne(proxyInterceptKey)
+
 			// Forward all pending intercepts for this proxy
 			go backend.forwardProxyIntercepts(proxyDBID)
 		} else {
@@ -159,19 +164,8 @@ func (backend *Backend) forwardProxyIntercepts(proxyDBID string) {
 			continue
 		}
 
-		// Get the data record to check generated_by
-		dataID := interceptRecord.GetString("req")
-		if dataID == "" {
-			continue
-		}
-
-		dataRecord, err := dao.FindRecordById("_data", dataID)
-		if err != nil {
-			log.Printf("[InterceptManager][WARN] Failed to find data record %s: %v", dataID, err)
-			continue
-		}
-
-		recordGeneratedBy := dataRecord.GetString("generated_by")
+		// generated_by is stored directly on the intercept record
+		recordGeneratedBy := interceptRecord.GetString("generated_by")
 		if recordGeneratedBy == expectedGeneratedBy {
 			select {
 			case ch <- forwardUpdate:
