@@ -155,6 +155,9 @@ func serve(projectPath string) {
 	// Modify
 	API.App.OnBeforeServe().Add(API.ModifyRequest)
 
+	// Parse
+	API.App.OnBeforeServe().Add(API.ParseRaw)
+
 	// Extractor
 	API.App.OnBeforeServe().Add(API.ExtractDataEndpoint)
 
