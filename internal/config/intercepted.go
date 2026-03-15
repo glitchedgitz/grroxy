@@ -12,9 +12,7 @@ const defaultInterceptedHTML = `<!DOCTYPE html>
     <p
         class="dots"
         style="font-size: 14px; font-weight: 600; color: #27AE60; font-family: ocr-a-std, monospace;"
-    >
-        grroxy is listening
-    </p>
+    >grroxy is listening</p>
 </div>
 
 <style>
