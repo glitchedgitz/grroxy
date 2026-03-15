@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+rm -r bin
+rm -r dist
+
 # Full build: Go binaries + frontend + Electron app
 #
 # Usage: ./build.sh              (current platform)

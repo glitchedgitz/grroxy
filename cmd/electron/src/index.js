@@ -91,6 +91,7 @@ function createWindow(grroxyURL) {
         height: 720,
         frame: !isWindows,
         autoHideMenuBar: true,
+        backgroundColor: '#070708',
 
         icon: iconPath,
 
@@ -102,7 +103,7 @@ function createWindow(grroxyURL) {
             symbolColor: '#FFFFFF',
         },
 
-        vibrancy: isWindows ? undefined : 'under-window',
+        // vibrancy: isWindows ? undefined : 'under-window',
 
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
