@@ -35,8 +35,6 @@ Includes `v0.28.0` and `v0.27.1`
 - **Frontend: Title bar tooltips** — Tooltips in title bar were positioned at top-left corner.
 - **Intercept counter not updating on toggle off** — Per-proxy intercept counter now resets to 0 immediately when intercept is disabled.
 
----
-
 ## [2026-MAR] - v0.27.1 - MCP Fixes, Proxy Endpoints & HTTP/2 Parsing
 
 ### Added
