@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-rm -r bin
-rm -r dist
+rm -rf bin
+rm -rf dist
 
 # Full build: Go binaries + frontend + Electron app
 #
@@ -22,6 +22,60 @@ ALL_PLATFORMS=(
     "linux:arm64"
     "windows:amd64"
 )
+
+# --- Signing config (macOS only) ---
+# Requires:
+#   - Certificate "Developer ID Application" installed in Keychain
+#   - Notarization credentials stored via:
+#     xcrun notarytool store-credentials "grroxy-notarize" ...
+
+CODESIGN_IDENTITY="Developer ID Application: Gitesh Sharma (96Q778FZG7)"
+NOTARIZE_PROFILE="grroxy-notarize"
+
+SIGN_ENABLED=false
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$CODESIGN_IDENTITY"; then
+    SIGN_ENABLED=true
+    echo "Code signing enabled: ${CODESIGN_IDENTITY}"
+else
+    echo "Warning: Signing certificate not found, skipping signing/notarization"
+fi
+
+codesign_binary() {
+    local BINARY_PATH="$1"
+    if [ "$SIGN_ENABLED" = true ] && file "$BINARY_PATH" | grep -q "Mach-O"; then
+        codesign --force --options runtime --timestamp \
+            --sign "$CODESIGN_IDENTITY" "$BINARY_PATH"
+        echo "    Signed: $(basename "$BINARY_PATH")"
+    fi
+}
+
+notarize_dmg() {
+    local DMG_PATH="$1"
+    if [ "$SIGN_ENABLED" != true ]; then
+        echo "  Skipping notarization (signing not configured)"
+        return
+    fi
+
+    echo "  Submitting for notarization: $(basename "$DMG_PATH")"
+    xcrun notarytool submit "$DMG_PATH" \
+        --keychain-profile "$NOTARIZE_PROFILE" \
+        --wait
+
+    echo "  Stapling: $(basename "$DMG_PATH")"
+    xcrun stapler staple "$DMG_PATH"
+    echo "  Done: $(basename "$DMG_PATH")"
+}
+
+notarize_zip() {
+    local ZIP_PATH="$1"
+    if [ "$SIGN_ENABLED" != true ]; then return; fi
+
+    echo "  Submitting for notarization: $(basename "$ZIP_PATH")"
+    xcrun notarytool submit "$ZIP_PATH" \
+        --keychain-profile "$NOTARIZE_PROFILE" \
+        --wait
+    echo "  Done: $(basename "$ZIP_PATH")"
+}
 
 build_go_platform() {
     local TARGET_OS="$1"
@@ -61,6 +115,9 @@ build_go_platform() {
             -o "${OUT_DIR}/${binary}${EXT}" \
             "$PKG"
         echo " OK"
+
+        # Sign macOS binaries immediately after build
+        codesign_binary "${OUT_DIR}/${binary}${EXT}"
     done
 
     echo
@@ -90,6 +147,12 @@ npm install
 # --- Step 3: Package Electron app ---
 
 echo "=== Step 3: Package Electron app ==="
+
+# electron-builder picks up these env vars for signing
+if [ "$SIGN_ENABLED" = true ]; then
+    export CSC_NAME="Gitesh Sharma (96Q778FZG7)"
+fi
+
 if [ "${1:-}" = "all" ]; then
     npx electron-builder --mac --x64 --arm64
     npx electron-builder --linux --x64 --arm64
@@ -112,6 +175,26 @@ for f in "${SCRIPT_DIR}"/dist/grroxy-mac-x64-*; do
     newname="${f/mac-x64-/mac-x64-intelchip-}"
     echo "  Renaming $(basename "$f") -> $(basename "$newname")"
     mv "$f" "$newname"
+done
+
+# --- Step 5: Notarize macOS artifacts ---
+
+echo "=== Step 5: Notarize macOS artifacts ==="
+NOTARIZE_PIDS=()
+for f in "${SCRIPT_DIR}"/dist/*.dmg; do
+    [ -e "$f" ] || continue
+    notarize_dmg "$f" &
+    NOTARIZE_PIDS+=($!)
+done
+for f in "${SCRIPT_DIR}"/dist/*-mac-*.zip; do
+    [ -e "$f" ] || continue
+    notarize_zip "$f" &
+    NOTARIZE_PIDS+=($!)
+done
+
+# Wait for all notarizations to finish
+for pid in "${NOTARIZE_PIDS[@]}"; do
+    wait "$pid" || { echo "Notarization failed (PID $pid)"; exit 1; }
 done
 
 echo
