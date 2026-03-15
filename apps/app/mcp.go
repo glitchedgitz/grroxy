@@ -42,8 +42,8 @@ func (backend *Backend) mcpInit() {
 	// --- Utility tools ---
 
 	s.AddTool(
-		mcp.NewTool("version",
-			mcp.WithDescription("Get grroxy version information (backend, frontend, release)"),
+		mcp.NewTool("grroxyStatus",
+			mcp.WithDescription("Check if the grroxy is active"),
 		),
 		backend.versionHandler,
 	)
@@ -52,7 +52,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("getRequestResponseFromID",
-			mcp.WithDescription("Get the full request and response for a given record ID from the proxy history"),
+			mcp.WithDescription("Get the active request and response for active ID"),
 			mcp.WithInputSchema[GetRequestResponseArgs](),
 		),
 		backend.getRequestResponseFromIDHandler,
@@ -60,7 +60,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("hostPrintSitemap",
-			mcp.WithDescription("Print the sitemap tree for a given host showing all discovered paths and endpoints"),
+			mcp.WithDescription("Get the sitemap for a host"),
 			mcp.WithInputSchema[HostPrintSitemapArgs](),
 		),
 		backend.hostPrintSitemapHandler,
@@ -68,20 +68,241 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("hostPrintRowsInDetails",
-			mcp.WithDescription("Print detailed rows (method, URL, status, content-type, length) for a given host from the proxy history"),
+			mcp.WithDescription("Get the table for a host"),
 			mcp.WithInputSchema[HostPrintRowsArgs](),
 		),
 		backend.hostPrintRowsInDetailsHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("listHosts",
+			mcp.WithDescription("List all hosts with their technologies (as names) and labels (as names)"),
+			mcp.WithInputSchema[ListHostsArgs](),
+		),
+		backend.listHostsHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("getHostInfo",
+			mcp.WithDescription("Get detailed info for a specific host by ID, including technologies (as names), labels (as names), and notes"),
+			mcp.WithInputSchema[GetHostInfoArgs](),
+		),
+		backend.getHostInfoHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("getNoteForHost",
+			mcp.WithDescription("Get the note for a host"),
+			mcp.WithInputSchema[GetNoteForHostArgs](),
+		),
+		backend.getNoteForHostHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("setNoteForHost",
+			mcp.WithDescription("Set the note for a host"),
+			mcp.WithInputSchema[SetNoteForHostArgs](),
+		),
+		backend.setNoteForHostHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("modifyHostLabels",
+			mcp.WithDescription("Add or remove labels from a host"),
+			mcp.WithInputSchema[ModifyHostLabelsArgs](),
+		),
+		backend.modifyHostLabelsHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("modifyHostNotes",
+			mcp.WithDescription("Add, update, or remove notes for a host"),
+			mcp.WithInputSchema[ModifyHostNotesArgs](),
+		),
+		backend.modifyHostNotesHandler,
 	)
 
 	// --- Action tools ---
 
 	s.AddTool(
 		mcp.NewTool("sendRequest",
-			mcp.WithDescription("Send a raw HTTP request to a host and return the response"),
+			mcp.WithDescription("Send a request via http. Mind the terminating the request with \\r\\n\\r\\n or \\n\\n if there are no body, mind the content length of the body, it should exactly match"),
 			mcp.WithInputSchema[SendRequestArgs](),
 		),
 		backend.sendRequestHandler,
+	)
+
+	// --- Intercept tools ---
+
+	s.AddTool(
+		mcp.NewTool("interceptToggle",
+			mcp.WithDescription("Enable or disable request/response interception on a proxy. When disabled, all pending intercepts are automatically forwarded"),
+			mcp.WithInputSchema[InterceptToggleArgs](),
+		),
+		backend.interceptToggleHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("interceptPrintRowsInDetails",
+			mcp.WithDescription("List intercepted requests/responses for a proxy with full metadata (host, port, method, path, status, headers)"),
+			mcp.WithInputSchema[InterceptReadArgs](),
+		),
+		backend.interceptReadHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("interceptGetRawRequestAndResponse",
+			mcp.WithDescription("Get the raw HTTP request and response strings for a specific intercepted record, for reading or editing before forwarding"),
+			mcp.WithInputSchema[InterceptGetRawArgs](),
+		),
+		backend.interceptGetRawHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("interceptAction",
+			mcp.WithDescription("Take action on a pending intercept: forward (pass through, optionally with edits) or drop (block the request/response)"),
+			mcp.WithInputSchema[InterceptActionArgs](),
+		),
+		backend.interceptActionHandler,
+	)
+
+	// --- Proxy tools ---
+
+	s.AddTool(
+		mcp.NewTool("proxyList",
+			mcp.WithDescription("Get a list of all running proxy instances with their status, browser type, and configuration"),
+		),
+		backend.proxyListHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyStart",
+			mcp.WithDescription("Start a new proxy instance with optional browser attachment (chrome, firefox, or none)"),
+			mcp.WithInputSchema[ProxyStartArgs](),
+		),
+		backend.proxyStartHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyStop",
+			mcp.WithDescription("Stop a running proxy instance by ID, or stop all proxies if no ID is provided"),
+			mcp.WithInputSchema[ProxyStopArgs](),
+		),
+		backend.proxyStopHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyScreenshot",
+			mcp.WithDescription("Capture a screenshot from Chrome browser attached to a proxy instance via Chrome DevTools Protocol, wait after calling the tool"),
+			mcp.WithInputSchema[ProxyScreenshotArgs](),
+		),
+		backend.proxyScreenshotHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyClick",
+			mcp.WithDescription("Click an element on the page using Chrome browser attached to a proxy instance via Chrome DevTools Protocol"),
+			mcp.WithInputSchema[ProxyClickArgs](),
+		),
+		backend.proxyClickHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyElements",
+			mcp.WithDescription("Extract information about all interactive elements on the page (buttons, links, inputs, textareas, selects). Returns unique CSS selectors for each element using nth-of-type paths"),
+			mcp.WithInputSchema[ProxyElementsArgs](),
+		),
+		backend.proxyElementsHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyType",
+			mcp.WithDescription("Type text into a form field (input, textarea) on the page. Clicks to focus, optionally clears existing value, then dispatches real key events"),
+			mcp.WithInputSchema[ProxyTypeArgs](),
+		),
+		backend.proxyTypeHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyEval",
+			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools"),
+			mcp.WithInputSchema[ProxyEvalArgs](),
+		),
+		backend.proxyEvalHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyWaitForSelector",
+			mcp.WithDescription("Wait for a CSS selector to become visible on the page. Useful for SPA transitions where waitForNavigation doesn't work"),
+			mcp.WithInputSchema[ProxyWaitForSelectorArgs](),
+		),
+		backend.proxyWaitForSelectorHandler,
+	)
+
+	// --- Chrome Tab tools ---
+
+	s.AddTool(
+		mcp.NewTool("proxyListTabs",
+			mcp.WithDescription("Lists all open tabs in the Chrome browser attached to a proxy instance"),
+			mcp.WithInputSchema[ProxyListTabsArgs](),
+		),
+		backend.proxyListTabsHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyOpenTab",
+			mcp.WithDescription("Opens a new tab in the Chrome browser attached to a proxy instance"),
+			mcp.WithInputSchema[ProxyOpenTabArgs](),
+		),
+		backend.proxyOpenTabHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyNavigateTab",
+			mcp.WithDescription("Navigates a specific tab (or the active tab) to a URL with configurable wait conditions"),
+			mcp.WithInputSchema[ProxyNavigateTabArgs](),
+		),
+		backend.proxyNavigateTabHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyActivateTab",
+			mcp.WithDescription("Switches focus to a specific tab, making it the active tab in Chrome"),
+			mcp.WithInputSchema[ProxyActivateTabArgs](),
+		),
+		backend.proxyActivateTabHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyCloseTab",
+			mcp.WithDescription("Closes a specific tab in Chrome"),
+			mcp.WithInputSchema[ProxyCloseTabArgs](),
+		),
+		backend.proxyCloseTabHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyReloadTab",
+			mcp.WithDescription("Reloads a specific tab or the active tab, optionally bypassing cache"),
+			mcp.WithInputSchema[ProxyReloadTabArgs](),
+		),
+		backend.proxyReloadTabHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyGoBack",
+			mcp.WithDescription("Navigates back in the browser history for a specific tab or the active tab"),
+			mcp.WithInputSchema[ProxyGoBackArgs](),
+		),
+		backend.proxyGoBackHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyGoForward",
+			mcp.WithDescription("Navigates forward in the browser history for a specific tab or the active tab"),
+			mcp.WithInputSchema[ProxyGoForwardArgs](),
+		),
+		backend.proxyGoForwardHandler,
 	)
 
 	sseServer := mcpserver.NewSSEServer(s,

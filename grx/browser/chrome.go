@@ -17,7 +17,7 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-func launchChrome(proxyAddress string, customCertPath string, profileDir string) (*exec.Cmd, error) {
+func launchChrome(proxyAddress string, customCertPath string, profileDir string, startURL string) (*exec.Cmd, error) {
 	log.Println("[launchChrome] Starting Chrome launch process")
 
 	// Use provided profile directory
@@ -119,7 +119,7 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string)
 		"--enable-fixed-layout",
 		"--noerrdialogs",
 		"--test-type",
-		"grroxy.com",
+		startURL,
 	)
 
 	log.Printf("[launchChrome] Chrome arguments: %v", args)
@@ -134,8 +134,75 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string)
 
 	log.Printf("[launchChrome] Chrome process started successfully")
 	log.Printf("[launchChrome] Chrome profile at: %s", chromeDataDir)
+
+	// Focus the address bar after Chrome finishes loading
+	// go focusAddressBar(chromeDataDir)
+
 	return cmd, nil
 }
+
+// // focusAddressBar waits for Chrome to be ready, then sends Cmd+L / Ctrl+L to focus the omnibox.
+// func focusAddressBar(profileDir string) {
+// 	// Wait for DevToolsActivePort file to appear (Chrome writes it once ready)
+// 	devToolsFile := filepath.Join(profileDir, "DevToolsActivePort")
+// 	var debugURL string
+// 	for i := 0; i < 30; i++ {
+// 		time.Sleep(500 * time.Millisecond)
+// 		url, err := GetChromeDebugURL(profileDir)
+// 		if err == nil {
+// 			debugURL = url
+// 			break
+// 		}
+// 		_ = devToolsFile // suppress unused hint
+// 	}
+// 	if debugURL == "" {
+// 		log.Println("[focusAddressBar] Could not get Chrome debug URL, skipping address bar focus")
+// 		return
+// 	}
+
+// 	allocCtx, allocCancel := chromedp.NewRemoteAllocator(context.Background(), debugURL)
+// 	defer allocCancel()
+
+// 	ctx, cancel := chromedp.NewContext(allocCtx)
+// 	defer cancel()
+
+// 	ctx, timeoutCancel := context.WithTimeout(ctx, 5*time.Second)
+// 	defer timeoutCancel()
+
+// 	// Determine the modifier flag based on OS
+// 	var modifiers input.Modifier = 2 // Ctrl
+// 	if runtime.GOOS == "darwin" {
+// 		modifiers = 4 // Meta (Cmd)
+// 	}
+
+// 	// Send Ctrl+L / Cmd+L via CDP Input.dispatchKeyEvent to focus the address bar
+// 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+// 		// Key down
+// 		if err := input.DispatchKeyEvent(input.KeyDown).
+// 			WithModifiers(modifiers).
+// 			WithKey("l").
+// 			WithCode("KeyL").
+// 			WithWindowsVirtualKeyCode(76).
+// 			WithNativeVirtualKeyCode(76).
+// 			Do(c); err != nil {
+// 			return err
+// 		}
+// 		// Key up
+// 		return input.DispatchKeyEvent(input.KeyUp).
+// 			WithModifiers(modifiers).
+// 			WithKey("l").
+// 			WithCode("KeyL").
+// 			WithWindowsVirtualKeyCode(76).
+// 			WithNativeVirtualKeyCode(76).
+// 			Do(c)
+// 	}))
+// 	if err != nil {
+// 		log.Printf("[focusAddressBar] Failed to send key event: %v", err)
+// 		return
+// 	}
+
+// 	log.Println("[focusAddressBar] Address bar focus sent")
+// }
 
 // GetChromeDebugURL reads the DevTools WebSocket URL from Chrome's profile directory
 // Chrome writes this information to DevToolsActivePort file when launched with --remote-debugging-port
@@ -466,12 +533,43 @@ func (cr *ChromeRemote) GetElements(targetID string, targetURL string) ([]Elemen
 	(function() {
 		const elements = [];
 		const clickableSelectors = [
-			'button', 'a', 'input[type="button"]', 'input[type="submit"]', 
-			'input[type="reset"]', '[role="button"]', '[onclick]'
+			'button', 'a', 'input[type="button"]', 'input[type="submit"]',
+			'input[type="reset"]', '[role="button"]', '[onclick]',
+			'input[type="text"]', 'input[type="password"]', 'input[type="email"]',
+			'input[type="search"]', 'input[type="tel"]', 'input[type="url"]',
+			'input[type="number"]', 'textarea', 'select',
+			'input:not([type])'
 		];
+
+		// Build a unique CSS selector path using nth-of-type from the element to the root
+		function uniqueSelector(el) {
+			if (el.id) return '#' + CSS.escape(el.id);
+			const parts = [];
+			let cur = el;
+			while (cur && cur !== document.body && cur !== document.documentElement) {
+				let seg = cur.tagName.toLowerCase();
+				if (cur.id) {
+					parts.unshift('#' + CSS.escape(cur.id));
+					break;
+				}
+				const parent = cur.parentElement;
+				if (parent) {
+					const siblings = Array.from(parent.children).filter(c => c.tagName === cur.tagName);
+					if (siblings.length > 1) {
+						const idx = siblings.indexOf(cur) + 1;
+						seg += ':nth-of-type(' + idx + ')';
+					}
+				}
+				parts.unshift(seg);
+				cur = parent;
+			}
+			if (parts.length === 0) return el.tagName.toLowerCase();
+			return parts.join(' > ');
+		}
+
 		const seen = new Set();
 		clickableSelectors.forEach(selector => {
-			document.querySelectorAll(selector).forEach((el, index) => {
+			document.querySelectorAll(selector).forEach((el) => {
 				if (seen.has(el)) return;
 				seen.add(el);
 				const rect = el.getBoundingClientRect();
@@ -479,7 +577,7 @@ func (cr *ChromeRemote) GetElements(targetID string, targetURL string) ([]Elemen
 				const info = {
 					tagName: el.tagName.toLowerCase(),
 					id: el.id || '',
-					class: el.className || '',
+					class: (typeof el.className === 'string' ? el.className : '') || '',
 					text: (el.textContent || el.value || '').trim().substring(0, 100),
 					type: el.type || '',
 					href: el.href || '',
@@ -487,19 +585,7 @@ func (cr *ChromeRemote) GetElements(targetID string, targetURL string) ([]Elemen
 					aria: el.getAttribute('aria-label') || '',
 					placeholder: el.placeholder || ''
 				};
-				let selectorStr = el.tagName.toLowerCase();
-				if (info.id) {
-					selectorStr = '#' + info.id;
-				} else if (info.class) {
-					const firstClass = info.class.split(' ')[0];
-					selectorStr = selectorStr + '.' + firstClass;
-				}
-				if (el.name) {
-					selectorStr = selectorStr + '[name="' + el.name + '"]';
-				} else if (el.type) {
-					selectorStr = selectorStr + '[type="' + el.type + '"]';
-				}
-				info.selector = selectorStr;
+				info.selector = uniqueSelector(el);
 				elements.push(info);
 			});
 		});
@@ -716,6 +802,66 @@ func (cr *ChromeRemote) Evaluate(targetID string, jsExpr string, dest interface{
 	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 	return chromedp.Run(tctx, chromedp.Evaluate(jsExpr, dest))
+}
+
+// TypeText types text into an element identified by a CSS selector using CDP.
+// It clicks the element first to focus it, clears any existing value, then types the text.
+func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, clearFirst bool, timeoutMs int) error {
+	log.Printf("[ChromeRemote] Typing text into %s (targetID=%s, clearFirst=%v)", selector, targetID, clearFirst)
+
+	ctx, err := cr.getContext(targetID)
+	if err != nil {
+		return err
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 15000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	var tasks []chromedp.Action
+
+	// Wait for element and click to focus
+	tasks = append(tasks, chromedp.WaitVisible(selector))
+	tasks = append(tasks, chromedp.Click(selector, chromedp.ByQuery))
+
+	if clearFirst {
+		// Clear existing value via JS
+		clearJS := fmt.Sprintf(`document.querySelector(%q).value = ''`, selector)
+		tasks = append(tasks, chromedp.Evaluate(clearJS, nil))
+	}
+
+	// Type the text using SendKeys (dispatches real key events)
+	tasks = append(tasks, chromedp.SendKeys(selector, text, chromedp.ByQuery))
+
+	if err := chromedp.Run(tctx, tasks...); err != nil {
+		return fmt.Errorf("[ChromeRemote] failed to type text: %v", err)
+	}
+
+	log.Printf("[ChromeRemote] Text typed successfully into %s", selector)
+	return nil
+}
+
+// WaitForSelector waits for a CSS selector to become visible on the page.
+func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeoutMs int) error {
+	log.Printf("[ChromeRemote] Waiting for selector %s (targetID=%s, timeout=%dms)", selector, targetID, timeoutMs)
+
+	ctx, err := cr.getContext(targetID)
+	if err != nil {
+		return err
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 30000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	if err := chromedp.Run(tctx, chromedp.WaitVisible(selector)); err != nil {
+		return fmt.Errorf("[ChromeRemote] timeout waiting for selector %s: %v", selector, err)
+	}
+
+	log.Printf("[ChromeRemote] Selector %s found", selector)
+	return nil
 }
 
 // --- Legacy Wrappers (Deprecated) ---

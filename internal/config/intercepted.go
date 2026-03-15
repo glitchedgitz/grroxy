@@ -1,0 +1,49 @@
+package config
+
+const defaultInterceptedHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grroxy - Intercepted</title>
+</head>
+<body>
+<div style="display: flex; height: 100vh; align-items: center; justify-content: center;">
+    <p
+        class="dots"
+        style="font-size: 14px; font-weight: 600; color: #27AE60; font-family: ocr-a-std, monospace;"
+    >grroxy is listening</p>
+</div>
+
+<style>
+    @import url('https://use.typekit.net/bek8faf.css');
+
+    html, body {
+        background: #070708;
+    }
+
+    @keyframes dots {
+        0% {
+            content: '.';
+        }
+        10% {
+            content: '..';
+        }
+        20% {
+            content: '...';
+        }
+        30% {
+            content: '...';
+        }
+    }
+
+    .dots::after {
+        content: '';
+        display: inline-block;
+        width: 1.5em;
+        text-align: left;
+        animation: dots 2s steps(1) infinite;
+    }
+</style>
+</body>
+</html>`

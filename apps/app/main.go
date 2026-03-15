@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy/internal/config"
@@ -25,6 +26,9 @@ type Backend struct {
 	CounterManager *CounterManager
 	XtermManager   *XtermManager
 	MCP            *MCP
+
+	mu          sync.Mutex
+	fileWatcher *fileWatcherState
 }
 
 func (backend *Backend) Serve() {

@@ -74,6 +74,8 @@ func serve(projectPath string) {
 	// Info
 	API.App.OnBeforeServe().Add(API.Info)
 	API.App.OnBeforeServe().Add(API.CWDContent)
+	API.App.OnBeforeServe().Add(API.CWDBrowse)
+	API.App.OnBeforeServe().Add(API.CWDReadFile)
 
 	// Labels
 	API.App.OnBeforeServe().Add(API.LabelAttach)
@@ -138,6 +140,9 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.ReloadTab)
 	API.App.OnBeforeServe().Add(API.GoBack)
 	API.App.OnBeforeServe().Add(API.GoForward)
+	API.App.OnBeforeServe().Add(API.TypeTextProxy)
+	API.App.OnBeforeServe().Add(API.WaitForSelectorProxy)
+	API.App.OnBeforeServe().Add(API.EvaluateProxy)
 
 	// Other
 	API.App.OnBeforeServe().Add(API.AddRequest)
@@ -149,6 +154,9 @@ func serve(projectPath string) {
 
 	// Modify
 	API.App.OnBeforeServe().Add(API.ModifyRequest)
+
+	// Parse
+	API.App.OnBeforeServe().Add(API.ParseRaw)
 
 	// Extractor
 	API.App.OnBeforeServe().Add(API.ExtractDataEndpoint)

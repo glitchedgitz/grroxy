@@ -1,8 +1,68 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
-
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+# Released v2026.3.8
+
+Includes `v0.28.0` and `v0.27.1`
+
+## v0.28.0 - Frontend Updates
+
+- **Frontend: Convert to POST / GET** — Convert requests between POST and GET, moving params between body and query string. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Duplicate tab** — Duplicate the active data tab including all persisted filters. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Decoder panel stay minimized** — Decoder panel stays minimized after user manually minimize it. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Toggle sidebar** — Show/hide the sidebar. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Custom tab names** — Ability to name tabs. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Open in new tab** — Open a request in a new tab from proxy or data tabs. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Auto-remove headers** — Filter to auto-hide unnecessary headers. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Search bar** — Unified search icon for general search in Data tab. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: New request popup** — A button to create a new request.
+- **Frontend: Send request shortcut** — Shortcut to send the request
+- **Intercepted landing page** — Browser now opens a custom `intercepted.html` page (served via `file://`) instead of `grroxy.com`. So we don't capture unwanted traffic.
+- **`/api/request/parse` endpoint** — Parse raw HTTP request/response into structured breakdown (method, path, query, headers, body). Uses existing `rawhttp.ParseRequest` and `rawhttp.ParseResponse`.
+- **Frontend: Filter AddNew and Edit Popup** — Add, edit filters from UI.
+- **Frontend: Proxy page** — Improved UI
+- **Frontend: Cmd+Enter to send** — Keyboard shortcut to send requests.
+
+### Fixed
+
+- **Proxy Timeout** — There waas a 60sec timeout for intercepting the request. [@Sharo_k_h](https://x.com/Sharo_k_h)
+- **Proxy Pastebin** — Proxy pastebin was not working. [@Sharo_k_h](https://x.com/Sharo_k_h)
+- **Frontend: Repeater sort** — Fixed repeater index sorting bug. [@Sharo_k_h](https://x.com/Sharo_k_h)
+- **Frontend: Proxy pastebin** — Fixed proxy pastebin not working. [@Sharo_k_h](https://x.com/Sharo_k_h)
+- **Frontend: Long filter view** — Fixed broken view when filter is long. [@Behi_Sec](https://x.com/Behi_Sec)
+- **Frontend: Title bar tooltips** — Tooltips in title bar were positioned at top-left corner.
+- **Intercept counter not updating on toggle off** — Per-proxy intercept counter now resets to 0 immediately when intercept is disabled.
+
+---
+
+## [2026-MAR] - v0.27.1 - MCP Fixes, Proxy Endpoints & HTTP/2 Parsing
+
+### Added
+
+- **Proxy HTTP endpoints** — `/api/proxy/typetext`, `/api/proxy/waitforselector`, `/api/proxy/evaluate` for browser automation via API.
+- **MCP tools** — `listHosts`, `getHostInfo`, `getNoteForHost`, `setNoteForHost`, `modifyHostLabels`, `modifyHostNotes`, `interceptToggle`, `interceptPrintRowsInDetails`, `interceptGetRawRequestAndResponse`, `interceptAction`, `proxyList`, `proxyStart`, `proxyStop`, `proxyScreenshot`, `proxyClick`, `proxyElements`, `proxyType`, `proxyEval`, `proxyWaitForSelector`, `proxyListTabs`, `proxyOpenTab`, `proxyNavigateTab`, `proxyActivateTab`, `proxyCloseTab`, `proxyReloadTab`, `proxyGoBack`, `proxyGoForward`.
+- **Frontend: AI tools** — `proxyTypeText`, `proxyWaitForSelector`, `proxyEvaluate` tool definitions and handlers in AI tools panel.
+- **Frontend: backend API methods** — `proxyTypeText`, `proxyWaitForSelector`, `proxyEvaluate` in `backend_app.ts`.
+- **Frontend: MCP tools sorted alphabetically** in HudTerminal.
+- **Frontend: CWD File Explorer** — VSCode-style file/folder explorer for browsing, opening, and previewing files from the current working directory.
+- **File watcher** — `fsnotify`-based file watcher for CWD explorer live updates.
+- **Chrome `GetElements` improved** — Added input/textarea/select to interactive element selectors; unique CSS selector paths using `nth-of-type`.
+
+### Changed
+
+- **`proxyStart` MCP tool** — Removed `browser` and `http` options; hardcoded to Chrome with auto-assigned HTTP port.
+
+### Fixed
+
+- **MCP `interceptToggle` not intercepting** — `dao.SaveRecord()` doesn't trigger `OnRecordAfterUpdateRequest` hooks; now sets `inst.Proxy.Intercept` directly in memory.
+- **Edited request parsing: `HTTP/2` rejected** — `http.ReadRequest` requires `major.minor` format; normalizes `HTTP/2` → `HTTP/2.0`.
+- **Edited request parsing: unexpected EOF** — Detects linebreak style (`\r\n` vs `\n`) and ensures request ends with double linebreak.
+
+# Released v2026.3.7
+
+Includes `v0.27.0`
 
 ## [2026-MAR] - v0.27.0 - MCP (Model Context Protocol) Support
 
@@ -28,7 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - **Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination.
-- **[IMP][PERFORMANCE] Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination. 
+- **[IMP][PERFORMANCE] Electron: orphan child processes on quit** — Closing the Electron app now kills the entire process group (grroxy, grroxy-app, grroxy-tool) instead of only the grroxy process. Uses `detached: true` spawn and `process.kill(-pid)` for group termination.
 - **Proxy timeouts increased to 10 minutes** — Prevents intercepted request connection failures when requests are held for manual review (`rawproxy` config, MITM, and proxy server timeouts all updated).
 - **Stale WebSocket cleanup on session close** — All connected WebSocket clients are now closed when a terminal session is closed, preventing hanging goroutines.
 - **Scrollback buffer memory compaction** — Buffer uses in-place `copy()` to prevent unbounded underlying array growth.
