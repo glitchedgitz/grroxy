@@ -672,8 +672,9 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 		profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
 		log.Printf("[startProxyLogic] Browser profile directory: %s", profileDir)
 
-		go func(proxyID, browserType, listenAddr, cert, profDir string) {
-			cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir)
+		startURL := backend.Config.InterceptedPagePath()
+		go func(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
+			cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
 			if err != nil {
 				log.Println("Error launching browser:", err)
 				return
@@ -684,7 +685,7 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 				inst.BrowserCmd = cmd
 			}
 			ProxyMgr.mu.Unlock()
-		}(proxyID, body.Browser, body.HTTP, certPath, profileDir)
+		}(proxyID, body.Browser, body.HTTP, certPath, profileDir, startURL)
 	}
 
 	// Create proxy record in database
@@ -968,8 +969,9 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 				profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
 				log.Printf("[RestartProxy] Browser profile directory: %s", profileDir)
 
-				go func(proxyID, browserType, listenAddr, cert, profDir string) {
-					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir)
+				startURL := backend.Config.InterceptedPagePath()
+				go func(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
+					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
 					if err != nil {
 						log.Println("Error launching browser:", err)
 						return
@@ -980,7 +982,7 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 						inst.BrowserCmd = cmd
 					}
 					ProxyMgr.mu.Unlock()
-				}(proxyID, browserType, listenAddr, certPath, profileDir)
+				}(proxyID, browserType, listenAddr, certPath, profileDir, startURL)
 			}
 
 			log.Printf("[RestartProxy] Successfully restarted proxy %s", proxyID)

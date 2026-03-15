@@ -17,7 +17,7 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-func launchChrome(proxyAddress string, customCertPath string, profileDir string) (*exec.Cmd, error) {
+func launchChrome(proxyAddress string, customCertPath string, profileDir string, startURL string) (*exec.Cmd, error) {
 	log.Println("[launchChrome] Starting Chrome launch process")
 
 	// Use provided profile directory
@@ -119,7 +119,7 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string)
 		"--enable-fixed-layout",
 		"--noerrdialogs",
 		"--test-type",
-		"grroxy.com",
+		startURL,
 	)
 
 	log.Printf("[launchChrome] Chrome arguments: %v", args)
@@ -134,8 +134,75 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string)
 
 	log.Printf("[launchChrome] Chrome process started successfully")
 	log.Printf("[launchChrome] Chrome profile at: %s", chromeDataDir)
+
+	// Focus the address bar after Chrome finishes loading
+	// go focusAddressBar(chromeDataDir)
+
 	return cmd, nil
 }
+
+// // focusAddressBar waits for Chrome to be ready, then sends Cmd+L / Ctrl+L to focus the omnibox.
+// func focusAddressBar(profileDir string) {
+// 	// Wait for DevToolsActivePort file to appear (Chrome writes it once ready)
+// 	devToolsFile := filepath.Join(profileDir, "DevToolsActivePort")
+// 	var debugURL string
+// 	for i := 0; i < 30; i++ {
+// 		time.Sleep(500 * time.Millisecond)
+// 		url, err := GetChromeDebugURL(profileDir)
+// 		if err == nil {
+// 			debugURL = url
+// 			break
+// 		}
+// 		_ = devToolsFile // suppress unused hint
+// 	}
+// 	if debugURL == "" {
+// 		log.Println("[focusAddressBar] Could not get Chrome debug URL, skipping address bar focus")
+// 		return
+// 	}
+
+// 	allocCtx, allocCancel := chromedp.NewRemoteAllocator(context.Background(), debugURL)
+// 	defer allocCancel()
+
+// 	ctx, cancel := chromedp.NewContext(allocCtx)
+// 	defer cancel()
+
+// 	ctx, timeoutCancel := context.WithTimeout(ctx, 5*time.Second)
+// 	defer timeoutCancel()
+
+// 	// Determine the modifier flag based on OS
+// 	var modifiers input.Modifier = 2 // Ctrl
+// 	if runtime.GOOS == "darwin" {
+// 		modifiers = 4 // Meta (Cmd)
+// 	}
+
+// 	// Send Ctrl+L / Cmd+L via CDP Input.dispatchKeyEvent to focus the address bar
+// 	err := chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+// 		// Key down
+// 		if err := input.DispatchKeyEvent(input.KeyDown).
+// 			WithModifiers(modifiers).
+// 			WithKey("l").
+// 			WithCode("KeyL").
+// 			WithWindowsVirtualKeyCode(76).
+// 			WithNativeVirtualKeyCode(76).
+// 			Do(c); err != nil {
+// 			return err
+// 		}
+// 		// Key up
+// 		return input.DispatchKeyEvent(input.KeyUp).
+// 			WithModifiers(modifiers).
+// 			WithKey("l").
+// 			WithCode("KeyL").
+// 			WithWindowsVirtualKeyCode(76).
+// 			WithNativeVirtualKeyCode(76).
+// 			Do(c)
+// 	}))
+// 	if err != nil {
+// 		log.Printf("[focusAddressBar] Failed to send key event: %v", err)
+// 		return
+// 	}
+
+// 	log.Println("[focusAddressBar] Address bar focus sent")
+// }
 
 // GetChromeDebugURL reads the DevTools WebSocket URL from Chrome's profile directory
 // Chrome writes this information to DevToolsActivePort file when launched with --remote-debugging-port
