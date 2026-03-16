@@ -3,12 +3,21 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+# Released v2026.3.9
+
+Includes `v0.28.1`
+
+- Using single frontend for electron and binary.
+- Apple Developer Signed Binaries
+- ZoomSlider, App loading improvements and other misc fixes
+
 # Released v2026.3.8
 
 Includes `v0.28.0` and `v0.27.1`
 
 ## v0.28.0 - Frontend Updates
 
+- Added Apple Developer Signed Binaries
 - **Frontend: Convert to POST / GET** — Convert requests between POST and GET, moving params between body and query string. [@Behi_Sec](https://x.com/Behi_Sec)
 - **Frontend: Duplicate tab** — Duplicate the active data tab including all persisted filters. [@Behi_Sec](https://x.com/Behi_Sec)
 - **Frontend: Decoder panel stay minimized** — Decoder panel stays minimized after user manually minimize it. [@Behi_Sec](https://x.com/Behi_Sec)
