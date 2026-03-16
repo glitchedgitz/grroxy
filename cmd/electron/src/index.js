@@ -112,8 +112,14 @@ function createWindow(grroxyURL) {
         }
     })
 
-    mainWindow.loadURL(grroxyURL)
-    // mainWindow.loadURL('http://localhost:5173')
+    const frontendPath = app.isPackaged
+        ? path.join(process.resourcesPath, 'frontend', 'index.html')
+        : path.join(__dirname, '..', '..', '..', 'grx', 'frontend', 'dist', 'index.html')
+    mainWindow.loadFile(frontendPath)
+
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.setZoomFactor(1)
+    })
 
     mainWindow.on('enter-full-screen', () => {
         console.log('[main] Entered fullscreen');
@@ -140,13 +146,10 @@ function createWindow(grroxyURL) {
     }
 }
 
-let grroxyURL = null
-
 app.whenReady()
     .then(async () => {
         const port = await findAvailablePort(8090)
         const host = `127.0.0.1:${port}`
-        grroxyURL = `http://${host}`
 
         console.log(`[electron] Starting grroxy on ${host}`)
         startGrroxy(host)
@@ -189,10 +192,14 @@ app.whenReady()
             shell.openExternal(url)
         });
 
-        createWindow(grroxyURL)
+        ipcMain.handle('get-host', () => {
+            return host
+        });
+
+        createWindow()
 
         app.on('activate', function () {
-            if (BrowserWindow.getAllWindows().length === 0) createWindow(grroxyURL)
+            if (BrowserWindow.getAllWindows().length === 0) createWindow()
         })
     })
 

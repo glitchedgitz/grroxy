@@ -38,4 +38,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // App info
     getVersion: () => ipcRenderer.invoke('get-version'),
     openURL: (url) => ipcRenderer.invoke('open-url', url),
+    getHost: () => ipcRenderer.invoke('get-host'),
 });
