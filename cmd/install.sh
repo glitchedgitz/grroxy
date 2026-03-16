@@ -8,16 +8,16 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 # Store the original directory
 ORIGINAL_DIR=$(pwd)
 
-# Define the project root directory
-PROJECT_ROOT="$SCRIPT_DIR"
+# Define the project root directory (one level up from cmd/)
+PROJECT_ROOT="$SCRIPT_DIR/.."
 
-# Array of directories to process - using Unix-style paths
-DIRS=("cmd/grroxy" "cmd/grroxy-app" "cmd/grroxy-tool" "cmd/grxp" "cmd/grx-fuzzer")
+# Array of directories to process - relative to cmd/
+DIRS=("grroxy" "grroxy-app" "grroxy-tool" "grxp" "grx-fuzzer")
 
 # Loop through each directory
 for dir in "${DIRS[@]}"; do
-    FULL_PATH="$PROJECT_ROOT/$dir"
-    echo "Installing in $dir..."
+    FULL_PATH="$PROJECT_ROOT/cmd/$dir"
+    echo "Installing in cmd/$dir..."
     if [ ! -d "$FULL_PATH" ]; then
         echo "Directory $dir not found at $FULL_PATH"
         continue

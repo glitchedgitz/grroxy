@@ -9,9 +9,22 @@ rm -rf dist
 # Usage: ./build.sh              (current platform)
 #        ./build.sh darwin arm64  (specific platform)
 #        ./build.sh all           (all platforms)
+#        ./build.sh --dev         (current platform, skip signing/notarization)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# Parse --dev flag
+DEV_MODE=false
+ARGS=()
+for arg in "$@"; do
+    if [ "$arg" = "--dev" ]; then
+        DEV_MODE=true
+    else
+        ARGS+=("$arg")
+    fi
+done
+set -- "${ARGS[@]}"
 
 BINARIES=(grroxy grroxy-app grroxy-tool cook)
 
@@ -33,7 +46,9 @@ CODESIGN_IDENTITY="Developer ID Application: Gitesh Sharma (96Q778FZG7)"
 NOTARIZE_PROFILE="grroxy-notarize"
 
 SIGN_ENABLED=false
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$CODESIGN_IDENTITY"; then
+if [ "$DEV_MODE" = true ]; then
+    echo "Dev mode: skipping signing/notarization"
+elif security find-identity -v -p codesigning 2>/dev/null | grep -q "$CODESIGN_IDENTITY"; then
     SIGN_ENABLED=true
     echo "Code signing enabled: ${CODESIGN_IDENTITY}"
 else
@@ -151,6 +166,8 @@ echo "=== Step 3: Package Electron app ==="
 # electron-builder picks up these env vars for signing
 if [ "$SIGN_ENABLED" = true ]; then
     export CSC_NAME="Gitesh Sharma (96Q778FZG7)"
+else
+    export CSC_IDENTITY_AUTO_DISCOVERY=false
 fi
 
 if [ "${1:-}" = "all" ]; then

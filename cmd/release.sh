@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION=$(cat VERSION)
-DIST="dist"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PROJECT_ROOT="$SCRIPT_DIR/.."
+
+VERSION=$(cat "$PROJECT_ROOT/VERSION")
+DIST="$PROJECT_ROOT/dist"
 CMDS=("grroxy" "grroxy-app" "grroxy-tool")
 PLATFORMS=("darwin/arm64" "darwin/amd64" "linux/amd64" "linux/arm64" "windows/amd64")
 
@@ -23,7 +26,7 @@ for platform in "${PLATFORMS[@]}"; do
 
   echo "Building ${os}/${arch}..."
   for cmd in "${CMDS[@]}"; do
-    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -o "${outdir}/${cmd}${ext}" "./cmd/${cmd}"
+    CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -o "${outdir}/${cmd}${ext}" "$PROJECT_ROOT/cmd/${cmd}"
   done
 
   # Package
