@@ -35,18 +35,12 @@ Grroxy was started 4 years back, I had.. and have some pain points with the prox
 
 <img width="64px" src="https://github.com/user-attachments/assets/311d61f6-5645-498e-9227-5c055807c52e">
 
-### Desktop App
-Download the latest release for your platform from [Releases](https://github.com/glitchedgitz/grroxy/releases):
+## Desktop App
+Download the latest release for your platform from [releases](https://github.com/glitchedgitz/grroxy/releases)
 
-```bash
-# note: on mac, the app may show a prompt saying it's not signed. I've applied for an Apple Developer ID — it will take some time.
-# current workaround: run the command and restart the app
-xattr -cr /Applications/Grroxy.app
-```
+## Terminal
 
-### Terminal
-
-If you prefer using grroxy without the desktop app (but why?)
+If you prefer using grroxy without the desktop app
 
 ```bash
 go install github.com/glitchedgitz/grroxy/cmd/grroxy@latest #grroxy
@@ -58,8 +52,6 @@ go install github.com/glitchedgitz/cook/v2/cmd/cook@latest #cook
 ```bash
 grroxy start # http://127.0.0.1:8090
 ```
-
----
 
 # Contributing
 
