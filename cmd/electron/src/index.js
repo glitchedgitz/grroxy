@@ -1,7 +1,7 @@
 // This file is the entry point for the Electron application.
 
 const { app, BrowserWindow, ipcMain, nativeImage, shell } = require('electron')
-const { spawn } = require('child_process')
+const { spawn, spawnSync } = require('child_process')
 const path = require('path')
 const net = require('net')
 
@@ -49,7 +49,11 @@ function startGrroxy(host) {
     grroxyProcess = spawn(grroxyPath, ['start', '--host', host], {
         stdio: 'pipe',
         env: env,
-        detached: true,
+        // On Windows, omit detached so grroxy stays in Electron's Job Object
+        // and is auto-killed if Electron crashes.
+        // On Unix, detached creates a process group so we can kill -pid the whole tree.
+        detached: process.platform !== 'win32',
+        windowsHide: true,
     })
 
     grroxyProcess.stdout.on('data', (data) => {
@@ -75,8 +79,16 @@ function stopGrroxy() {
     if (grroxyProcess) {
         const pid = grroxyProcess.pid
         grroxyProcess = null
-        // Kill the entire process group (grroxy + grroxy-app + grroxy-tool)
-        try { process.kill(-pid, 'SIGTERM') } catch { /* already dead */ }
+        // Kill the entire process tree (grroxy + grroxy-app + grroxy-tool)
+        if (process.platform === 'win32') {
+            // spawnSync so the process tree is dead before before-quit completes
+            try { spawnSync('taskkill', ['/F', '/T', '/PID', String(pid)], { windowsHide: true }) } catch { /* already dead */ }
+        } else {
+            // Kill the process group (catches grroxy-app + grroxy-tool if same group)
+            try { process.kill(-pid, 'SIGKILL') } catch { /* already dead */ }
+            // Also kill the direct process in case it left its own group
+            try { process.kill(pid, 'SIGKILL') } catch { /* already dead */ }
+        }
     }
 }
 
