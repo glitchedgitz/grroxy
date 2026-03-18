@@ -169,13 +169,34 @@ if [ "$SIGN_ENABLED" = true ]; then
 else
     export CSC_IDENTITY_AUTO_DISCOVERY=false
 fi
+# Skip Windows signing
+export WIN_CSC_LINK=""
+
+electron_arch_flag() {
+    case "$1" in
+        arm64) echo "--arm64" ;;
+        amd64) echo "--x64" ;;
+        *)     echo "--$1" ;;
+    esac
+}
+
+electron_os_flag() {
+    case "$1" in
+        darwin)  echo "--mac" ;;
+        linux)   echo "--linux" ;;
+        windows) echo "--win" ;;
+        *)       echo "--$1" ;;
+    esac
+}
 
 if [ "${1:-}" = "all" ]; then
     npx electron-builder --mac --x64 --arm64
     npx electron-builder --linux --x64 --arm64
     npx electron-builder --win --x64
 else
-    npm run build
+    OS_FLAG=$(electron_os_flag "$TARGET_OS")
+    ARCH_FLAG=$(electron_arch_flag "$TARGET_ARCH")
+    npx electron-builder $OS_FLAG $ARCH_FLAG
 fi
 
 # --- Step 4: Rename mac artifacts to include chip name ---
