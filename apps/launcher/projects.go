@@ -87,6 +87,72 @@ func (launcher *Launcher) API_CreateNewProject(e *core.ServeEvent) error {
 	return nil
 }
 
+func (launcher *Launcher) API_DeleteProject(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: "POST",
+		Path:   "/api/project/delete",
+		Handler: func(c echo.Context) error {
+
+			var data struct {
+				Id string `json:"id"`
+			}
+
+			if err := c.Bind(&data); err != nil {
+				return c.String(http.StatusBadRequest, "Invalid request body")
+			}
+
+			if data.Id == "" || strings.TrimSpace(data.Id) == "" {
+				return c.String(http.StatusBadRequest, "Project id can't be empty")
+			}
+
+			record, err := launcher.App.Dao().FindRecordById("_projects", data.Id)
+
+			if record == nil || err != nil {
+				return c.String(http.StatusNotFound, "Project not found")
+			}
+
+			// Check if project is active
+			var stateData ProjectStateData
+			dataInterface := record.Get("data")
+			if dataInterface != nil {
+				jsonData, err := json.Marshal(dataInterface)
+				if err == nil {
+					if err := json.Unmarshal(jsonData, &stateData); err == nil {
+						if stateData.State == ProjectState.Active {
+							return c.String(http.StatusConflict, "Cannot delete an active project. Stop it first.")
+						}
+					}
+				}
+			}
+
+			// Delete project directory
+			projectPath := fmt.Sprintf("%v", record.Get("path"))
+			if projectPath != "" {
+				if err := os.RemoveAll(projectPath); err != nil {
+					fmt.Printf("Error deleting project directory: %v\n", err)
+					return c.String(http.StatusInternalServerError, "Error deleting project files")
+				}
+			}
+
+			// Delete DB record
+			if err := launcher.App.Dao().DeleteRecord(record); err != nil {
+				fmt.Printf("Error deleting project record: %v\n", err)
+				return c.String(http.StatusInternalServerError, "Error deleting project record")
+			}
+
+			return c.JSON(http.StatusOK, map[string]string{
+				"message": "Project deleted successfully",
+			})
+
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(launcher.App),
+		},
+	})
+
+	return nil
+}
+
 func (launcher *Launcher) API_OpenProject(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: "POST",
@@ -208,6 +274,7 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
 		fmt.Println("Error creating project:", err)
+		os.RemoveAll(projectPath)
 		return ProjectData{}, err
 	}
 
