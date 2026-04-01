@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -557,6 +558,25 @@ func (backend *Backend) loadProxySettings(proxy *RawProxyWrapper, proxyRecord *m
 
 	proxy.Filters = filterstring
 	log.Printf("[ProxySettings] Filters: %s", filterstring)
+
+	// Load run_templates from data JSON field
+	dataRaw := proxyRecord.Get("data")
+	switch v := dataRaw.(type) {
+	case map[string]any:
+		if rt, ok := v["run_templates"].(bool); ok {
+			proxy.RunTemplates = rt
+		}
+	default:
+		var dataMap map[string]any
+		if bytes, err := json.Marshal(v); err == nil {
+			if err := json.Unmarshal(bytes, &dataMap); err == nil {
+				if rt, ok := dataMap["run_templates"].(bool); ok {
+					proxy.RunTemplates = rt
+				}
+			}
+		}
+	}
+	log.Printf("[ProxySettings] RunTemplates: %v", proxy.RunTemplates)
 
 	return nil
 }

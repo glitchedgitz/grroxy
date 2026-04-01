@@ -22,6 +22,7 @@ var API app.Backend
 var HostAddress string
 var ProjectPath string
 var ProxyAddress string // removed, we use api now
+var LauncherAddress string
 var showLogs bool
 
 // func printBanner() {
@@ -77,6 +78,7 @@ func prodApp() {
 	flag.StringVar(&HostAddress, "host", "127.0.0.1:8090", "Host address to listen on")
 	flag.StringVar(&ProxyAddress, "proxy", "127.0.0.1:8888", "Proxy address to listen on")
 	flag.StringVar(&ProjectPath, "path", "", "Project directory path")
+	flag.StringVar(&LauncherAddress, "launcher", "", "Launcher address for fetching templates")
 	flag.BoolVar(&showLogs, "log", false, "Show debug logs")
 
 	flag.Parse()

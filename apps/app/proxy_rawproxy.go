@@ -31,6 +31,8 @@ import (
 
 	"github.com/glitchedgitz/grroxy/grx/rawhttp"
 	"github.com/glitchedgitz/grroxy/grx/rawproxy"
+	"github.com/glitchedgitz/grroxy/grx/templates"
+	"github.com/glitchedgitz/grroxy/grx/templates/actions"
 	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/glitchedgitz/pocketbase/daos"
@@ -63,8 +65,9 @@ type RawProxyWrapper struct {
 	interceptCollection  *models.Collection
 	wsCollection         *models.Collection // WebSocket messages collection
 
-	Intercept bool
-	Filters   string
+	Intercept    bool
+	Filters      string
+	RunTemplates bool
 }
 
 // ProxyStats tracks proxy statistics
@@ -524,6 +527,50 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		"is_resp_edited": false,
 	}
 
+	// Run before_request templates (synchronous — can modify request)
+	if rp.backend.TemplatesEnabled && rp.RunTemplates && rp.backend.Templates != nil {
+		templateData := make(map[string]any, len(userdata))
+		for k, v := range userdata {
+			templateData[k] = v
+		}
+		templateData["req"] = requestData
+		templateData["resp"] = userdata["resp_json"]
+		results, err := rp.backend.Templates.Run(templateData, "proxy:before_request")
+		if err != nil {
+			log.Printf("[RawProxy][Templates][ERROR] before_request: %v", err)
+		} else if len(results) > 0 {
+			modified := false
+			var otherActions []templates.Action
+
+			for _, action := range results {
+				switch action.ActionName {
+				case actions.Set:
+					for key, value := range action.Data {
+						applySetToRequest(req, key, fmt.Sprint(value))
+						modified = true
+					}
+				case actions.Delete:
+					for key := range action.Data {
+						applyDeleteToRequest(req, key)
+						modified = true
+					}
+				default:
+					otherActions = append(otherActions, action)
+				}
+			}
+
+			if modified {
+				requestData = generateRequestData(req)
+				userdata["req_json"] = requestData
+				log.Printf("[RawProxy][Templates] before_request: request modified")
+			}
+
+			if len(otherActions) > 0 {
+				rp.backend.ExecuteTemplateActions(otherActions, userdata)
+			}
+		}
+	}
+
 	// Dump request to raw string
 	normalizeHTTP := (scheme == "http")
 	requestInString := rawhttp.DumpRequest(req, normalizeHTTP)
@@ -571,6 +618,28 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 			log.Printf("[RawProxy][Sitemap][SUCCESS] Created sitemap entry ID=%s", userdata["id"].(string))
 		}
 	}()
+
+	// Run templates on request
+	if rp.backend.TemplatesEnabled && rp.RunTemplates && rp.backend.Templates != nil {
+		go func() {
+			// Build a copy with req/resp aliases for template variable resolution
+			// (can't overwrite userdata["req"]/["resp"] — those are relation IDs)
+			templateData := make(map[string]any, len(userdata))
+			for k, v := range userdata {
+				templateData[k] = v
+			}
+			templateData["req"] = userdata["req_json"]
+			templateData["resp"] = userdata["resp_json"]
+			results, err := rp.backend.Templates.Run(templateData, "proxy:request")
+			if err != nil {
+				log.Printf("[RawProxy][Templates][ERROR] on_request: %v", err)
+				return
+			}
+			if len(results) > 0 {
+				rp.backend.ExecuteTemplateActions(results, userdata)
+			}
+		}()
+	}
 
 	// Store request context in reqData.Data for response correlation (thread-safe!)
 	// rawproxy will pass this same reqData to onResponse
@@ -690,6 +759,22 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 	responseData["title"] = title
 	updateResponseDataFromRaw(responseData, responseInString)
 
+	// // Run before_response templates (synchronous)
+	// if rp.backend.TemplatesEnabled && rp.RunTemplates && rp.backend.Templates != nil {
+	// 	templateData := make(map[string]any, len(userdata))
+	// 	for k, v := range userdata {
+	// 		templateData[k] = v
+	// 	}
+	// 	templateData["req"] = userdata["req_json"]
+	// 	templateData["resp"] = responseData
+	// 	results, err := rp.backend.Templates.Run(templateData, "proxy:before_response")
+	// 	if err != nil {
+	// 		log.Printf("[RawProxy][Templates][ERROR] before_response: %v", err)
+	// 	} else if len(results) > 0 {
+	// 		rp.backend.ExecuteTemplateActions(results, userdata)
+	// 	}
+	// }
+
 	// Save response to database synchronously (not in goroutine) to ensure it completes
 	rp.saveResponseToDB(reqCtx, responseData)
 
@@ -758,7 +843,25 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 		}
 	}
 
-	// No cleanup needed - reqData is automatically garbage collected after this function returns
+	// Run templates on response
+	if rp.backend.TemplatesEnabled && rp.RunTemplates && rp.backend.Templates != nil {
+		go func() {
+			templateData := make(map[string]any, len(userdata))
+			for k, v := range userdata {
+				templateData[k] = v
+			}
+			templateData["req"] = userdata["req_json"]
+			templateData["resp"] = userdata["resp_json"]
+			results, err := rp.backend.Templates.Run(templateData, "proxy:response")
+			if err != nil {
+				log.Printf("[RawProxy][Templates][ERROR] on_response: %v", err)
+				return
+			}
+			if len(results) > 0 {
+				rp.backend.ExecuteTemplateActions(results, userdata)
+			}
+		}()
+	}
 
 	log.Printf("[RawProxy][Response] ID=%s Status=%d Host=%s", userdata["id"].(string), resp.StatusCode, userdata["host"].(string))
 

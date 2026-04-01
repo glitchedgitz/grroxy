@@ -211,7 +211,7 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 		return ProjectData{}, err
 	}
 
-	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", func() {
+	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", launcher.Config.HostAddr, func() {
 		launcher.setProjectStateClose(projectId)
 	})
 
@@ -305,7 +305,7 @@ func (launcher *Launcher) OpenProject(projectIndex int) (ProjectData, error) {
 		return ProjectData{}, err
 	}
 
-	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", func() {
+	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", launcher.Config.HostAddr, func() {
 		launcher.setProjectStateClose(record.Get("id").(string))
 	})
 
@@ -374,7 +374,7 @@ func (launcher *Launcher) OpenProjectFromNameOrId(project string) (ProjectData, 
 		return ProjectData{}, err
 	}
 
-	go StartProject(projectPath, projectIp, "127.0.0.1:8888", func() {
+	go StartProject(projectPath, projectIp, "127.0.0.1:8888", launcher.Config.HostAddr, func() {
 		launcher.setProjectStateClose(record.Get("id").(string))
 	})
 
@@ -382,8 +382,8 @@ func (launcher *Launcher) OpenProjectFromNameOrId(project string) (ProjectData, 
 	return projectData, nil
 }
 
-func StartProject(projectPath string, host string, proxy string, onClose func()) {
-	cmd := exec.Command("grroxy-app", "-path", projectPath, "-host", host, "-proxy", proxy, "-log")
+func StartProject(projectPath string, host string, proxy string, launcherAddr string, onClose func()) {
+	cmd := exec.Command("grroxy-app", "-path", projectPath, "-host", host, "-proxy", proxy, "-launcher", launcherAddr, "-log")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

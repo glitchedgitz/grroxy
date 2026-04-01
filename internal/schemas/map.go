@@ -234,4 +234,12 @@ var Collections = []DB{
 	// 	CREATE INDEX idx_websockets_reqid ON _websockets (request_id);
 	// 	`,
 	// },
+	// {
+	// 	"_templates",
+	// 	Templates,
+	// 	true,
+	// 	`
+	// 	CREATE UNIQUE INDEX idx_templates_name ON _templates (name);
+	// 	`,
+	// },
 }

@@ -237,7 +237,8 @@ func RequestUpdateKey(requestData map[string]any, key string, value any) {
 		if headers, ok := requestData["headers"].([][]string); ok {
 			found := false
 			for i, h := range headers {
-				if h[0] == header+":" {
+				trimmed := strings.TrimRight(h[0], ": ")
+				if trimmed == header {
 					headers[i][1] = value.(string)
 					found = true
 					break
@@ -303,19 +304,16 @@ func RequestDeleteKey(requestData map[string]any, key string) {
 			// Check if header ends with * for wildcard deletion
 			if strings.HasSuffix(header, "*") {
 				prefix := strings.TrimSuffix(header, "*")
-				// Delete all headers starting with the prefix
 				for _, h := range headers {
-					// h[0] is the header name with colon (e.g., "Sec-Fetch-Dest:")
-					// Check if it starts with the prefix followed by colon or dash
-					headerName := strings.TrimSuffix(h[0], ":")
-					if !strings.HasPrefix(headerName, prefix) {
+					trimmed := strings.TrimRight(h[0], ": ")
+					if !strings.HasPrefix(trimmed, prefix) {
 						newHeaders = append(newHeaders, h)
 					}
 				}
 			} else {
-				// Exact match deletion (existing behavior)
 				for _, h := range headers {
-					if h[0] != header+":" {
+					trimmed := strings.TrimRight(h[0], ": ")
+					if trimmed != header {
 						newHeaders = append(newHeaders, h)
 					}
 				}

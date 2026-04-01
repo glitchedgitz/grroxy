@@ -3,7 +3,6 @@ package templates_test
 import (
 	"fmt"
 	"log"
-	"os"
 	"testing"
 
 	"github.com/glitchedgitz/grroxy/grx/templates"
@@ -160,11 +159,11 @@ func TestSetup(t *testing.T) {
 		},
 	}
 
-	if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {
-		t.Skip("GRROXY_TEMPLATE_DIR is not set; skipping template integration test")
-	}
+	// if os.Getenv("GRROXY_TEMPLATE_DIR") == "" {
+	// 	t.Skip("GRROXY_TEMPLATE_DIR is not set; skipping template integration test")
+	// }
 	x := &templates.Templates{
-		TempalteDir: os.Getenv("GRROXY_TEMPLATE_DIR"),
+		// TempalteDir: os.Getenv("GRROXY_TEMPLATE_DIR"),
 	}
 
 	x.Setup()

@@ -24,6 +24,7 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/glitchedgitz/pocketbase"
 	"github.com/glitchedgitz/pocketbase/apis"
+	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/glitchedgitz/pocketbase/plugins/migratecmd"
 	"github.com/spf13/cobra"
 
@@ -134,6 +135,31 @@ func main() {
 	startCmd.Flags().String("host", "", "host address to listen on (default 127.0.0.1:8090)")
 	rootCmd.AddCommand(startCmd)
 
+	migrateCmd := &cobra.Command{
+		Use:   "migrate [up|down|collections]",
+		Short: "Run database migrations",
+		Run: func(cmd *cobra.Command, args []string) {
+			setConfig()
+			// Bootstrap PocketBase to initialize DB
+			app := pocketbase.NewWithConfig(
+				pocketbase.Config{
+					ProjectDir:      path.Join(conf.ProjectsDirectory),
+					DefaultDataDir:  "grroxy-main",
+					HideStartBanner: true,
+				},
+			)
+			migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{})
+			app.Bootstrap()
+			// Forward to PocketBase's migrate command
+			app.RootCmd.SetArgs(append([]string{"migrate"}, args...))
+			if err := app.RootCmd.Execute(); err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+		},
+	}
+	rootCmd.AddCommand(migrateCmd)
+
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "update [binary]",
 		Short: "Update grroxy binaries to the latest release",
@@ -242,6 +268,11 @@ func startCore() {
 	launch.App.OnBeforeServe().Add(launch.ResetProjectStates)
 	launch.App.OnBeforeServe().Add(launch.ResetToolsStates)
 
+	// Watch _templates changes and notify running projects
+	launch.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+		return launch.SetupTemplateHooks()
+	})
+
 	// Adding custom endpoints
 	launch.App.OnBeforeServe().Add(launch.API_ListProjects)
 	launch.App.OnBeforeServe().Add(launch.API_CreateNewProject)
@@ -258,6 +289,8 @@ func startCore() {
 	launch.App.OnBeforeServe().Add(launch.TemplatesList)
 	launch.App.OnBeforeServe().Add(launch.TemplatesNew)
 	launch.App.OnBeforeServe().Add(launch.TemplatesDelete)
+	launch.App.OnBeforeServe().Add(launch.TemplatesInfo)
+	launch.App.OnBeforeServe().Add(launch.TemplatesCheck)
 	launch.App.OnBeforeServe().Add(launch.Tools)
 	launch.App.OnBeforeServe().Add(launch.ToolsServer)
 	launch.App.OnBeforeServe().Add(launch.API_CheckUpdate)
@@ -271,6 +304,9 @@ func startCore() {
 			panic(err)
 		}
 	}
+
+	// Set the resolved host address on the config so launcher passes it to projects
+	conf.HostAddr = host
 
 	// Signal that initialization is complete before starting the server
 	fmt.Println("Starting main app at: ", host)

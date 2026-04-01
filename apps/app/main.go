@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
+	"github.com/glitchedgitz/grroxy/grx/templates"
 	"github.com/glitchedgitz/grroxy/internal/config"
 	"github.com/glitchedgitz/grroxy/internal/process"
 	"github.com/glitchedgitz/pocketbase"
@@ -26,6 +27,8 @@ type Backend struct {
 	CounterManager *CounterManager
 	XtermManager   *XtermManager
 	MCP            *MCP
+	Templates        *templates.Templates
+	TemplatesEnabled bool
 
 	mu          sync.Mutex
 	fileWatcher *fileWatcherState

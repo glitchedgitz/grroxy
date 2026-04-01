@@ -15,41 +15,42 @@ import (
 )
 
 type Action struct {
-	Data       map[string]any `yaml:"data"`
-	ActionName string         `yaml:"action_name"`
+	Data       map[string]any `yaml:"data" json:"data"`
+	ActionName string         `yaml:"action_name" json:"action_name"`
 }
 
 type Actions struct {
-	Id        string                      `yaml:"id"`
-	Condition string                      `yaml:"condition"`
-	Todo      []map[string]map[string]any `yaml:"todo"`
+	Id        string                      `yaml:"id" json:"id"`
+	Condition string                      `yaml:"condition" json:"condition"`
+	Todo      []map[string]map[string]any `yaml:"todo" json:"todo"`
+	Disabled  bool                        `yaml:"disabled" json:"disabled"`
 }
 
 type Info struct {
-	Title       string `yaml:"title,omitempty"`
-	Description string `yaml:"description,omitempty"`
-	Author      string `yaml:"author,omitempty"`
+	Title       string `yaml:"title,omitempty" json:"title,omitempty"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
+	Author      string `yaml:"author,omitempty" json:"author,omitempty"`
 }
 
 type Config struct {
 	// Actions
-	Type string `yaml:"type,omitempty"`
+	Type string `yaml:"type,omitempty" json:"type,omitempty"`
 
 	// Mode?: By default it's 'all',
 	//        Use 'any' to stop after one match
-	Mode string `yaml:"mode,omitempty"`
+	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
 
 	// Hooks: Which templates one should run
-	Hooks map[string][]string `yaml:"hooks,omitempty"`
+	Hooks map[string][]string `yaml:"hooks,omitempty" json:"hooks,omitempty"`
 }
 
 type Template struct {
-	Id     string `yaml:"id"`
-	Info   Info   `yaml:"info"`
-	Config Config `yaml:"config"`
+	Id     string `yaml:"id" json:"id"`
+	Info   Info   `yaml:"info" json:"info"`
+	Config Config `yaml:"config" json:"config"`
 
 	// Tasks: List of actions to check
-	Tasks []Actions `yaml:"tasks"`
+	Tasks []Actions `yaml:"tasks" json:"tasks"`
 }
 
 type Templates struct {
@@ -60,39 +61,53 @@ type Templates struct {
 
 func (t *Templates) Setup() {
 	t.Templates = make(map[string]*Template)
+	log.Println("[Template.Setup] Initialized (loading from database)")
 
-	// Initialize the watcher
-	var err error
-	t.watcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatalln("Error creating watcher:", err)
-	}
+	// // Directory-based loading (paused — loading from DB now)
+	// // Initialize the watcher
+	// var err error
+	// t.watcher, err = fsnotify.NewWatcher()
+	// if err != nil {
+	// 	log.Fatalln("Error creating watcher:", err)
+	// }
+	//
+	// // Start watching for file changes
+	// go t.watchFiles()
+	//
+	// files, err := os.ReadDir(t.TempalteDir)
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+	//
+	// log.Println("[Template.Setup]")
+	//
+	// for _, file := range files {
+	// 	fileName := file.Name()
+	// 	if strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml") {
+	// 		l := Read(path.Join(t.TempalteDir, fileName))
+	// 		log.Printf("Template:%v Scan:%v\n", fileName, len(l.Tasks))
+	// 		log.Printf("Template:%v Mode:%v\n", fileName, l.Config.Mode)
+	// 		t.Templates[l.Id] = l
+	// 	}
+	// }
+	//
+	// // Add the template directory to the watcher
+	// err = t.watcher.Add(t.TempalteDir)
+	// if err != nil {
+	// 	log.Fatalln("Error adding directory to watcher:", err)
+	// }
+}
 
-	// Start watching for file changes
-	go t.watchFiles()
+// LoadTemplate adds or updates a template in the map
+func (t *Templates) LoadTemplate(tmpl *Template) {
+	t.Templates[tmpl.Id] = tmpl
+	log.Printf("[Template.LoadTemplate] Loaded: %s (%d tasks)", tmpl.Id, len(tmpl.Tasks))
+}
 
-	files, err := os.ReadDir(t.TempalteDir)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	log.Println("[Template.Setup]")
-
-	for _, file := range files {
-		fileName := file.Name()
-		if strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml") {
-			l := Read(path.Join(t.TempalteDir, fileName))
-			log.Printf("Template:%v Scan:%v\n", fileName, len(l.Tasks))
-			log.Printf("Template:%v Mode:%v\n", fileName, l.Config.Mode)
-			t.Templates[l.Id] = l
-		}
-	}
-
-	// Add the template directory to the watcher
-	err = t.watcher.Add(t.TempalteDir)
-	if err != nil {
-		log.Fatalln("Error adding directory to watcher:", err)
-	}
+// RemoveTemplate removes a template from the map
+func (t *Templates) RemoveTemplate(id string) {
+	delete(t.Templates, id)
+	log.Printf("[Template.RemoveTemplate] Removed: %s", id)
 }
 
 func (t *Templates) watchFiles() {
@@ -205,6 +220,9 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 		log.Printf("[Templates.Run][%s] Running template: %s", id, template.Info.Title)
 
 		for _, job := range template.Tasks {
+			if job.Disabled {
+				continue
+			}
 			// Collect default actions separately
 			if job.Id == "default" {
 				for _, action := range job.Todo {
@@ -266,6 +284,9 @@ func ParseTemplateActions(tasks []Actions, data map[string]any, mode string) ([]
 	var defaultActions []Action
 
 	for _, job := range tasks {
+		if job.Disabled {
+			continue
+		}
 		// Collect default actions separately
 		if job.Id == "default" {
 			for _, action := range job.Todo {

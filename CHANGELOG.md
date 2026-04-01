@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - Template Actions System
+
+### Added
+
+- **Template Actions Engine** — Hook-based automation on proxy traffic. Templates run on `before_request`, `request`, `response` hooks. Each template has tasks with conditions (dadql) and actions.
+- **Actions:** `set`, `delete`, `replace` (string/regex), `create_label`, `send_request`
+- **`_templates` collection** — DB-backed template storage on launcher with migration + default seed
+- **Default templates** — `extensions`, `mime`, `paths`, `proxy-configs` embedded via `//go:embed`, seeded on first migration
+- **3-level enable/disable** — Global (`_configs`), per-project (`_projects.data`), per-proxy (`_proxies.data.run_templates`)
+- **Live reload** — Launcher watches `_templates` for changes, notifies running `grroxy-app` instances via `POST /api/templates/reload`
+- **`/api/templates/check`** — Validate template YAML (hooks, actions, required keys) before saving
+- **`/api/templates/info`** — Returns all available hooks, actions, their keys and descriptions. Used by frontend for autocomplete and documentation
+- **`/api/request/modify`** — Apply template actions to raw HTTP request strings (set, delete, replace)
+- **Settings UI** — Global and per-project template toggles in settings, per-proxy toggle in proxy toolbar
+- **Frontend** — DB-backed template list with PocketBase subscription, editor with task disable toggles
+
+### Fixed
+
+- **Header matching in `modify.go`** — `RequestUpdateKey` and `RequestDeleteKey` now use `strings.TrimRight(h[0], ": ")` to handle both `"Header:"` and `"Header: "` formats from rawhttp parser
+- **PocketBase JSON field parsing in launcher hooks** — `forEachRunningProject` now handles `types.JsonRaw`, `string`, and `map[string]any` for the `data` field instead of silently skipping all projects
+
+### Known Issues
+
+- Race condition on `Templates.Templates` map (concurrent read/write from proxy goroutines and reload handlers) — needs `sync.RWMutex`
+- `TemplatesEnabled` and `RunTemplates` bools need `atomic.Bool` for concurrent access
+- `send_request` action: header and body overrides are TODO stubs
+- `Content-Length` header not updated when body changes via `set` action
+
+---
+
 # Released v2026.3.8
 
 Includes `v0.28.0` and `v0.27.1`
