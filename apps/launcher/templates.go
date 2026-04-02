@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/glitchedgitz/grroxy/grx/templates"
 	"github.com/glitchedgitz/grroxy/grx/templates/actions"
 	"github.com/glitchedgitz/pocketbase/apis"
 	"github.com/glitchedgitz/pocketbase/core"
@@ -121,8 +122,9 @@ func (launcher *Launcher) TemplatesInfo(e *core.ServeEvent) error {
 		Path:   "/api/templates/info",
 		Handler: func(c echo.Context) error {
 			return c.JSON(http.StatusOK, map[string]any{
-				"actions": actions.ActionRegistry,
-				"hooks":   actions.HookRegistry,
+				"actions":   actions.ActionRegistry,
+				"hooks":     actions.HookRegistry,
+				"reference": templates.TemplateReference,
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
