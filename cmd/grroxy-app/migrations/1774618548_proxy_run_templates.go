@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/glitchedgitz/grroxy/apps/app"
 	"github.com/glitchedgitz/pocketbase/daos"
 	m "github.com/glitchedgitz/pocketbase/migrations"
 	"github.com/pocketbase/dbx"
@@ -19,7 +20,7 @@ func init() {
 			return nil
 		}
 
-		for _, record := range records {
+		for i, record := range records {
 			dataRaw := record.Get("data")
 
 			var dataMap map[string]any
@@ -36,13 +37,26 @@ func init() {
 				dataMap = make(map[string]any)
 			}
 
+			updated := false
+
 			if _, exists := dataMap["run_templates"]; !exists {
 				dataMap["run_templates"] = true
+				updated = true
+			}
+
+			// Assign color if empty
+			color := record.GetString("color")
+			if color == "" {
+				record.Set("color", app.NextProxyColor(i))
+				updated = true
+			}
+
+			if updated {
 				record.Set("data", dataMap)
 				if err := dao.SaveRecord(record); err != nil {
 					log.Printf("[migration][proxy_run_templates] Error updating proxy %s: %v", record.Id, err)
 				} else {
-					log.Printf("[migration][proxy_run_templates] Set run_templates=true for proxy %s", record.Id)
+					log.Printf("[migration][proxy_run_templates] Updated proxy %s", record.Id)
 				}
 			}
 		}
