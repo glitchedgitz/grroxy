@@ -725,9 +725,14 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 	proxyRecord.Set("color", "")
 	proxyRecord.Set("profile", "")
 
-	// Initialize data column (filters are now stored separately in _ui collection)
-	proxyData := map[string]interface{}{}
+	// Initialize data column with run_templates enabled by default
+	proxyData := map[string]interface{}{
+		"run_templates": true,
+	}
 	proxyRecord.Set("data", proxyData)
+
+	// Set RunTemplates on the live proxy instance
+	newProxy.RunTemplates = true
 
 	if err := dao.SaveRecord(proxyRecord); err != nil {
 		return nil, fmt.Errorf("failed to save proxy record: %v", err)
