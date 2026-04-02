@@ -5,6 +5,21 @@ set -euo pipefail
 
 LAUNCHER_ADDR="${1:-127.0.0.1:8090}"
 
+# Install latest binaries
+echo "Installing binaries..."
+SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+bash "${SCRIPT_DIR}/install.sh"
+
+# Start launcher if not running
+STARTED_LAUNCHER=false
+if ! curl -s -o /dev/null "http://${LAUNCHER_ADDR}" 2>/dev/null; then
+    echo "Starting launcher on ${LAUNCHER_ADDR}..."
+    grroxy start --host "${LAUNCHER_ADDR}" &
+    LAUNCHER_PID=$!
+    STARTED_LAUNCHER=true
+    sleep 3
+fi
+
 echo "Cleaning up e2e test data from ${LAUNCHER_ADDR}..."
 
 # Delete test templates
@@ -29,5 +44,12 @@ for ID in $PROJECT_IDS; do
     || curl -s -X DELETE "http://${LAUNCHER_ADDR}/api/collections/_projects/records/${ID}" > /dev/null 2>&1
     echo "  Deleted project: ${NAME} (${ID})"
 done
+
+# Stop launcher if we started it
+if [ "$STARTED_LAUNCHER" = true ]; then
+    kill "$LAUNCHER_PID" 2>/dev/null || true
+    wait "$LAUNCHER_PID" 2>/dev/null || true
+    echo "Stopped launcher."
+fi
 
 echo "Done."
