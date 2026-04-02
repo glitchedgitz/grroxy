@@ -134,6 +134,17 @@ type ProjectStateData struct {
 	State string `json:"state" db:"state"`
 }
 
+// updateProjectData merges ip/state into the existing data field without overwriting other keys (e.g. templatesEnabled).
+func updateProjectData(record *models.Record, ip string, state string) {
+	existing := make(map[string]any)
+	if raw, err := json.Marshal(record.Get("data")); err == nil {
+		json.Unmarshal(raw, &existing)
+	}
+	existing["ip"] = ip
+	existing["state"] = state
+	record.Set("data", existing)
+}
+
 type ProjectData struct {
 	Id      string           `json:"id" db:"id"`
 	Name    string           `json:"name" db:"name"`
@@ -226,11 +237,7 @@ func (launcher *Launcher) setProjectStateClose(projectId string) {
 		return
 	}
 
-	stateData := ProjectStateData{
-		Ip:    "",
-		State: ProjectState.Unactive,
-	}
-	record.Set("data", stateData)
+	updateProjectData(record, "", ProjectState.Unactive)
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
@@ -291,7 +298,7 @@ func (launcher *Launcher) OpenProject(projectIndex int) (ProjectData, error) {
 		},
 	}
 
-	record.Set("data", projectData.Data)
+	updateProjectData(record, ProjectIP, ProjectState.Active)
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
@@ -360,7 +367,7 @@ func (launcher *Launcher) OpenProjectFromNameOrId(project string) (ProjectData, 
 		Data: projectStateData,
 	}
 
-	record.Set("data", projectStateData)
+	updateProjectData(record, projectIp, ProjectState.Active)
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
@@ -453,10 +460,7 @@ func (launcher *Launcher) ResetProjectStates(e *core.ServeEvent) error {
 			continue
 		}
 
-		record.Set("data", ProjectStateData{
-			Ip:    "",
-			State: ProjectState.Unactive,
-		})
+		updateProjectData(record, "", ProjectState.Unactive)
 
 		err = launcher.App.Dao().SaveRecord(record)
 		if err != nil {
