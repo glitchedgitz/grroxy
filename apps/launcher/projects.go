@@ -87,6 +87,63 @@ func (launcher *Launcher) API_CreateNewProject(e *core.ServeEvent) error {
 	return nil
 }
 
+func (launcher *Launcher) API_DeleteProject(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: "POST",
+		Path:   "/api/project/delete",
+		Handler: func(c echo.Context) error {
+			var data struct {
+				Id string `json:"id"`
+			}
+
+			if err := c.Bind(&data); err != nil {
+				return c.String(http.StatusBadRequest, "Invalid request body")
+			}
+
+			if data.Id == "" {
+				return c.String(http.StatusBadRequest, "Project ID is required")
+			}
+
+			record, err := launcher.App.Dao().FindRecordById("_projects", data.Id)
+			if err != nil {
+				return c.String(http.StatusNotFound, "Project not found")
+			}
+
+			projectPath := record.GetString("path")
+
+			// Kill running grroxy-app for this project
+			existingData := make(map[string]any)
+			if raw, err := json.Marshal(record.Get("data")); err == nil {
+				json.Unmarshal(raw, &existingData)
+			}
+			if ip, ok := existingData["ip"].(string); ok && ip != "" {
+				if state, ok := existingData["state"].(string); ok && state == ProjectState.Active {
+					// Set state to unactive so the process exits
+					updateProjectData(record, "", ProjectState.Unactive)
+					launcher.App.Dao().SaveRecord(record)
+				}
+			}
+
+			// Delete the project record
+			if err := launcher.App.Dao().DeleteRecord(record); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			}
+
+			// Delete project folder
+			if projectPath != "" {
+				os.RemoveAll(projectPath)
+			}
+
+			return c.JSON(http.StatusOK, map[string]string{"message": "Project deleted"})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(launcher.App),
+		},
+	})
+
+	return nil
+}
+
 func (launcher *Launcher) API_OpenProject(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: "POST",
@@ -214,7 +271,11 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 	record.Set("name", projectName)
 	record.Set("id", projectId)
 	record.Set("path", projectPath)
-	record.Set("data", projectData.Data)
+	record.Set("data", map[string]any{
+		"ip":               ProjectIP,
+		"state":            ProjectState.Active,
+		"templatesEnabled": true,
+	})
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
