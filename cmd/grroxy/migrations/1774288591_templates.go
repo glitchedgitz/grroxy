@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"encoding/json"
 	"log"
 
 	"github.com/glitchedgitz/grroxy/grx/templates"
@@ -83,6 +84,39 @@ func init() {
 				log.Printf("[migration][templates] Error seeding %s: %v", tmpl.Id, err)
 			} else {
 				log.Printf("[migration][templates] Seeded default template: %s", tmpl.Id)
+			}
+		}
+
+		// Enable templatesEnabled on all existing projects
+		projects, err := dao.FindRecordsByExpr("_projects")
+		if err == nil {
+			for _, project := range projects {
+				existing := make(map[string]any)
+				if raw, err := json.Marshal(project.Get("data")); err == nil {
+					json.Unmarshal(raw, &existing)
+				}
+				if _, ok := existing["templatesEnabled"]; !ok {
+					existing["templatesEnabled"] = true
+					project.Set("data", existing)
+					if err := dao.SaveRecord(project); err != nil {
+						log.Printf("[migration][templates] Error enabling templates for project %s: %v", project.Id, err)
+					} else {
+						log.Printf("[migration][templates] Enabled templates for project: %s", project.Id)
+					}
+				}
+			}
+		}
+
+		// Seed global templates toggle in _configs
+		configCollection, err := dao.FindCollectionByNameOrId("_configs")
+		if err == nil {
+			configRecord := models.NewRecord(configCollection)
+			configRecord.Set("key", "settings.templatesEnabled")
+			configRecord.Set("data", true)
+			if err := dao.SaveRecord(configRecord); err != nil {
+				log.Printf("[migration][templates] Error seeding config: %v", err)
+			} else {
+				log.Println("[migration][templates] Seeded settings.templatesEnabled = true")
 			}
 		}
 
