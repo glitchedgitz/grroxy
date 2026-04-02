@@ -722,7 +722,7 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 	proxyRecord.Set("browser", body.Browser)
 	proxyRecord.Set("intercept", false) // Default to false
 	proxyRecord.Set("state", "running")
-	proxyRecord.Set("color", "")
+	proxyRecord.Set("color", NextProxyColor(len(ProxyMgr.instances)))
 	proxyRecord.Set("profile", "")
 
 	// Initialize data column with run_templates enabled by default
