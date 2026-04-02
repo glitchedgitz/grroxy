@@ -105,7 +105,16 @@ func (backend *Backend) LoadTemplatesEnabledFromLauncher(launcherAddr string) {
 				} `json:"items"`
 			}
 			if json.Unmarshal(body, &result) == nil && len(result.Items) > 0 {
-				json.Unmarshal(result.Items[0].Data, &globalEnabled)
+				// data can be bool (true/false) or string ("true"/"false")
+				var boolVal bool
+				if json.Unmarshal(result.Items[0].Data, &boolVal) == nil {
+					globalEnabled = boolVal
+				} else {
+					var strVal string
+					if json.Unmarshal(result.Items[0].Data, &strVal) == nil {
+						globalEnabled = strVal == "true"
+					}
+				}
 			}
 		}
 	}
