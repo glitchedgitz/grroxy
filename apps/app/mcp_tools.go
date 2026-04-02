@@ -1,14 +1,18 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"time"
 
+	"github.com/glitchedgitz/grroxy/grx/templates"
 	"github.com/glitchedgitz/grroxy/grx/version"
 	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/grroxy/internal/utils"
@@ -115,6 +119,42 @@ type ProxyStartArgs struct {
 
 type ProxyStopArgs struct {
 	ID string `json:"id,omitempty" jsonschema_description:"The proxy ID to stop. If not provided, stops all running proxies"`
+}
+
+// --- Template arg structs ---
+
+type TemplateListArgs struct{}
+
+type TemplateGetInfoArgs struct{}
+
+type TemplateCreateArgs struct {
+	Name        string              `json:"name" jsonschema:"required" jsonschema_description:"Unique template ID/name"`
+	Title       string              `json:"title" jsonschema:"required" jsonschema_description:"Human readable title"`
+	Description string              `json:"description,omitempty" jsonschema_description:"What this template does"`
+	Mode        string              `json:"mode,omitempty" jsonschema_description:"'any' = stop after first match, 'all' = run all matching tasks. Default: any"`
+	Hooks       map[string][]string `json:"hooks" jsonschema:"required" jsonschema_description:"Hook config, e.g. {proxy: [request, response, before_request]}"`
+	Tasks       []TemplateTaskArg   `json:"tasks" jsonschema:"required" jsonschema_description:"List of tasks with conditions and actions"`
+	Enabled     bool                `json:"enabled,omitempty" jsonschema_description:"Enable template, default true"`
+}
+
+type TemplateTaskArg struct {
+	Id        string           `json:"id" jsonschema:"required" jsonschema_description:"Unique task ID"`
+	Condition string           `json:"condition,omitempty" jsonschema_description:"dadql condition, empty = match all. Operators: =, !=, >, <, ~, !~, AND, OR, NOT. Fields: req.method, req.path, req.ext, req.headers.Name, resp.status, resp.mime, host"`
+	Disabled  bool             `json:"disabled,omitempty" jsonschema_description:"Set true to skip this task"`
+	Todo      []map[string]any `json:"todo" jsonschema:"required" jsonschema_description:"Actions: {create_label: {name, color, type}}, {set: {req.headers.X: val}}, {delete: {req.headers.X: ''}}, {replace: {search, value, regex}}, {send_request: {req.method: PUT}}"`
+}
+
+type TemplateReadArgs struct {
+	Id string `json:"id" jsonschema:"required" jsonschema_description:"Template ID to read"`
+}
+
+type TemplateUpdateArgs struct {
+	Id      string            `json:"id" jsonschema:"required" jsonschema_description:"Template record ID to update"`
+	Title   string            `json:"title,omitempty" jsonschema_description:"Update title"`
+	Mode    string            `json:"mode,omitempty" jsonschema_description:"Update mode"`
+	Hooks   map[string][]string `json:"hooks,omitempty" jsonschema_description:"Update hooks"`
+	Tasks   []TemplateTaskArg `json:"tasks,omitempty" jsonschema_description:"Update tasks"`
+	Enabled *bool             `json:"enabled,omitempty" jsonschema_description:"Enable/disable template"`
 }
 
 type ProxyScreenshotArgs struct {
@@ -1251,6 +1291,151 @@ func (backend *Backend) proxyWaitForSelectorHandler(ctx context.Context, request
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Template tools
+// ---------------------------------------------------------------------------
+
+func (backend *Backend) templateListHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if backend.Templates == nil {
+		return mcpJSONResult(map[string]any{"list": []any{}, "count": 0})
+	}
+
+	list := make([]map[string]any, 0)
+	for _, tmpl := range backend.Templates.Templates {
+		list = append(list, map[string]any{
+			"id":          tmpl.Id,
+			"title":       tmpl.Info.Title,
+			"description": tmpl.Info.Description,
+			"mode":        tmpl.Config.Mode,
+			"hooks":       tmpl.Config.Hooks,
+			"tasks_count": len(tmpl.Tasks),
+		})
+	}
+
+	return mcpJSONResult(map[string]any{"list": list, "count": len(list)})
+}
+
+func (backend *Backend) templateReadHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args TemplateReadArgs
+	argsBytes, _ := json.Marshal(request.Params.Arguments)
+	if err := json.Unmarshal(argsBytes, &args); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid arguments: %v", err)), nil
+	}
+
+	if backend.Templates == nil {
+		return mcp.NewToolResultError("templates not initialized"), nil
+	}
+
+	tmpl, ok := backend.Templates.Templates[args.Id]
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf("template '%s' not found", args.Id)), nil
+	}
+
+	return mcpJSONResult(tmpl)
+}
+
+func (backend *Backend) templateGetInfoHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return mcp.NewToolResultText(templates.TemplateReference), nil
+}
+
+func (backend *Backend) templateCreateHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args TemplateCreateArgs
+	argsBytes, _ := json.Marshal(request.Params.Arguments)
+	if err := json.Unmarshal(argsBytes, &args); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid arguments: %v", err)), nil
+	}
+
+	// Save to launcher via HTTP
+	if backend.Config.LauncherAddr == "" {
+		return mcp.NewToolResultError("no launcher address configured"), nil
+	}
+
+	body := map[string]any{
+		"name":       args.Name,
+		"title":      args.Title,
+		"description": args.Description,
+		"type":       "actions",
+		"mode":       args.Mode,
+		"hooks":      args.Hooks,
+		"tasks":      args.Tasks,
+		"enabled":    args.Enabled,
+		"global":     true,
+		"is_default": false,
+	}
+	if args.Mode == "" {
+		body["mode"] = "any"
+	}
+
+	bodyJSON, _ := json.Marshal(body)
+	resp, err := httpPost(fmt.Sprintf("http://%s/api/templates/new", backend.Config.LauncherAddr), bodyJSON)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to create template: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(string(resp)), nil
+}
+
+func (backend *Backend) templateUpdateHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args TemplateUpdateArgs
+	argsBytes, _ := json.Marshal(request.Params.Arguments)
+	if err := json.Unmarshal(argsBytes, &args); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid arguments: %v", err)), nil
+	}
+
+	if backend.Config.LauncherAddr == "" {
+		return mcp.NewToolResultError("no launcher address configured"), nil
+	}
+
+	body := make(map[string]any)
+	if args.Title != "" {
+		body["title"] = args.Title
+	}
+	if args.Mode != "" {
+		body["mode"] = args.Mode
+	}
+	if args.Hooks != nil {
+		body["hooks"] = args.Hooks
+	}
+	if args.Tasks != nil {
+		body["tasks"] = args.Tasks
+	}
+	if args.Enabled != nil {
+		body["enabled"] = *args.Enabled
+	}
+
+	bodyJSON, _ := json.Marshal(body)
+	url := fmt.Sprintf("http://%s/api/collections/_templates/records/%s", backend.Config.LauncherAddr, args.Id)
+	resp, err := httpPatch(url, bodyJSON)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to update template: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(string(resp)), nil
+}
+
+func httpPost(url string, body []byte) ([]byte, error) {
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
+func httpPatch(url string, body []byte) ([]byte, error) {
+	req, err := http.NewRequest("PATCH", url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
 
 func mcpJSONResult(v any) (*mcp.CallToolResult, error) {
 	jsonBytes, err := json.Marshal(v)
