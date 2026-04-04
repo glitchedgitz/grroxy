@@ -1336,16 +1336,27 @@ func (backend *Backend) templateReadHandler(ctx context.Context, request mcp.Cal
 		return mcp.NewToolResultError(fmt.Sprintf("invalid arguments: %v", err)), nil
 	}
 
-	if backend.Templates == nil {
-		return mcp.NewToolResultError("templates not initialized"), nil
+	// Fetch from launcher by PocketBase record ID
+	if backend.Config.LauncherAddr != "" {
+		url := fmt.Sprintf("http://%s/api/collections/_templates/records/%s", backend.Config.LauncherAddr, args.Id)
+		resp, err := http.Get(url)
+		if err == nil {
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err == nil && resp.StatusCode == 200 {
+				return mcp.NewToolResultText(string(body)), nil
+			}
+		}
 	}
 
-	tmpl, ok := backend.Templates.Templates[args.Id]
-	if !ok {
-		return mcp.NewToolResultError(fmt.Sprintf("template '%s' not found", args.Id)), nil
+	// Fallback: try in-memory by template name
+	if backend.Templates != nil {
+		if tmpl, ok := backend.Templates.Templates[args.Id]; ok {
+			return mcpJSONResult(tmpl)
+		}
 	}
 
-	return mcpJSONResult(tmpl)
+	return mcp.NewToolResultError(fmt.Sprintf("template '%s' not found", args.Id)), nil
 }
 
 func (backend *Backend) templateGetInfoHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
