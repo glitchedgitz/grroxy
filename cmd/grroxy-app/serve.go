@@ -10,6 +10,7 @@ import (
 
 	"github.com/glitchedgitz/cook/v2/pkg/cook"
 	"github.com/glitchedgitz/grroxy/apps/app"
+	"github.com/glitchedgitz/grroxy/grx/templates"
 	"github.com/glitchedgitz/grroxy/internal/process"
 	"github.com/glitchedgitz/pocketbase"
 	"github.com/glitchedgitz/pocketbase/core"
@@ -32,7 +33,9 @@ func serve(projectPath string) {
 	// Extract project ID from project path (the directory name)
 	projectID := filepath.Base(projectPath)
 	conf.ProjectID = projectID
+	conf.LauncherAddr = LauncherAddress
 	log.Printf("Project ID: %s", projectID)
+	log.Printf("Launcher Address: %s", LauncherAddress)
 
 	// Create an instance of the app structure
 	API = app.Backend{
@@ -109,6 +112,13 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.TemplatesList)
 	API.App.OnBeforeServe().Add(API.TemplatesNew)
 	API.App.OnBeforeServe().Add(API.TemplatesDelete)
+	API.App.OnBeforeServe().Add(API.TemplatesCheck)
+	API.App.OnBeforeServe().Add(API.TemplatesInfo)
+	API.App.OnBeforeServe().Add(API.TemplateActionButtons)
+	API.App.OnBeforeServe().Add(API.TemplateRunAction)
+	API.App.OnBeforeServe().Add(API.TemplateToggle)
+	API.App.OnBeforeServe().Add(API.TemplateGlobalToggle)
+	API.App.OnBeforeServe().Add(API.TemplateReload)
 
 	// Commands
 	API.App.OnBeforeServe().Add(API.RunCommand)
@@ -167,6 +177,14 @@ func serve(projectPath string) {
 	// Xterm (Terminal)
 	API.RegisterXtermRoutes()
 
+	// Initialize Templates engine: fetch from launcher
+	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
+		API.Templates = &templates.Templates{}
+		API.Templates.Setup()
+		API.LoadTemplatesEnabledFromLauncher(conf.LauncherAddr)
+		return API.LoadTemplatesFromLauncher(conf.LauncherAddr)
+	})
+
 	API.App.OnBeforeServe().Add(func(e *core.ServeEvent) error {
 		return API.InitializeProxy()
 	})
@@ -212,6 +230,13 @@ func serve(projectPath string) {
 		err := API.SetupInterceptHooks()
 		if err != nil {
 			log.Printf("[Startup] Error setting up intercept hooks: %v", err)
+			return err
+		}
+
+		// Setup template hooks
+		err = API.SetupTemplateHooks()
+		if err != nil {
+			log.Printf("[Startup] Error setting up template hooks: %v", err)
 			return err
 		}
 

@@ -14,6 +14,8 @@ Central hub for tracking features, tasks, and project progress in a structured w
 | Feature | Status | File |
 |---------|--------|------|
 | CWD File Explorer | in-progress | [feature-cwd/README.md](feature-cwd/README.md) |
+| Template Actions | in-progress | [feature-actions/README.md](feature-actions/README.md) |
+| Integration Tests | planned | [feature-integration-tests/README.md](feature-integration-tests/README.md) |
 
 ## Bug Fixes
 

@@ -3,6 +3,50 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] - Template Actions System
+
+### Added
+
+- **Template Actions Engine** — Hook-based automation on proxy traffic. Templates run on `before_request`, `request`, `response` hooks. Each template has tasks with conditions (dadql) and actions.
+- **Actions:** `set`, `delete`, `replace` (string/regex), `create_label`, `send_request`
+- **`_templates` collection** — DB-backed template storage on launcher with migration + default seed
+- **Default templates** — `extensions`, `mime`, `paths`, `proxy-configs` embedded via `//go:embed`, seeded on first migration
+- **3-level enable/disable** — Global (`_configs`), per-project (`_projects.data`), per-proxy (`_proxies.data.run_templates`). New projects and proxies default to enabled.
+- **Live reload** — Launcher watches `_templates` for changes, notifies running `grroxy-app` instances via `POST /api/templates/reload`
+- **`/api/templates/check`** — Validate template YAML (hooks, actions, required keys) before saving
+- **`/api/templates/info`** — Returns all available hooks, actions, keys, descriptions, and full syntax reference
+- **`/api/project/delete`** — Delete a project, its DB record, and project folder
+- **`/api/request/modify`** — Apply template actions to raw HTTP request strings (set, delete, replace)
+- **MCP template tools** — `templateList`, `templateRead`, `templateGetInfo`, `templateCreate`, `templateUpdate` for AI agents (Claude Code, MCP clients)
+- **Frontend AI tools** — `templateGetInfo`, `templateList`, `templateRead`, `templateCreate`, `templateUpdate`, `templateDelete`, `templateCheck` in AI SDK
+- **Template syntax reference** — Full reference in `grx/templates/reference.go`, served via `/api/templates/info` for AI agents
+- **Settings UI** — Global and per-project template toggles in settings, per-proxy toggle in proxy toolbar
+- **Frontend** — DB-backed template list with PocketBase subscription, editor with task disable toggles
+- **Proxy auto-color** — New proxies get a color from the palette automatically. Migration assigns colors to existing proxies with empty color.
+- **Frontend: `send_request` UI** — Template editor now supports `send_request` action with method, headers, and body fields
+- **Frontend: `delete` action UI** — Template editor now supports `delete` action (reuses `set` UI)
+- **Frontend: `ColorDialog` component** — Shared color picker used in both proxy manager and template label editor
+- **Frontend: Editable author** — Template author is now inline-editable (same as title/description)
+- **Frontend: Sidebar template status** — Disabled templates show dimmed icon in sidebar
+- **E2E test script** — `tests/e2e_test.sh` — full integration test: project creation, template CRUD, proxy traffic, label verification, send_request, toggles, restart persistence (20 tests)
+- **Cleanup script** — `tests/cleanup.sh` — removes test templates and projects
+
+### Fixed
+
+- **Header matching in `modify.go`** — `RequestUpdateKey` and `RequestDeleteKey` now use `strings.TrimRight(h[0], ": ")` to handle both `"Header:"` and `"Header: "` formats from rawhttp parser
+- **PocketBase JSON field parsing in launcher hooks** — `forEachRunningProject` now handles `types.JsonRaw`, `string`, and `map[string]any` for the `data` field instead of silently skipping all projects
+- **Project data preserved on restart** — `ResetProjectStates`, `setProjectStateClose`, and `OpenProject` now merge into existing `data` field instead of overwriting (preserves `templatesEnabled`)
+- **New projects default to `templatesEnabled: true`** — `CreateNewProject` sets it in the initial data
+- **New proxies default to `run_templates: true`** — `startProxyLogic` sets it in proxy data and on the live instance
+- **`send_request` action** — Fixed: strips `http://`/`https://` from host, fetches raw request from `_req` DB record, normalizes `\r\n` line endings, fixes Host header for direct replay, sets `Url` field so host shows in DB
+
+### Known Issues
+
+- Race condition on `Templates.Templates` map (concurrent read/write from proxy goroutines and reload handlers) — needs `sync.RWMutex`
+- `TemplatesEnabled` and `RunTemplates` bools need `atomic.Bool` for concurrent access
+- `Content-Length` header not updated when body changes via `set` action
+
+---
 # Released v2026.3.9
 
 Includes `v0.28.1`

@@ -17,8 +17,9 @@ type Config struct {
 	CacheDirectory    string // Cache directory
 	TemplateDirectory string // Template directory
 
-	ProjectID   string //  Active Project's ID
-	CWDirectory string //  Projects Directory + ProjectID
+	ProjectID    string //  Active Project's ID
+	CWDirectory  string //  Projects Directory + ProjectID
+	LauncherAddr string // Launcher address for fetching templates
 }
 
 func (c *Config) Initiate() {
