@@ -426,7 +426,7 @@ fi
 # Check send_request created duplicate
 sleep 5
 ALL_DATA=$(api GET "http://${PROJECT_IP}/api/collections/_data/records?perPage=50")
-GENERATED_COUNT=$(echo "$ALL_DATA" | jq '[.items[] | select(.generated_by != null and (.generated_by | contains("template:send_request")))] | length')
+GENERATED_COUNT=$(echo "$ALL_DATA" | jq '[.items[] | select(.generated_by != null and (.generated_by | contains("repeater/template:")))] | length')
 if [ "$GENERATED_COUNT" -gt 0 ]; then
     pass "send_request created duplicate request (${GENERATED_COUNT})"
 else
