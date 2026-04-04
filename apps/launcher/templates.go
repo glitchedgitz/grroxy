@@ -124,6 +124,7 @@ func (launcher *Launcher) TemplatesInfo(e *core.ServeEvent) error {
 			return c.JSON(http.StatusOK, map[string]any{
 				"actions":   actions.ActionRegistry,
 				"hooks":     actions.HookRegistry,
+				"modes":     actions.ModeRegistry,
 				"reference": templates.TemplateReference,
 			})
 		},

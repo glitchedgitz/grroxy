@@ -20,6 +20,18 @@ type ActionInfo struct {
 	Keys        []KeyInfo `json:"keys"`
 }
 
+// ModeInfo describes a template execution mode
+type ModeInfo struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// ModeRegistry returns available modes
+var ModeRegistry = []ModeInfo{
+	{Name: "any", Description: "Stop after the first matching task"},
+	{Name: "all", Description: "Run all matching tasks"},
+}
+
 // KeyInfo describes a key for an action
 type KeyInfo struct {
 	Name        string `json:"name"`
@@ -51,7 +63,9 @@ var ValidActions = map[string][]string{
 
 // ValidHooks lists all supported hook types (for /check validation)
 var ValidHooks = map[string][]string{
-	"proxy": {"request", "response", "before_request"},
+	"proxy":                 {"request", "response", "before_request"},
+	"request-action-button": {},
+	"response-action-button": {},
 }
 
 // ActionRegistry returns full action metadata
@@ -120,5 +134,15 @@ var HookRegistry = []HookInfo{
 			{Name: "request", Description: "Runs after request is saved to DB. Async — used for labeling, notifications, send_request"},
 			{Name: "response", Description: "Runs after response is saved to DB. Async — used for labeling based on response data (mime, status, headers)"},
 		},
+	},
+	{
+		Group:       "request-action-button",
+		Description: "Button shown on request rows — user clicks to run the action on a specific request",
+		Hooks:       []HookItemInfo{},
+	},
+	{
+		Group:       "response-action-button",
+		Description: "Button shown on response rows — user clicks to run the action on a specific response",
+		Hooks:       []HookItemInfo{},
 	},
 }

@@ -114,6 +114,8 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.TemplatesDelete)
 	API.App.OnBeforeServe().Add(API.TemplatesCheck)
 	API.App.OnBeforeServe().Add(API.TemplatesInfo)
+	API.App.OnBeforeServe().Add(API.TemplateActionButtons)
+	API.App.OnBeforeServe().Add(API.TemplateRunAction)
 	API.App.OnBeforeServe().Add(API.TemplateToggle)
 	API.App.OnBeforeServe().Add(API.TemplateGlobalToggle)
 	API.App.OnBeforeServe().Add(API.TemplateReload)

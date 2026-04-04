@@ -239,7 +239,138 @@ func (backend *Backend) TemplatesInfo(e *core.ServeEvent) error {
 			return c.JSON(http.StatusOK, map[string]any{
 				"actions":   actions.ActionRegistry,
 				"hooks":     actions.HookRegistry,
+				"modes":     actions.ModeRegistry,
 				"reference": templates.TemplateReference,
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+
+	return nil
+}
+
+// TemplateActionButtons returns templates with request-action-button or response-action-button hooks
+func (backend *Backend) TemplateActionButtons(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/templates/action-buttons",
+		Handler: func(c echo.Context) error {
+			var body struct {
+				Hook string `json:"hook"`
+			}
+			if err := c.Bind(&body); err != nil {
+				body.Hook = "request-action-button"
+			}
+			hookType := body.Hook
+			if hookType == "" {
+				hookType = "request-action-button"
+			}
+
+			if backend.Templates == nil {
+				return c.JSON(http.StatusOK, map[string]any{"list": []any{}})
+			}
+
+			list := make([]map[string]any, 0)
+			for _, tmpl := range backend.Templates.Templates {
+				if _, ok := tmpl.Config.Hooks[hookType]; ok {
+					list = append(list, map[string]any{
+						"id":          tmpl.Id,
+						"title":       tmpl.Info.Title,
+						"description": tmpl.Info.Description,
+						"tasks":       tmpl.Tasks,
+						"mode":        tmpl.Config.Mode,
+					})
+				}
+			}
+
+			return c.JSON(http.StatusOK, map[string]any{"list": list})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+
+	return nil
+}
+
+// TemplateRunAction executes a specific template's tasks on provided request data
+func (backend *Backend) TemplateRunAction(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: "POST",
+		Path:   "/api/templates/run-action",
+		Handler: func(c echo.Context) error {
+			var body struct {
+				TemplateID string         `json:"template_id"`
+				Request    string         `json:"request"`
+				Url        string         `json:"url"`
+				RowID      string         `json:"row_id"`
+				Data       map[string]any `json:"data"`
+			}
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
+			}
+
+			if backend.Templates == nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Templates not initialized"})
+			}
+
+			tmpl, ok := backend.Templates.Templates[body.TemplateID]
+			if !ok {
+				return c.JSON(http.StatusNotFound, map[string]string{"error": "Template not found"})
+			}
+
+			// Build data map for template execution
+			data := body.Data
+			if data == nil {
+				data = make(map[string]any)
+			}
+			if body.RowID != "" {
+				data["id"] = body.RowID
+			}
+
+			// Run the template's tasks with ParseTemplateActions
+			results, err := templates.ParseTemplateActions(tmpl.Tasks, data, tmpl.Config.Mode)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			}
+
+			// Separate modification actions from side-effect actions
+			var modifyTasks []templates.Action
+			var sideEffects []templates.Action
+			for _, action := range results {
+				switch action.ActionName {
+				case actions.Set, actions.Delete, actions.Replace:
+					modifyTasks = append(modifyTasks, action)
+				default:
+					sideEffects = append(sideEffects, action)
+				}
+			}
+
+			// Apply modification actions to the raw request if provided
+			var modifiedRequest string
+			if body.Request != "" && len(modifyTasks) > 0 {
+				modifiedRequest, _ = runActions(modifyTasks, map[string]any{
+					"method":  "",
+					"url":     body.Url,
+					"path":    "",
+					"query":   "",
+					"headers": [][]string{},
+					"raw":     body.Request,
+				})
+			}
+
+			// Execute side-effect actions (create_label, send_request, etc.)
+			if len(sideEffects) > 0 {
+				go backend.ExecuteTemplateActions(sideEffects, data)
+			}
+
+			return c.JSON(http.StatusOK, map[string]any{
+				"request":      modifiedRequest,
+				"actions_run":  len(results),
+				"modified":     len(modifyTasks) > 0,
+				"side_effects": len(sideEffects),
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
