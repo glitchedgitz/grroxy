@@ -17,6 +17,7 @@ import (
 type Action struct {
 	Data       map[string]any `yaml:"data" json:"data"`
 	ActionName string         `yaml:"action_name" json:"action_name"`
+	TemplateID string         `yaml:"-" json:"template_id,omitempty"`
 }
 
 type Actions struct {
@@ -272,13 +273,17 @@ func (t *Templates) Run(data map[string]any, hook string) ([]Action, error) {
 			actions = defaultActions
 		}
 
+		for i := range actions {
+			actions[i].TemplateID = template.Id
+		}
+
 		results = append(results, actions...)
 	}
 
 	return results, nil
 }
 
-func ParseTemplateActions(tasks []Actions, data map[string]any, mode string) ([]Action, error) {
+func ParseTemplateActions(tasks []Actions, data map[string]any, mode string, templateID ...string) ([]Action, error) {
 
 	var actions []Action
 	var defaultActions []Action
@@ -334,6 +339,12 @@ func ParseTemplateActions(tasks []Actions, data map[string]any, mode string) ([]
 	// If no regular actions were found, use default actions
 	if len(actions) == 0 {
 		actions = defaultActions
+	}
+
+	if len(templateID) > 0 && templateID[0] != "" {
+		for i := range actions {
+			actions[i].TemplateID = templateID[0]
+		}
 	}
 
 	return actions, nil

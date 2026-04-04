@@ -379,7 +379,7 @@ func (backend *Backend) TemplateRunAction(e *core.ServeEvent) error {
 			}
 
 			// Run the template's tasks with ParseTemplateActions
-			results, err := templates.ParseTemplateActions(tmpl.Tasks, data, tmpl.Config.Mode)
+			results, err := templates.ParseTemplateActions(tmpl.Tasks, data, tmpl.Config.Mode, body.TemplateID)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			}

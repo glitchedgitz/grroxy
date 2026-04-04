@@ -22,7 +22,7 @@ func (backend *Backend) ExecuteTemplateActions(results []templates.Action, data 
 		case actions.CreateLabel:
 			backend.executeCreateLabel(action.Data, rowID)
 		case actions.SendRequest:
-			backend.executeSendRequest(action.Data, data)
+			backend.executeSendRequest(action.Data, data, action.TemplateID)
 		default:
 			log.Printf("[TemplateActions] Unknown action: %s", action.ActionName)
 		}
@@ -100,7 +100,7 @@ func (backend *Backend) executeCreateLabel(data map[string]any, rowID string) {
 	log.Printf("[TemplateActions][CreateLabel] Attached label '%s' to row %s", name, rowID)
 }
 
-func (backend *Backend) executeSendRequest(actionData map[string]any, requestData map[string]any) {
+func (backend *Backend) executeSendRequest(actionData map[string]any, requestData map[string]any, templateID string) {
 	host, _ := requestData["host"].(string)
 	port, _ := requestData["port"].(string)
 	useTLS, _ := requestData["is_https"].(bool)
@@ -192,7 +192,7 @@ func (backend *Backend) executeSendRequest(actionData map[string]any, requestDat
 			Timeout:     10,
 			Index:       index,
 			Url:         url,
-			GeneratedBy: "template:send_request",
+			GeneratedBy: "template:" + templateID,
 		})
 		if err != nil {
 			log.Printf("[TemplateActions][SendRequest] Error: %v", err)
