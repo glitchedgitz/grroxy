@@ -17,7 +17,8 @@ func (backend *Backend) LoadTemplatesFromLauncher(launcherAddr string) error {
 		return nil
 	}
 
-	url := fmt.Sprintf("http://%s/api/templates/list", launcherAddr)
+	// Fetch all templates from PocketBase collection API (returns all fields including tasks)
+	url := fmt.Sprintf("http://%s/api/collections/_templates/records?perPage=500", launcherAddr)
 	log.Printf("[TemplateLoader] Fetching templates from %s", url)
 
 	resp, err := http.Get(url)
@@ -34,14 +35,14 @@ func (backend *Backend) LoadTemplatesFromLauncher(launcherAddr string) error {
 	}
 
 	var result struct {
-		List []json.RawMessage `json:"list"`
+		Items []json.RawMessage `json:"items"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		log.Printf("[TemplateLoader] Error parsing response: %v", err)
 		return nil
 	}
 
-	for _, raw := range result.List {
+	for _, raw := range result.Items {
 		var record map[string]any
 		if err := json.Unmarshal(raw, &record); err != nil {
 			continue
