@@ -136,7 +136,7 @@ var HookRegistry = []HookInfo{
 	},
 	{
 		Group:       "request-action-button",
-		Description: "Button shown on request rows — user clicks to run the action on a specific request",
+		Description: "Action menu in the repeater — user clicks to run the action on the current request",
 		Hooks:       []HookItemInfo{},
 	},
 }

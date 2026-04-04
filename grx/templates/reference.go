@@ -119,9 +119,9 @@ These show as buttons in the UI. User clicks the button on a specific request/re
 
 | Hook                   | Where it appears              | Data access                    | Can modify? |
 |------------------------|-------------------------------|--------------------------------|-------------|
-| request-action-button  | Actions menu on request rows  | Full request + response data   | Yes — via send_request, set, delete, replace |
+| request-action-button  | Button in the repeater        | Full request + response data   | Yes — via send_request, set, delete, replace |
 
-Action buttons are manual — the user picks which request to run them on. They have access to the same req/resp fields as proxy hooks. They can send modified copies (send_request), create labels, or modify the request in the editor (set/delete/replace).
+Action menu items are manual — shown in the repeater, the user clicks to run the action on the current request. They have access to the same req/resp fields as proxy hooks. They can send modified copies (send_request), create labels, or modify the request in the editor (set/delete/replace).
 
 ` + "```yaml" + `
 # Example: action button template
