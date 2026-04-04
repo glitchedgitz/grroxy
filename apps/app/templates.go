@@ -1,8 +1,10 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/glitchedgitz/grroxy/grx/templates"
@@ -326,14 +328,46 @@ func (backend *Backend) TemplateRunAction(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request body"})
 			}
 
-			if backend.Templates == nil {
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Templates not initialized"})
+			// Fetch template from launcher by record ID
+			var tmpl *templates.Template
+
+			if backend.Config.LauncherAddr != "" {
+				url := fmt.Sprintf("http://%s/api/collections/_templates/records/%s", backend.Config.LauncherAddr, body.TemplateID)
+				resp, err := http.Get(url)
+				if err == nil {
+					defer resp.Body.Close()
+					respBody, err := io.ReadAll(resp.Body)
+					if err == nil && resp.StatusCode == 200 {
+						var record map[string]any
+						if json.Unmarshal(respBody, &record) == nil {
+							tmpl = &templates.Template{
+								Id: body.TemplateID,
+								Config: templates.Config{
+									Mode: getString(record, "mode"),
+								},
+							}
+							if tasksRaw, ok := record["tasks"]; ok && tasksRaw != nil {
+								if tasksBytes, err := json.Marshal(tasksRaw); err == nil {
+									json.Unmarshal(tasksBytes, &tmpl.Tasks)
+								}
+							}
+						}
+					}
+				}
 			}
 
-			tmpl, ok := backend.Templates.Templates[body.TemplateID]
-			if !ok {
+			// Fallback to in-memory
+			if tmpl == nil && backend.Templates != nil {
+				if t, ok := backend.Templates.Templates[body.TemplateID]; ok {
+					tmpl = t
+				}
+			}
+
+			if tmpl == nil {
 				return c.JSON(http.StatusNotFound, map[string]string{"error": "Template not found"})
 			}
+
+			log.Printf("[TemplateRunAction] Template %s: %d tasks", body.TemplateID, len(tmpl.Tasks))
 
 			// Build data map for template execution
 			data := body.Data
