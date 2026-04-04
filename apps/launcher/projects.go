@@ -280,6 +280,7 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
 		fmt.Println("Error creating project:", err)
+		os.RemoveAll(projectPath)
 		return ProjectData{}, err
 	}
 

@@ -296,6 +296,7 @@ func startCore() {
 	launch.App.OnBeforeServe().Add(launch.ToolsServer)
 	launch.App.OnBeforeServe().Add(launch.API_CheckUpdate)
 	launch.App.OnBeforeServe().Add(launch.API_DoUpdate)
+	launch.App.OnBeforeServe().Add(launch.Version)
 
 	host := MainHostAddress
 	if !hostFixed {

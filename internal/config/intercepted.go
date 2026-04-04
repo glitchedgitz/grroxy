@@ -11,7 +11,7 @@ const defaultInterceptedHTML = `<!DOCTYPE html>
 <div style="display: flex; height: 100vh; align-items: center; justify-content: center;">
     <p
         class="dots"
-        style="font-size: 14px; font-weight: 600; color: #27AE60; font-family: ocr-a-std, monospace;"
+        style="font-size: 14px; margin-top:-8px; font-weight: 600; color: #27AE60; font-family: ocr-a-std, monospace;"
     >grroxy is listening</p>
 </div>
 

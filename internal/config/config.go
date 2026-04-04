@@ -44,7 +44,7 @@ func (c *Config) Initiate() {
 
 	// Write intercepted.html to ProjectsDirectory on every start
 	interceptedPath := path.Join(c.ProjectsDirectory, "intercepted.html")
-	os.WriteFile(interceptedPath, []byte(defaultInterceptedHTML), 0644)
+	go os.WriteFile(interceptedPath, []byte(defaultInterceptedHTML), 0644)
 }
 
 // InterceptedPagePath returns the file:// URL for the intercepted landing page.
