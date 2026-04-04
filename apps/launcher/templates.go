@@ -36,7 +36,6 @@ func (launcher *Launcher) TemplatesList(e *core.ServeEvent) error {
 					"type":        record.GetString("type"),
 					"mode":        record.GetString("mode"),
 					"hooks":       record.Get("hooks"),
-					"tasks":       record.Get("tasks"),
 					"enabled":     record.GetBool("enabled"),
 					"global":      record.GetBool("global"),
 					"is_default":  record.GetBool("is_default"),

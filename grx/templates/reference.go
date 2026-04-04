@@ -103,11 +103,40 @@ Send a modified copy of the current request. Response is saved to DB.
 
 ## Hooks
 
+### Proxy hooks (automatic)
+
+These run automatically on proxy traffic. Defined under ` + "`" + `config.hooks.proxy` + "`" + `.
+
 | Hook            | When it runs                     | Sync/Async | Can modify request |
 |-----------------|----------------------------------|------------|-------------------|
 | before_request  | Before sending to target server  | Sync       | Yes (set/delete)  |
 | request         | After request saved to DB        | Async      | No                |
 | response        | After response saved to DB       | Async      | No                |
+
+### Action button hooks (manual)
+
+These show as buttons in the UI. User clicks the button on a specific request/response row to trigger. Defined as a top-level key in ` + "`" + `config.hooks` + "`" + `.
+
+| Hook                   | Where it appears              | Data access                    | Can modify? |
+|------------------------|-------------------------------|--------------------------------|-------------|
+| request-action-button  | Actions menu on request rows  | Full request + response data   | Yes — via send_request, set, delete, replace |
+
+Action buttons are manual — the user picks which request to run them on. They have access to the same req/resp fields as proxy hooks. They can send modified copies (send_request), create labels, or modify the request in the editor (set/delete/replace).
+
+` + "```yaml" + `
+# Example: action button template
+config:
+  hooks:
+    request-action-button: []   # empty array = this is an action button
+tasks:
+  - id: test-methods
+    condition: ""
+    todo:
+      - send_request:
+          req.method: PUT
+      - send_request:
+          req.method: DELETE
+` + "```" + `
 
 ## Complete Examples
 

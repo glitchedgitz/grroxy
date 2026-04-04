@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/glitchedgitz/grroxy/grx/templates"
@@ -24,6 +25,19 @@ func (backend *Backend) TemplatesList(e *core.ServeEvent) error {
 		Method: "GET",
 		Path:   "/api/templates/list",
 		Handler: func(c echo.Context) error {
+			// Proxy to launcher to get all templates from _templates collection
+			if backend.Config.LauncherAddr != "" {
+				resp, err := http.Get(fmt.Sprintf("http://%s/api/templates/list", backend.Config.LauncherAddr))
+				if err == nil {
+					defer resp.Body.Close()
+					body, err := io.ReadAll(resp.Body)
+					if err == nil {
+						return c.JSONBlob(http.StatusOK, body)
+					}
+				}
+			}
+
+			// Fallback to in-memory if launcher unavailable
 			if backend.Templates == nil {
 				return c.JSON(http.StatusOK, map[string]any{"list": []any{}})
 			}

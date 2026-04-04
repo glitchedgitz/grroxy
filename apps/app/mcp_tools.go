@@ -1297,6 +1297,19 @@ func (backend *Backend) proxyWaitForSelectorHandler(ctx context.Context, request
 // ---------------------------------------------------------------------------
 
 func (backend *Backend) templateListHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Proxy to launcher to get all templates from _templates collection
+	if backend.Config.LauncherAddr != "" {
+		resp, err := http.Get(fmt.Sprintf("http://%s/api/templates/list", backend.Config.LauncherAddr))
+		if err == nil {
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err == nil {
+				return mcp.NewToolResultText(string(body)), nil
+			}
+		}
+	}
+
+	// Fallback to in-memory
 	if backend.Templates == nil {
 		return mcpJSONResult(map[string]any{"list": []any{}, "count": 0})
 	}

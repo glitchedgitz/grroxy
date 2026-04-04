@@ -65,7 +65,6 @@ var ValidActions = map[string][]string{
 var ValidHooks = map[string][]string{
 	"proxy":                 {"request", "response", "before_request"},
 	"request-action-button": {},
-	"response-action-button": {},
 }
 
 // ActionRegistry returns full action metadata
@@ -138,11 +137,6 @@ var HookRegistry = []HookInfo{
 	{
 		Group:       "request-action-button",
 		Description: "Button shown on request rows — user clicks to run the action on a specific request",
-		Hooks:       []HookItemInfo{},
-	},
-	{
-		Group:       "response-action-button",
-		Description: "Button shown on response rows — user clicks to run the action on a specific response",
 		Hooks:       []HookItemInfo{},
 	},
 }
