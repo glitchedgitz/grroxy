@@ -2,7 +2,7 @@
 
 Cybersecurity proxy toolkit that blends manual web testing with AI agents. Intercepts HTTP/HTTPS traffic, provides request modification, fuzzing, browser automation, and an MCP endpoint for AI-driven security analysis. Built as a multi-binary Go backend with a Svelte frontend.
 
-**Version:** 2026.3.8 (App) / 0.28.0 (Backend & Frontend)
+**Version:** 2026.4.1 (App) / 0.29.0 (Backend & Frontend)
 
 ## Tech Stack
 
@@ -19,13 +19,13 @@ Cybersecurity proxy toolkit that blends manual web testing with AI agents. Inter
 
 ### Binaries
 
-| Binary | Entry Point | Purpose |
-|--------|-------------|---------|
-| `grroxy` | `cmd/grroxy/main.go` | **Launcher** - manages projects, starts per-project backends, global templates |
-| `grroxy-app` | `cmd/grroxy-app/main.go` | **Project backend** - proxy, intercept, templates, all per-project APIs |
-| `grroxy-tool` | `cmd/grroxy-tool/` | Standalone tools server (fuzzer, SDK) |
-| `grx-fuzzer` | `cmd/grx-fuzzer/main.go` | Standalone HTTP/HTTP2 fuzzer CLI |
-| `grxp` | `cmd/grxp/main.go` | URL parser/prober from stdin with dadql filtering |
+| Binary        | Entry Point              | Purpose                                                                        |
+| ------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `grroxy`      | `cmd/grroxy/main.go`     | **Launcher** - manages projects, starts per-project backends, global templates |
+| `grroxy-app`  | `cmd/grroxy-app/main.go` | **Project backend** - proxy, intercept, templates, all per-project APIs        |
+| `grroxy-tool` | `cmd/grroxy-tool/`       | Standalone tools server (fuzzer, SDK)                                          |
+| `grx-fuzzer`  | `cmd/grx-fuzzer/main.go` | Standalone HTTP/HTTP2 fuzzer CLI                                               |
+| `grxp`        | `cmd/grxp/main.go`       | URL parser/prober from stdin with dadql filtering                              |
 
 ### Directory Layout
 
@@ -133,13 +133,6 @@ npm run build     # Build installers (DMG/NSIS/AppImage)
 ./release.sh  # Builds darwin/arm64, darwin/amd64, linux/amd64, linux/arm64, windows/amd64
 ```
 
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GRROXY_TEMPLATE_DIR` | No | Override default template directory |
-| `GITHUB_TOKEN` / `GH_TOKEN` | No | For `grroxy update` (private repo access) |
-
 ## CLI Flags
 
 ```
@@ -157,20 +150,20 @@ Uses PocketBase with migration-based schema management. Each binary has its own 
 
 ### Key Collections
 
-| Collection | Purpose |
-|------------|---------|
-| `_proxies` | Proxy instances (addr, intercept state, browser config) |
-| `_data` (Rows) | HTTP request/response storage (index, host, method, relations to `_req`/`_resp`) |
-| `_req`, `_resp` | Raw request/response data (headers, body, URL parts) |
-| `_req_edited`, `_resp_edited` | Edited versions for intercept/modify |
-| `_intercept` | Currently intercepted messages (cleared on startup) |
-| `_templates` | Templates with hooks (on_request, on_response, action buttons) |
-| `_filters` | Filter rules (dadql expressions) |
-| `_sitemap` | Discovered endpoints (path, query, fragment, type) |
-| `_websockets` | WebSocket message capture |
-| `_projects` | Project metadata (launcher only) |
-| `_settings` | Key-value settings |
-| `_tools` | Tool server configurations |
+| Collection                    | Purpose                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `_proxies`                    | Proxy instances (addr, intercept state, browser config)                          |
+| `_data` (Rows)                | HTTP request/response storage (index, host, method, relations to `_req`/`_resp`) |
+| `_req`, `_resp`               | Raw request/response data (headers, body, URL parts)                             |
+| `_req_edited`, `_resp_edited` | Edited versions for intercept/modify                                             |
+| `_intercept`                  | Currently intercepted messages (cleared on startup)                              |
+| `_templates`                  | Templates with hooks (on_request, on_response, action buttons)                   |
+| `_filters`                    | Filter rules (dadql expressions)                                                 |
+| `_sitemap`                    | Discovered endpoints (path, query, fragment, type)                               |
+| `_websockets`                 | WebSocket message capture                                                        |
+| `_projects`                   | Project metadata (launcher only)                                                 |
+| `_settings`                   | Key-value settings                                                               |
+| `_tools`                      | Tool server configurations                                                       |
 
 ### Schema Files
 

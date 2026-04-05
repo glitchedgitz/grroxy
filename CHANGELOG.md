@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased] - Template Actions System
+## [v2026.4.1] - v0.29.0 - Grroxy Actions
 
 ### Added
 
@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `Content-Length` header not updated when body changes via `set` action
 
 ---
+
 # Released v2026.3.9
 
 Includes `v0.28.1`
