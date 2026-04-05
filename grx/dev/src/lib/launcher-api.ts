@@ -316,16 +316,16 @@ export const templates_api = [
 		name: 'List Templates',
 		method: 'GET',
 		path: '/api/templates/list',
-		description: 'List all YAML template files in the templates directory',
+		description: 'List all templates from the database',
 		category: '/api/templates',
 		examples: [
 			{
 				name: 'List templates',
-				description: 'Returns all .yaml/.yml files from the templates directory',
+				description: 'Returns all templates from the _templates collection',
 				request: {},
 				response: {
 					status: 200,
-					body: { list: [{ name: 'template.yaml', path: '/path/to/templates/template.yaml', is_dir: false }] }
+					body: { list: [{ id: 'abc123', name: 'create-extension-labels', title: 'Create Extension labels', description: 'Analyse requests extension and create labels', author: 'Grroxy', type: 'actions', mode: 'any', hooks: { proxy: ['request'] }, tasks: [], enabled: true, global: true, is_default: true, archive: false }] }
 				}
 			}
 		]
@@ -335,20 +335,27 @@ export const templates_api = [
 		name: 'Create Template',
 		method: 'POST',
 		path: '/api/templates/new',
-		description: 'Create or overwrite a template file',
+		description: 'Create a new template in the database',
 		category: '/api/templates',
 		defaultBody: {
-			name: 'my-template.yaml',
-			content: 'id: my-template\ninfo:\n  name: My Template'
+			name: 'my-template',
+			title: 'My Template',
+			description: 'Description of what template does',
+			author: 'You',
+			type: 'actions',
+			mode: 'any',
+			hooks: { proxy: ['request'] },
+			tasks: [],
+			enabled: true
 		},
 		examples: [
 			{
 				name: 'Create template',
-				description: 'Writes content to a file in the templates directory',
-				request: { name: 'my-template.yaml', content: 'id: my-template' },
+				description: 'Creates a new template record in _templates collection',
+				request: { name: 'my-template', title: 'My Template', enabled: true },
 				response: {
 					status: 200,
-					body: { filepath: '/path/to/templates/my-template.yaml' }
+					body: { id: 'abc123' }
 				}
 			}
 		]
@@ -358,17 +365,52 @@ export const templates_api = [
 		name: 'Delete Template',
 		method: 'DELETE',
 		path: '/api/templates/:template',
-		description: 'Delete a template file by name',
+		description: 'Delete a template by ID',
 		category: '/api/templates',
 		examples: [
 			{
 				name: 'Delete template',
-				description: 'Removes the specified template file from the templates directory',
+				description: 'Removes the specified template from the database',
 				request: {},
 				response: {
 					status: 200,
-					body: ''
+					body: { success: 'true' }
 				}
+			}
+		]
+	},
+	{
+		id: 'templates-info',
+		name: 'Template Info',
+		method: 'GET',
+		path: '/api/templates/info',
+		description: 'Returns all available hooks, actions, their keys and descriptions',
+		category: '/api/templates',
+		examples: [
+			{
+				name: 'Get template info',
+				description: 'Returns actions and hooks metadata for frontend autocomplete and docs',
+				request: {},
+				response: { status: 200, body: { actions: ['...'], hooks: ['...'] } }
+			}
+		]
+	},
+	{
+		id: 'templates-check',
+		name: 'Check Template',
+		method: 'POST',
+		path: '/api/templates/check',
+		description: 'Validate template YAML — checks hooks, actions, required keys',
+		category: '/api/templates',
+		defaultBody: {
+			yaml: 'id: my-template\nconfig:\n  hooks:\n    proxy:\n      - request\ntasks:\n  - id: task-1\n    todo:\n      - create_label:\n          name: test'
+		},
+		examples: [
+			{
+				name: 'Valid template',
+				description: 'Returns validation result with errors and warnings',
+				request: { yaml: '...' },
+				response: { status: 200, body: { valid: true, errors: [], warnings: [] } }
 			}
 		]
 	}

@@ -239,6 +239,46 @@ func (backend *Backend) mcpInit() {
 		backend.proxyWaitForSelectorHandler,
 	)
 
+	// --- Template tools ---
+
+	s.AddTool(
+		mcp.NewTool("templateList",
+			mcp.WithDescription("List all loaded templates with their hooks and task counts"),
+		),
+		backend.templateListHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("templateRead",
+			mcp.WithDescription("Read a specific template's full content — info, hooks, tasks, conditions, and actions"),
+			mcp.WithInputSchema[TemplateReadArgs](),
+		),
+		backend.templateReadHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("templateGetInfo",
+			mcp.WithDescription("Get the full template syntax reference — actions, hooks, condition syntax (dadql), variable interpolation, and examples. Call this before creating templates."),
+		),
+		backend.templateGetInfoHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("templateCreate",
+			mcp.WithDescription("Create a new template on the launcher. Call templateGetInfo first to learn the syntax."),
+			mcp.WithInputSchema[TemplateCreateArgs](),
+		),
+		backend.templateCreateHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("templateUpdate",
+			mcp.WithDescription("Update an existing template by ID. Only include fields you want to change."),
+			mcp.WithInputSchema[TemplateUpdateArgs](),
+		),
+		backend.templateUpdateHandler,
+	)
+
 	// --- Chrome Tab tools ---
 
 	s.AddTool(

@@ -1,0 +1,45 @@
+id: check-http-methods
+info:
+  title: Test HTTP Methods
+  author: Grroxy
+  description: Send the request with different HTTP methods (GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD) and compare responses
+config:
+  type: actions
+  hooks:
+    request-action-button: []
+tasks:
+  - id: test-get
+    condition: ""
+    todo:
+      - send_request:
+          req.method: GET
+  - id: test-post
+    condition: ""
+    todo:
+      - send_request:
+          req.method: POST
+  - id: test-put
+    condition: ""
+    todo:
+      - send_request:
+          req.method: PUT
+  - id: test-delete
+    condition: ""
+    todo:
+      - send_request:
+          req.method: DELETE
+  - id: test-patch
+    condition: ""
+    todo:
+      - send_request:
+          req.method: PATCH
+  - id: test-options
+    condition: ""
+    todo:
+      - send_request:
+          req.method: OPTIONS
+  - id: test-head
+    condition: ""
+    todo:
+      - send_request:
+          req.method: HEAD

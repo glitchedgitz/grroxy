@@ -92,7 +92,6 @@ func (launcher *Launcher) API_DeleteProject(e *core.ServeEvent) error {
 		Method: "POST",
 		Path:   "/api/project/delete",
 		Handler: func(c echo.Context) error {
-
 			var data struct {
 				Id string `json:"id"`
 			}
@@ -101,49 +100,41 @@ func (launcher *Launcher) API_DeleteProject(e *core.ServeEvent) error {
 				return c.String(http.StatusBadRequest, "Invalid request body")
 			}
 
-			if data.Id == "" || strings.TrimSpace(data.Id) == "" {
-				return c.String(http.StatusBadRequest, "Project id can't be empty")
+			if data.Id == "" {
+				return c.String(http.StatusBadRequest, "Project ID is required")
 			}
 
 			record, err := launcher.App.Dao().FindRecordById("_projects", data.Id)
-
-			if record == nil || err != nil {
+			if err != nil {
 				return c.String(http.StatusNotFound, "Project not found")
 			}
 
-			// Check if project is active
-			var stateData ProjectStateData
-			dataInterface := record.Get("data")
-			if dataInterface != nil {
-				jsonData, err := json.Marshal(dataInterface)
-				if err == nil {
-					if err := json.Unmarshal(jsonData, &stateData); err == nil {
-						if stateData.State == ProjectState.Active {
-							return c.String(http.StatusConflict, "Cannot delete an active project. Stop it first.")
-						}
-					}
+			projectPath := record.GetString("path")
+
+			// Kill running grroxy-app for this project
+			existingData := make(map[string]any)
+			if raw, err := json.Marshal(record.Get("data")); err == nil {
+				json.Unmarshal(raw, &existingData)
+			}
+			if ip, ok := existingData["ip"].(string); ok && ip != "" {
+				if state, ok := existingData["state"].(string); ok && state == ProjectState.Active {
+					// Set state to unactive so the process exits
+					updateProjectData(record, "", ProjectState.Unactive)
+					launcher.App.Dao().SaveRecord(record)
 				}
 			}
 
-			// Delete project directory
-			projectPath := fmt.Sprintf("%v", record.Get("path"))
-			if projectPath != "" {
-				if err := os.RemoveAll(projectPath); err != nil {
-					fmt.Printf("Error deleting project directory: %v\n", err)
-					return c.String(http.StatusInternalServerError, "Error deleting project files")
-				}
-			}
-
-			// Delete DB record
+			// Delete the project record
 			if err := launcher.App.Dao().DeleteRecord(record); err != nil {
-				fmt.Printf("Error deleting project record: %v\n", err)
-				return c.String(http.StatusInternalServerError, "Error deleting project record")
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			}
 
-			return c.JSON(http.StatusOK, map[string]string{
-				"message": "Project deleted successfully",
-			})
+			// Delete project folder
+			if projectPath != "" {
+				os.RemoveAll(projectPath)
+			}
 
+			return c.JSON(http.StatusOK, map[string]string{"message": "Project deleted"})
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(launcher.App),
@@ -198,6 +189,17 @@ var ProjectState = struct {
 type ProjectStateData struct {
 	Ip    string `json:"ip" db:"ip"`
 	State string `json:"state" db:"state"`
+}
+
+// updateProjectData merges ip/state into the existing data field without overwriting other keys (e.g. templatesEnabled).
+func updateProjectData(record *models.Record, ip string, state string) {
+	existing := make(map[string]any)
+	if raw, err := json.Marshal(record.Get("data")); err == nil {
+		json.Unmarshal(raw, &existing)
+	}
+	existing["ip"] = ip
+	existing["state"] = state
+	record.Set("data", existing)
 }
 
 type ProjectData struct {
@@ -269,7 +271,11 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 	record.Set("name", projectName)
 	record.Set("id", projectId)
 	record.Set("path", projectPath)
-	record.Set("data", projectData.Data)
+	record.Set("data", map[string]any{
+		"ip":               ProjectIP,
+		"state":            ProjectState.Active,
+		"templatesEnabled": true,
+	})
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
@@ -278,7 +284,7 @@ func (launcher *Launcher) CreateNewProject(projectName string) (ProjectData, err
 		return ProjectData{}, err
 	}
 
-	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", func() {
+	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", launcher.Config.HostAddr, func() {
 		launcher.setProjectStateClose(projectId)
 	})
 
@@ -293,11 +299,7 @@ func (launcher *Launcher) setProjectStateClose(projectId string) {
 		return
 	}
 
-	stateData := ProjectStateData{
-		Ip:    "",
-		State: ProjectState.Unactive,
-	}
-	record.Set("data", stateData)
+	updateProjectData(record, "", ProjectState.Unactive)
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
@@ -358,7 +360,7 @@ func (launcher *Launcher) OpenProject(projectIndex int) (ProjectData, error) {
 		},
 	}
 
-	record.Set("data", projectData.Data)
+	updateProjectData(record, ProjectIP, ProjectState.Active)
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
@@ -372,7 +374,7 @@ func (launcher *Launcher) OpenProject(projectIndex int) (ProjectData, error) {
 		return ProjectData{}, err
 	}
 
-	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", func() {
+	go StartProject(projectPath, ProjectIP, "127.0.0.1:8888", launcher.Config.HostAddr, func() {
 		launcher.setProjectStateClose(record.Get("id").(string))
 	})
 
@@ -427,7 +429,7 @@ func (launcher *Launcher) OpenProjectFromNameOrId(project string) (ProjectData, 
 		Data: projectStateData,
 	}
 
-	record.Set("data", projectStateData)
+	updateProjectData(record, projectIp, ProjectState.Active)
 
 	err = launcher.App.Dao().SaveRecord(record)
 	if err != nil {
@@ -441,7 +443,7 @@ func (launcher *Launcher) OpenProjectFromNameOrId(project string) (ProjectData, 
 		return ProjectData{}, err
 	}
 
-	go StartProject(projectPath, projectIp, "127.0.0.1:8888", func() {
+	go StartProject(projectPath, projectIp, "127.0.0.1:8888", launcher.Config.HostAddr, func() {
 		launcher.setProjectStateClose(record.Get("id").(string))
 	})
 
@@ -449,8 +451,8 @@ func (launcher *Launcher) OpenProjectFromNameOrId(project string) (ProjectData, 
 	return projectData, nil
 }
 
-func StartProject(projectPath string, host string, proxy string, onClose func()) {
-	cmd := exec.Command("grroxy-app", "-path", projectPath, "-host", host, "-proxy", proxy, "-log")
+func StartProject(projectPath string, host string, proxy string, launcherAddr string, onClose func()) {
+	cmd := exec.Command("grroxy-app", "-path", projectPath, "-host", host, "-proxy", proxy, "-launcher", launcherAddr, "-log")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -520,10 +522,7 @@ func (launcher *Launcher) ResetProjectStates(e *core.ServeEvent) error {
 			continue
 		}
 
-		record.Set("data", ProjectStateData{
-			Ip:    "",
-			State: ProjectState.Unactive,
-		})
+		updateProjectData(record, "", ProjectState.Unactive)
 
 		err = launcher.App.Dao().SaveRecord(record)
 		if err != nil {

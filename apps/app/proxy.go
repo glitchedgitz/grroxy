@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -558,6 +559,25 @@ func (backend *Backend) loadProxySettings(proxy *RawProxyWrapper, proxyRecord *m
 	proxy.Filters = filterstring
 	log.Printf("[ProxySettings] Filters: %s", filterstring)
 
+	// Load run_templates from data JSON field
+	dataRaw := proxyRecord.Get("data")
+	switch v := dataRaw.(type) {
+	case map[string]any:
+		if rt, ok := v["run_templates"].(bool); ok {
+			proxy.RunTemplates = rt
+		}
+	default:
+		var dataMap map[string]any
+		if bytes, err := json.Marshal(v); err == nil {
+			if err := json.Unmarshal(bytes, &dataMap); err == nil {
+				if rt, ok := dataMap["run_templates"].(bool); ok {
+					proxy.RunTemplates = rt
+				}
+			}
+		}
+	}
+	log.Printf("[ProxySettings] RunTemplates: %v", proxy.RunTemplates)
+
 	return nil
 }
 
@@ -702,12 +722,17 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 	proxyRecord.Set("browser", body.Browser)
 	proxyRecord.Set("intercept", false) // Default to false
 	proxyRecord.Set("state", "running")
-	proxyRecord.Set("color", "")
+	proxyRecord.Set("color", NextProxyColor(len(ProxyMgr.instances)))
 	proxyRecord.Set("profile", "")
 
-	// Initialize data column (filters are now stored separately in _ui collection)
-	proxyData := map[string]interface{}{}
+	// Initialize data column with run_templates enabled by default
+	proxyData := map[string]interface{}{
+		"run_templates": true,
+	}
 	proxyRecord.Set("data", proxyData)
+
+	// Set RunTemplates on the live proxy instance
+	newProxy.RunTemplates = true
 
 	if err := dao.SaveRecord(proxyRecord); err != nil {
 		return nil, fmt.Errorf("failed to save proxy record: %v", err)

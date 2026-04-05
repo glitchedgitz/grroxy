@@ -48,10 +48,23 @@ func (backend *Backend) ModifyRequest(e *core.ServeEvent) error {
 
 			parsedRequest := rawhttp.ParseRequest([]byte(reqData.Request))
 
-			parsedURL, err := url.Parse(parsedRequest.URL)
-			if err != nil {
-				log.Printf("[Modify request] Error parsing URL: %v", err)
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Error parsing URL", "message": err.Error()})
+			// Use url.Parse only for extracting path/query/fragment — keep original URL as-is
+			rawURL := parsedRequest.URL
+			parsedPath := rawURL
+			parsedQuery := ""
+			parsedFragment := ""
+			if idx := strings.Index(rawURL, "?"); idx != -1 {
+				parsedPath = rawURL[:idx]
+				rest := rawURL[idx+1:]
+				if fragIdx := strings.Index(rest, "#"); fragIdx != -1 {
+					parsedQuery = rest[:fragIdx]
+					parsedFragment = rest[fragIdx+1:]
+				} else {
+					parsedQuery = rest
+				}
+			} else if idx := strings.Index(rawURL, "#"); idx != -1 {
+				parsedPath = rawURL[:idx]
+				parsedFragment = rawURL[idx+1:]
 			}
 
 			hasCookies := false
@@ -65,11 +78,11 @@ func (backend *Backend) ModifyRequest(e *core.ServeEvent) error {
 
 			reqRecord := make(map[string]any)
 			reqRecord["method"] = parsedRequest.Method
-			reqRecord["url"] = parsedRequest.URL
-			reqRecord["path"] = parsedURL.Path
-			reqRecord["query"] = parsedURL.RawQuery
-			reqRecord["fragment"] = parsedURL.RawFragment
-			reqRecord["ext"] = strings.TrimPrefix(parsedURL.Path, ".")
+			reqRecord["url"] = rawURL
+			reqRecord["path"] = parsedPath
+			reqRecord["query"] = parsedQuery
+			reqRecord["fragment"] = parsedFragment
+			reqRecord["ext"] = ""
 			reqRecord["has_cookies"] = hasCookies
 			reqRecord["length"] = len(reqData.Request)
 			reqRecord["headers"] = parsedRequest.Headers
@@ -157,10 +170,8 @@ func buildRawRequest(requestData map[string]any) string {
 	}
 
 	urlStr := "/"
-	if u, ok := requestData["url"].(string); ok {
-		if parsedURL, err := url.Parse(u); err == nil {
-			urlStr = parsedURL.RequestURI()
-		}
+	if u, ok := requestData["url"].(string); ok && u != "" {
+		urlStr = u
 	}
 
 	builder.WriteString(method)
@@ -237,7 +248,8 @@ func RequestUpdateKey(requestData map[string]any, key string, value any) {
 		if headers, ok := requestData["headers"].([][]string); ok {
 			found := false
 			for i, h := range headers {
-				if h[0] == header+":" {
+				trimmed := strings.TrimRight(h[0], ": ")
+				if trimmed == header {
 					headers[i][1] = value.(string)
 					found = true
 					break
@@ -303,19 +315,16 @@ func RequestDeleteKey(requestData map[string]any, key string) {
 			// Check if header ends with * for wildcard deletion
 			if strings.HasSuffix(header, "*") {
 				prefix := strings.TrimSuffix(header, "*")
-				// Delete all headers starting with the prefix
 				for _, h := range headers {
-					// h[0] is the header name with colon (e.g., "Sec-Fetch-Dest:")
-					// Check if it starts with the prefix followed by colon or dash
-					headerName := strings.TrimSuffix(h[0], ":")
-					if !strings.HasPrefix(headerName, prefix) {
+					trimmed := strings.TrimRight(h[0], ": ")
+					if !strings.HasPrefix(trimmed, prefix) {
 						newHeaders = append(newHeaders, h)
 					}
 				}
 			} else {
-				// Exact match deletion (existing behavior)
 				for _, h := range headers {
-					if h[0] != header+":" {
+					trimmed := strings.TrimRight(h[0], ": ")
+					if trimmed != header {
 						newHeaders = append(newHeaders, h)
 					}
 				}

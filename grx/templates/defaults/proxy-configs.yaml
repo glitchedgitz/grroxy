@@ -1,0 +1,15 @@
+id: proxy-configs
+info:
+  title: Proxy Configs
+  description: ""
+  author: ""
+config:
+  hooks:
+    proxy:
+      - before_request
+tasks:
+  - id: upwork
+    condition: host ~ 'example'
+    todo:
+      - set:
+          req.headers.User-Agent: "{{req.headers.User-Agent}} modified"
