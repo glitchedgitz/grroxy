@@ -8,7 +8,7 @@ LAUNCHER_ADDR="${1:-127.0.0.1:8090}"
 # Install latest binaries
 echo "Installing binaries..."
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-bash "${SCRIPT_DIR}/install.sh"
+bash "./cmd/install.sh"
 
 # Start launcher if not running
 STARTED_LAUNCHER=false
