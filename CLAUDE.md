@@ -2,7 +2,7 @@
 
 Cybersecurity proxy toolkit that blends manual web testing with AI agents. Intercepts HTTP/HTTPS traffic, provides request modification, fuzzing, browser automation, and an MCP endpoint for AI-driven security analysis. Built as a multi-binary Go backend with a Svelte frontend.
 
-**Version:** 2026.4.1 (App) / 0.29.0 (Backend & Frontend)
+**Version:** 2026.4.2 (App) / 0.29.1 (Backend & Frontend)
 
 ## Tech Stack
 
