@@ -112,7 +112,7 @@ trap cleanup EXIT
 # ============================================================
 info "Installing binaries via install.sh..."
 cd "$PROJECT_DIR"
-bash ./install.sh
+bash ./cmd/install.sh
 
 # ============================================================
 # Phase 1: Setup
