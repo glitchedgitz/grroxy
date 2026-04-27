@@ -1,12 +1,16 @@
 package app
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 
 	"github.com/glitchedgitz/grroxy/grx/version"
@@ -16,6 +20,38 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 )
+
+// ---------------------------------------------------------------------------
+// Chat session correlation
+//
+// The cybernetic-ui frontend stamps each AI chat with an ID; the bridge
+// passes it through as ?chatId=<id> on the MCP SSE URL. We capture it at
+// session-creation time and surface it on every tool-handler context so
+// resource-creating tools (sendRequest, etc.) can set generated_by="ai/<id>".
+// ---------------------------------------------------------------------------
+
+type chatIDCtxKey struct{}
+
+// sessionID -> chatID. Populated when SSE establishes; read on each /mcp/message.
+// Bounded by the number of concurrent SSE sessions; not actively swept since
+// session lifetimes are short and entries don't accumulate without traffic.
+var mcpSessionChatIDs sync.Map
+
+// ChatIDFromContext returns the chat ID associated with an MCP request, or "".
+func ChatIDFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(chatIDCtxKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func mcpGenerateSessionID() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
+}
 
 // ---------------------------------------------------------------------------
 // MCP state
@@ -348,6 +384,29 @@ func (backend *Backend) mcpInit() {
 	sseServer := mcpserver.NewSSEServer(s,
 		mcpserver.WithStaticBasePath("/mcp"),
 		mcpserver.WithKeepAlive(true),
+		// Capture chatId at SSE establishment and key it by the session ID we mint.
+		mcpserver.WithSessionIDGenerator(func(ctx context.Context, r *http.Request) (string, error) {
+			id, err := mcpGenerateSessionID()
+			if err != nil {
+				return "", err
+			}
+			if chatID := r.URL.Query().Get("chatId"); chatID != "" {
+				mcpSessionChatIDs.Store(id, chatID)
+			}
+			return id, nil
+		}),
+		// Inject chatId into the request context for tool handlers.
+		// Called for both /mcp/sse (no sessionId yet) and /mcp/message (sessionId in query).
+		mcpserver.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+			if sid := r.URL.Query().Get("sessionId"); sid != "" {
+				if v, ok := mcpSessionChatIDs.Load(sid); ok {
+					if cid, ok := v.(string); ok && cid != "" {
+						ctx = context.WithValue(ctx, chatIDCtxKey{}, cid)
+					}
+				}
+			}
+			return ctx
+		}),
 	)
 
 	backend.MCP = &MCP{

@@ -417,6 +417,11 @@ func (backend *Backend) sendRequestHandler(ctx context.Context, request mcp.Call
 	port := fmt.Sprintf("%d", args.Port)
 	http2 := args.HttpVersion == 2
 
+	generatedBy := "ai/mcp/claudecode"
+	if chatID := ChatIDFromContext(ctx); chatID != "" {
+		generatedBy = "ai/mcp/" + chatID
+	}
+
 	resp, err := backend.sendRepeaterLogic(&RepeaterSendRequest{
 		Host:        host,
 		Port:        port,
@@ -427,7 +432,7 @@ func (backend *Backend) sendRequestHandler(ctx context.Context, request mcp.Call
 		Index:       args.AttachToIndex,
 		Url:         fmt.Sprintf("%s://%s:%d", map[bool]string{true: "https", false: "http"}[args.TLS], host, args.Port),
 		Note:        args.Note,
-		GeneratedBy: "ai/mcp/claudecode",
+		GeneratedBy: generatedBy,
 	})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
