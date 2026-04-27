@@ -253,6 +253,7 @@ type ProxyTypeArgs struct {
 type ProxyEvalArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	Js        string `json:"js" jsonschema:"required" jsonschema_description:"JavaScript expression to evaluate in the page context. The result is returned as JSON."`
+	Note      string `json:"note" jsonschema:"required" jsonschema_description:"REQUIRED: a short human-readable note (5-12 words) describing what this JS is doing and why. Shown to the user as the action label. Always include this."`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
 }
 

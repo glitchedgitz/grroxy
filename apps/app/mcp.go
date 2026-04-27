@@ -261,7 +261,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyEval",
-			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools"),
+			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools. ALWAYS include a short `note` explaining what this JS does — it is shown to the user as the action label."),
 			mcp.WithInputSchema[ProxyEvalArgs](),
 		),
 		backend.proxyEvalHandler,
