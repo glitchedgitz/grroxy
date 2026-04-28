@@ -1106,7 +1106,7 @@ func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
 			// Generate file path if saveFile is requested
 			var savePath string
 			if body.SaveFile {
-				timestamp := time.Now().Format("20060102-150405")
+				timestamp := time.Now().Format("20060102-150405.000000000")
 				filename := fmt.Sprintf("screenshot-%s.png", timestamp)
 				savePath = path.Join(backend.Config.CacheDirectory, filename)
 				log.Printf("[ScreenshotProxy] Will save screenshot to: %s", savePath)

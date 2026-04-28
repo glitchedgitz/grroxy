@@ -854,7 +854,7 @@ func (backend *Backend) proxyScreenshotHandler(ctx context.Context, request mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("failed to create screenshot directory: %v", err)), nil
 	}
 
-	timestamp := time.Now().Format("20060102-150405")
+	timestamp := time.Now().Format("20060102-150405.000000000")
 	filename := fmt.Sprintf("screenshot-%s.png", timestamp)
 	savePath := path.Join(screenshotDir, filename)
 
