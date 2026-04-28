@@ -1,12 +1,14 @@
 package app
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -14,6 +16,23 @@ import (
 	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
 )
+
+// imageMimeByExt returns a content-type for known image extensions, or "" otherwise.
+func imageMimeByExt(filePath string) string {
+	switch strings.ToLower(path.Ext(filePath)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	}
+	return ""
+}
 
 func (backend *Backend) CWDContent(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
@@ -169,6 +188,21 @@ func (backend *Backend) CWDReadFile(e *core.ServeEvent) error {
 			}
 
 			if isBinary {
+				// For known image types, return a base64 data URL so the
+				// frontend can render the bytes inline (used for screenshots).
+				if mime := imageMimeByExt(filePath); mime != "" {
+					encoded := base64.StdEncoding.EncodeToString(content)
+					return c.JSON(http.StatusOK, map[string]interface{}{
+						"path":    filePath,
+						"name":    path.Base(filePath),
+						"size":    info.Size(),
+						"content": "",
+						"binary":  true,
+						"image":   true,
+						"mime":    mime,
+						"dataUrl": "data:" + mime + ";base64," + encoded,
+					})
+				}
 				return c.JSON(http.StatusOK, map[string]interface{}{
 					"path":    filePath,
 					"name":    path.Base(filePath),
