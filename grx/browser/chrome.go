@@ -247,7 +247,12 @@ type ChromeRemote struct {
 
 	targetCtxs   map[string]context.Context
 	targetCancel map[string]context.CancelFunc
-	mu           sync.Mutex
+	// lastActiveTargetID is updated whenever ActivateTab/OpenTab/Navigate is
+	// called explicitly. TakeScreenshot("") prefers this over the
+	// "first non-blank tab" heuristic so multi-tab workflows behave as the
+	// caller expects.
+	lastActiveTargetID string
+	mu                 sync.Mutex
 }
 
 // NewChromeRemote creates a new ChromeRemote instance connected to the given debug URL
@@ -359,6 +364,18 @@ func (cr *ChromeRemote) CloseTargetContext(targetID string) {
 // If targetID == "", it will try to pick a "best" tab (heuristic).
 func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool) ([]byte, error) {
 	log.Printf("[ChromeRemote] Starting screenshot (targetID=%s, fullPage=%v)", targetID, fullPage)
+
+	// Fall back to the most recently activated/opened/navigated tab when no
+	// explicit targetID is given. This makes activate-then-screenshot work as
+	// callers expect, instead of always grabbing the first non-blank tab.
+	if targetID == "" {
+		cr.mu.Lock()
+		targetID = cr.lastActiveTargetID
+		cr.mu.Unlock()
+		if targetID != "" {
+			log.Printf("[ChromeRemote] Using last-active target: %s", targetID)
+		}
+	}
 
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
@@ -662,6 +679,10 @@ func (cr *ChromeRemote) OpenTab(url string) (string, error) {
 		return "", fmt.Errorf("failed to create target: %v", err)
 	}
 
+	cr.mu.Lock()
+	cr.lastActiveTargetID = string(targetID)
+	cr.mu.Unlock()
+
 	return string(targetID), nil
 }
 
@@ -728,6 +749,11 @@ func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, 
 	}
 
 	result.Status = "success"
+	if targetID != "" {
+		cr.mu.Lock()
+		cr.lastActiveTargetID = targetID
+		cr.mu.Unlock()
+	}
 	log.Printf("[ChromeRemote] Navigation successful in %v", time.Since(startTime))
 	return result, nil
 }
@@ -735,7 +761,13 @@ func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, 
 // ActivateTab switches focus to a specific tab
 func (cr *ChromeRemote) ActivateTab(targetID string) error {
 	log.Printf("[ChromeRemote] Activating tab: %s", targetID)
-	return chromedp.Run(cr.browserCtx, target.ActivateTarget(target.ID(targetID)))
+	if err := chromedp.Run(cr.browserCtx, target.ActivateTarget(target.ID(targetID))); err != nil {
+		return err
+	}
+	cr.mu.Lock()
+	cr.lastActiveTargetID = targetID
+	cr.mu.Unlock()
+	return nil
 }
 
 // CloseTab closes a specific tab

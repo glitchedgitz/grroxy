@@ -304,7 +304,7 @@ func (pm *ProxyManager) ApplyToAllProxies(fn func(proxy *RawProxyWrapper, proxyI
 
 // TakeScreenshot captures a screenshot using the Chrome browser attached to a proxy instance
 // Returns: screenshot bytes, file path (if saved), error
-func (pm *ProxyManager) TakeScreenshot(proxyID string, fullPage bool, savePath string) ([]byte, string, error) {
+func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage bool, savePath string) ([]byte, string, error) {
 	pm.mu.Lock()
 	inst := pm.instances[proxyID]
 	if inst == nil {
@@ -356,8 +356,9 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, fullPage bool, savePath s
 	chrome := inst.Chrome
 	pm.mu.Unlock()
 
-	// Capture the screenshot
-	screenshotBytes, err := chrome.TakeScreenshot("", fullPage)
+	// Capture the screenshot. If a targetID is supplied use it directly;
+	// otherwise chrome.TakeScreenshot("") falls back to the last activated tab.
+	screenshotBytes, err := chrome.TakeScreenshot(targetID, fullPage)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to capture screenshot: %v", err)
 	}
@@ -1085,6 +1086,7 @@ func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
 			type ScreenshotBody struct {
 				ID       string `json:"id"`                 // Proxy ID (required)
 				URL      string `json:"url,omitempty"`      // URL to navigate to (optional, empty = current tab)
+				TargetID string `json:"targetId,omitempty"` // Chrome target ID (optional, empty = last activated tab)
 				FullPage bool   `json:"fullPage,omitempty"` // Capture full page or viewport (default: false)
 				SaveFile bool   `json:"saveFile,omitempty"` // Save to disk in cache directory (default: false)
 			}
@@ -1111,7 +1113,7 @@ func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
 			}
 
 			// Capture the screenshot using ProxyManager
-			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.FullPage, savePath)
+			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.TargetID, body.FullPage, savePath)
 			if err != nil {
 				log.Printf("[ScreenshotProxy] Error taking screenshot: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})

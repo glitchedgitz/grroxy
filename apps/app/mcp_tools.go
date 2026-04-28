@@ -158,7 +158,8 @@ type TemplateUpdateArgs struct {
 }
 
 type ProxyScreenshotArgs struct {
-	ID string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	ID       string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	TargetID string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to capture (returned by proxyOpenTab / proxyListTabs). If empty, captures the most recently activated/opened/navigated tab."`
 }
 
 type ProxyClickArgs struct {
@@ -857,7 +858,7 @@ func (backend *Backend) proxyScreenshotHandler(ctx context.Context, request mcp.
 	filename := fmt.Sprintf("screenshot-%s.png", timestamp)
 	savePath := path.Join(screenshotDir, filename)
 
-	_, filePath, err := ProxyMgr.TakeScreenshot(args.ID, false, savePath)
+	_, filePath, err := ProxyMgr.TakeScreenshot(args.ID, args.TargetID, false, savePath)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
