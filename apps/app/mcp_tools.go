@@ -776,6 +776,30 @@ func (backend *Backend) modifyHostNotesHandler(ctx context.Context, request mcp.
 // Proxy tool handlers
 // ---------------------------------------------------------------------------
 
+// checkProxyOwnership rejects an MCP call if the target proxy is currently
+// running and tagged with a different chat id. Stopped or unowned proxies
+// always pass — they're claimable. Empty proxyID also passes (caller didn't
+// target a specific proxy, e.g. proxyStop with no id stops all).
+func checkProxyOwnership(ctx context.Context, proxyID string) error {
+	if proxyID == "" {
+		return nil
+	}
+	inst := ProxyMgr.GetProxy(proxyID)
+	if inst == nil {
+		// Not running → claimable.
+		return nil
+	}
+	if inst.AIChatID == "" {
+		// Running but unowned (started manually, etc.) → claimable.
+		return nil
+	}
+	caller := ChatIDFromContext(ctx)
+	if inst.AIChatID == caller {
+		return nil
+	}
+	return fmt.Errorf("proxy %s is currently in use by another chat", proxyID)
+}
+
 func (backend *Backend) proxyListHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ProxyMgr.mu.RLock()
 	instances := make([]map[string]any, 0, len(ProxyMgr.instances))
@@ -834,6 +858,10 @@ func (backend *Backend) proxyStopHandler(ctx context.Context, request mcp.CallTo
 		return mcpJSONResult(map[string]any{"success": true, "message": "All proxies stopped"})
 	}
 
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if err := ProxyMgr.StopProxy(args.ID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -846,6 +874,9 @@ func (backend *Backend) proxyStopHandler(ctx context.Context, request mcp.CallTo
 func (backend *Backend) proxyScreenshotHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args ProxyScreenshotArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -882,6 +913,10 @@ func (backend *Backend) proxyClickHandler(ctx context.Context, request mcp.CallT
 		return mcp.NewToolResultError("selector is required"), nil
 	}
 
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if err := ProxyMgr.ClickElement(args.ID, args.URL, args.Selector, args.WaitForNavigation); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -896,6 +931,9 @@ func (backend *Backend) proxyClickHandler(ctx context.Context, request mcp.CallT
 func (backend *Backend) proxyElementsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args ProxyElementsArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -913,6 +951,9 @@ func (backend *Backend) proxyElementsHandler(ctx context.Context, request mcp.Ca
 func (backend *Backend) proxyListTabsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args ProxyListTabsArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -937,6 +978,9 @@ func (backend *Backend) proxyOpenTabHandler(ctx context.Context, request mcp.Cal
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	chrome, err := ProxyMgr.GetChromeRemote(args.ProxyID)
 	if err != nil {
@@ -957,6 +1001,9 @@ func (backend *Backend) proxyOpenTabHandler(ctx context.Context, request mcp.Cal
 func (backend *Backend) proxyNavigateTabHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args ProxyNavigateTabArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -987,6 +1034,9 @@ func (backend *Backend) proxyActivateTabHandler(ctx context.Context, request mcp
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	chrome, err := ProxyMgr.GetChromeRemote(args.ProxyID)
 	if err != nil {
@@ -1006,6 +1056,9 @@ func (backend *Backend) proxyActivateTabHandler(ctx context.Context, request mcp
 func (backend *Backend) proxyCloseTabHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args ProxyCloseTabArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -1029,6 +1082,9 @@ func (backend *Backend) proxyReloadTabHandler(ctx context.Context, request mcp.C
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	chrome, err := ProxyMgr.GetChromeRemote(args.ProxyID)
 	if err != nil {
@@ -1050,6 +1106,9 @@ func (backend *Backend) proxyGoBackHandler(ctx context.Context, request mcp.Call
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	chrome, err := ProxyMgr.GetChromeRemote(args.ProxyID)
 	if err != nil {
@@ -1069,6 +1128,9 @@ func (backend *Backend) proxyGoBackHandler(ctx context.Context, request mcp.Call
 func (backend *Backend) proxyGoForwardHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args ProxyGoForwardArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -1094,6 +1156,9 @@ func (backend *Backend) proxyGoForwardHandler(ctx context.Context, request mcp.C
 func (backend *Backend) interceptToggleHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args InterceptToggleArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -1167,6 +1232,9 @@ func (backend *Backend) interceptActionHandler(ctx context.Context, request mcp.
 func (backend *Backend) interceptReadHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args InterceptReadArgs
 	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -1243,6 +1311,10 @@ func (backend *Backend) proxyTypeHandler(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError("text is required"), nil
 	}
 
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if err := ProxyMgr.TypeText(args.ID, args.Selector, args.Text, args.ClearFirst, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1264,6 +1336,10 @@ func (backend *Backend) proxyEvalHandler(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError("js expression is required"), nil
 	}
 
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	result, err := ProxyMgr.Evaluate(args.ID, args.Js, args.TimeoutMs)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -1283,6 +1359,10 @@ func (backend *Backend) proxyWaitForSelectorHandler(ctx context.Context, request
 
 	if args.Selector == "" {
 		return mcp.NewToolResultError("selector is required"), nil
+	}
+
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	if err := ProxyMgr.WaitForSelector(args.ID, args.Selector, args.TimeoutMs); err != nil {
