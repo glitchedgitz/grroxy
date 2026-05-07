@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/glitchedgitz/pocketbase/apis"
@@ -154,7 +155,10 @@ func (backend *Backend) forwardProxyIntercepts(proxyDBID string) {
 	}
 
 	forwardedCount := 0
-	expectedGeneratedBy := fmt.Sprintf("proxy/%s", proxyDBID)
+	// proxyTag is the canonical proxy suffix; the full generated_by may also
+	// be prefixed with "ai/<chatID>/" when an AI chat owns the proxy, so we
+	// match on suffix rather than equality.
+	proxyTag := fmt.Sprintf("proxy/%s", proxyDBID)
 
 	for id, ch := range interceptChannels {
 		// Check if this intercept belongs to the proxy
@@ -166,7 +170,7 @@ func (backend *Backend) forwardProxyIntercepts(proxyDBID string) {
 
 		// generated_by is stored directly on the intercept record
 		recordGeneratedBy := interceptRecord.GetString("generated_by")
-		if recordGeneratedBy == expectedGeneratedBy {
+		if recordGeneratedBy == proxyTag || strings.HasSuffix(recordGeneratedBy, "/"+proxyTag) {
 			select {
 			case ch <- forwardUpdate:
 				log.Printf("[InterceptManager] Forwarded intercept %s for proxy %s", id, proxyDBID)

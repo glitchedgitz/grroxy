@@ -68,6 +68,17 @@ type RawProxyWrapper struct {
 	Intercept    bool
 	Filters      string
 	RunTemplates bool
+	AIChatID     string // chat that owns this proxy; empty when no AI owner. Stamped into generated_by on every captured row.
+}
+
+// formatGeneratedBy returns the generated_by value to stamp on rows captured
+// by this proxy. When an AI chat owns the proxy, the chat ID is prefixed so
+// per-chat filters (~ 'ai/<chatID>') match proxy-captured traffic too.
+func (rp *RawProxyWrapper) formatGeneratedBy() string {
+	if rp.AIChatID != "" {
+		return fmt.Sprintf("ai/%s/proxy/%s", rp.AIChatID, rp.proxyID)
+	}
+	return fmt.Sprintf("proxy/%s", rp.proxyID)
 }
 
 // ProxyStats tracks proxy statistics
@@ -513,7 +524,7 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		"is_https":     req.TLS != nil,                      // Secure if TLS is present (works with any scheme)
 		"http":         req.Proto,                           // HTTP version: HTTP/1.1, HTTP/2.0, etc.
 		"proxy_id":     reqData.RequestID,                   // Proxy request ID from rawproxy: req-00000001
-		"generated_by": fmt.Sprintf("proxy/%s", rp.proxyID), // Format: proxy/______________1
+		"generated_by": rp.formatGeneratedBy(), // proxy/<id> or ai/<chatID>/proxy/<id> when AI-owned
 		"req_json":     requestData,
 		"resp_json": map[string]any{
 			"title":       "",

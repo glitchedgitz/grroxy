@@ -560,32 +560,31 @@ func (backend *Backend) loadProxySettings(proxy *RawProxyWrapper, proxyRecord *m
 	proxy.Filters = filterstring
 	log.Printf("[ProxySettings] Filters: %s", filterstring)
 
-	// Load run_templates from data JSON field
+	// Load run_templates and ai_chat_id from data JSON field
 	dataRaw := proxyRecord.Get("data")
-	switch v := dataRaw.(type) {
-	case map[string]any:
-		if rt, ok := v["run_templates"].(bool); ok {
-			proxy.RunTemplates = rt
-		}
-	default:
-		var dataMap map[string]any
-		if bytes, err := json.Marshal(v); err == nil {
-			if err := json.Unmarshal(bytes, &dataMap); err == nil {
-				if rt, ok := dataMap["run_templates"].(bool); ok {
-					proxy.RunTemplates = rt
-				}
-			}
+	dataMap, ok := dataRaw.(map[string]any)
+	if !ok {
+		dataMap = map[string]any{}
+		if bytes, err := json.Marshal(dataRaw); err == nil {
+			_ = json.Unmarshal(bytes, &dataMap)
 		}
 	}
-	log.Printf("[ProxySettings] RunTemplates: %v", proxy.RunTemplates)
+	if rt, ok := dataMap["run_templates"].(bool); ok {
+		proxy.RunTemplates = rt
+	}
+	if cid, ok := dataMap["ai_chat_id"].(string); ok {
+		proxy.AIChatID = cid
+	}
+	log.Printf("[ProxySettings] RunTemplates: %v, AIChatID: %q", proxy.RunTemplates, proxy.AIChatID)
 
 	return nil
 }
 
 type ProxyBody struct {
-	HTTP    string `json:"http,omitempty"`
-	Browser string `json:"browser,omitempty"`
-	Name    string `json:"name,omitempty"` // Optional name for the proxy instance
+	HTTP     string `json:"http,omitempty"`
+	Browser  string `json:"browser,omitempty"`
+	Name     string `json:"name,omitempty"`       // Optional name for the proxy instance
+	AIChatID string `json:"ai_chat_id,omitempty"` // chat that owns this proxy; stamped into generated_by on captures
 }
 
 func (backend *Backend) InitializeProxy() error {
@@ -729,11 +728,13 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 	// Initialize data column with run_templates enabled by default
 	proxyData := map[string]interface{}{
 		"run_templates": true,
+		"ai_chat_id":    body.AIChatID,
 	}
 	proxyRecord.Set("data", proxyData)
 
-	// Set RunTemplates on the live proxy instance
+	// Set RunTemplates and AI chat ownership on the live proxy instance
 	newProxy.RunTemplates = true
+	newProxy.AIChatID = body.AIChatID
 
 	if err := dao.SaveRecord(proxyRecord); err != nil {
 		return nil, fmt.Errorf("failed to save proxy record: %v", err)
@@ -887,7 +888,8 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 			}
 
 			type RestartProxyBody struct {
-				ID string `json:"id"` // Formatted ID like "______________1"
+				ID       string  `json:"id"` // Formatted ID like "______________1"
+				AIChatID *string `json:"ai_chat_id,omitempty"`
 			}
 
 			var body RestartProxyBody
@@ -976,9 +978,28 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 			// Update PROXY for backward compatibility
 			updateProxyVar()
 
-			// Load intercept and filter settings from proxy record
+			// Load intercept and filter settings from proxy record (also reads ai_chat_id from data JSON)
 			if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
 				log.Printf("[RestartProxy] Warning: Failed to load proxy settings: %v", err)
+			}
+
+			// If the caller passed ai_chat_id explicitly, it overrides whatever was persisted.
+			// Empty string is a deliberate "clear ownership" — what the manual UI restart sends.
+			if body.AIChatID != nil {
+				newProxy.AIChatID = *body.AIChatID
+				dataRaw := proxyRecord.Get("data")
+				dataMap, _ := dataRaw.(map[string]any)
+				if dataMap == nil {
+					dataMap = map[string]any{}
+					if bytes, mErr := json.Marshal(dataRaw); mErr == nil {
+						_ = json.Unmarshal(bytes, &dataMap)
+					}
+				}
+				dataMap["ai_chat_id"] = *body.AIChatID
+				proxyRecord.Set("data", dataMap)
+				if err := dao.SaveRecord(proxyRecord); err != nil {
+					log.Printf("[RestartProxy][WARN] Failed to persist ai_chat_id: %v", err)
+				}
 			}
 
 			// Start the proxy

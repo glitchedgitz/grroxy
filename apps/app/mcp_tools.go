@@ -810,8 +810,9 @@ func (backend *Backend) proxyStartHandler(ctx context.Context, request mcp.CallT
 	}
 
 	body := &ProxyBody{
-		Browser: "chrome",
-		Name:    args.Name,
+		Browser:  "chrome",
+		Name:     args.Name,
+		AIChatID: ChatIDFromContext(ctx),
 	}
 
 	result, err := backend.startProxyLogic(body)
