@@ -260,6 +260,14 @@ func (backend *Backend) mcpInit() {
 	)
 
 	s.AddTool(
+		mcp.NewTool("proxySetValue",
+			mcp.WithDescription("Set the value of an input/textarea/select using the framework-aware path: native value setter + bubbling input/change events. Use this when proxyType is wedged by overlays/focus-traps or when React/Vue/Angular state isn't picking up direct .value writes."),
+			mcp.WithInputSchema[ProxySetValueArgs](),
+		),
+		backend.proxySetValueHandler,
+	)
+
+	s.AddTool(
 		mcp.NewTool("proxyEval",
 			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools. ALWAYS include a short `note` explaining what this JS does — it is shown to the user as the action label."),
 			mcp.WithInputSchema[ProxyEvalArgs](),

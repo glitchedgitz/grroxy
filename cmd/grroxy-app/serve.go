@@ -151,6 +151,7 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.GoBack)
 	API.App.OnBeforeServe().Add(API.GoForward)
 	API.App.OnBeforeServe().Add(API.TypeTextProxy)
+	API.App.OnBeforeServe().Add(API.SetValueProxy)
 	API.App.OnBeforeServe().Add(API.WaitForSelectorProxy)
 	API.App.OnBeforeServe().Add(API.EvaluateProxy)
 

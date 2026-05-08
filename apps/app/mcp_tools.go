@@ -158,8 +158,9 @@ type TemplateUpdateArgs struct {
 }
 
 type ProxyScreenshotArgs struct {
-	ID       string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	TargetID string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to capture (returned by proxyOpenTab / proxyListTabs). If empty, captures the most recently activated/opened/navigated tab."`
+	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	TargetID  string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to capture (returned by proxyOpenTab / proxyListTabs). If empty, captures the most recently activated/opened/navigated tab."`
+	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Total time budget for capture in milliseconds, including readiness check and one retry on timeout. Default: 30000"`
 }
 
 type ProxyClickArgs struct {
@@ -167,6 +168,15 @@ type ProxyClickArgs struct {
 	URL               string `json:"url,omitempty" jsonschema_description:"URL to navigate to before clicking. If empty, operates on the current active page"`
 	Selector          string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector for the element to click"`
 	WaitForNavigation bool   `json:"waitForNavigation,omitempty" jsonschema_description:"If true, waits for page navigation after click (default: false)"`
+	WaitForSelector   string `json:"waitForSelector,omitempty" jsonschema_description:"Optional CSS selector to wait for after the click. Useful for SPA transitions where waitForNavigation never fires."`
+	UseJS             bool   `json:"useJS,omitempty" jsonschema_description:"Force a JS .click() instead of native CDP dispatchMouseEvent. Use when overlays / autocomplete dropdowns / focus traps intercept native mouse events on complex pages. Default false: native click is tried first and auto-falls back to JS .click() on timeout. Result.clickMode reports which path fired (native|js|js-fallback)."`
+}
+
+type ProxySetValueArgs struct {
+	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector for the input/textarea/select element to set"`
+	Value     string `json:"value" jsonschema:"required" jsonschema_description:"The value to write into the element"`
+	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 5000"`
 }
 
 type ProxyElementsArgs struct {
@@ -205,16 +215,19 @@ type ProxyReloadTabArgs struct {
 	ProxyID     string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	TargetID    string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to reload. If empty, reloads the active tab"`
 	BypassCache bool   `json:"bypassCache,omitempty" jsonschema_description:"If true, reloads ignoring cache (hard refresh). Default: false"`
+	TimeoutMs   int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds for the reload command ACK. The reload itself continues asynchronously in the browser. Default: 5000"`
 }
 
 type ProxyGoBackArgs struct {
-	ProxyID  string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	TargetID string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab. If empty, operates on the active tab"`
+	ProxyID   string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	TargetID  string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab. If empty, operates on the active tab"`
+	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds for the navigate-back command ACK. Default: 5000"`
 }
 
 type ProxyGoForwardArgs struct {
-	ProxyID  string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	TargetID string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab. If empty, operates on the active tab"`
+	ProxyID   string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	TargetID  string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab. If empty, operates on the active tab"`
+	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds for the navigate-forward command ACK. Default: 5000"`
 }
 
 // --- Intercept arg structs ---
@@ -260,8 +273,9 @@ type ProxyEvalArgs struct {
 
 type ProxyWaitForSelectorArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector to wait for"`
+	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector to wait for (evaluated through document.querySelector)"`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 30000"`
+	State     string `json:"state,omitempty" jsonschema_description:"What to wait for: \"attached\" (default — element exists in the DOM) or \"visible\" (element exists AND is visible: non-zero size, not display:none/opacity:0). Use \"attached\" by default — many real elements exist on the page but fail the strict visibility check (collapsed sections, off-screen sticky bars, transitioning UI)."`
 }
 
 // ---------------------------------------------------------------------------
@@ -800,30 +814,115 @@ func checkProxyOwnership(ctx context.Context, proxyID string) error {
 	return fmt.Errorf("proxy %s is currently in use by another chat", proxyID)
 }
 
-func (backend *Backend) proxyListHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// listAllProxies returns every proxy record persisted in _proxies, not just
+// the ones currently running in the in-memory ProxyManager. The "running"
+// status, browserPid, and live listenAddr are layered in from
+// ProxyMgr.instances when present.
+//
+// Why this matters: iterating ProxyMgr.instances only covers running proxies
+// (entries are deleted on stop). Callers had no way to enumerate previously-
+// started proxies that are now stopped. This helper is shared by both the
+// MCP `proxyList` tool and the HTTP `/api/proxy/list` route so they stay
+// consistent.
+func listAllProxies(backend *Backend) ([]map[string]any, error) {
+	dao := backend.App.Dao()
+	records, err := dao.FindRecordsByExpr("_proxies")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query _proxies: %v", err)
+	}
+
+	type liveInfo struct {
+		listenAddr string
+		browserPid int
+		intercept  bool
+		aiChatID   string
+		label      string
+		browser    string
+	}
+	live := make(map[string]liveInfo)
 	ProxyMgr.mu.RLock()
-	instances := make([]map[string]any, 0, len(ProxyMgr.instances))
 	for id, inst := range ProxyMgr.instances {
-		if inst != nil && inst.Proxy != nil {
-			var browserPid int
-			if inst.BrowserCmd != nil && inst.BrowserCmd.Process != nil {
-				browserPid = inst.BrowserCmd.Process.Pid
-			}
-			instances = append(instances, map[string]any{
-				"id":         id,
-				"listenAddr": inst.Proxy.listenAddr,
-				"label":      inst.Label,
-				"browser":    inst.Browser,
-				"browserPid": browserPid,
-				"intercept":  inst.Proxy.Intercept,
-			})
+		if inst == nil || inst.Proxy == nil {
+			continue
 		}
+		info := liveInfo{
+			listenAddr: inst.Proxy.listenAddr,
+			intercept:  inst.Proxy.Intercept,
+			aiChatID:   inst.Proxy.AIChatID,
+			label:      inst.Label,
+			browser:    inst.Browser,
+		}
+		if inst.BrowserCmd != nil && inst.BrowserCmd.Process != nil {
+			info.browserPid = inst.BrowserCmd.Process.Pid
+		}
+		live[id] = info
 	}
 	ProxyMgr.mu.RUnlock()
 
+	proxies := make([]map[string]any, 0, len(records))
+	for _, r := range records {
+		id := r.GetId()
+
+		entry := map[string]any{
+			"id":         id,
+			"listenAddr": r.GetString("addr"),
+			"label":      r.GetString("label"),
+			"browser":    r.GetString("browser"),
+			"browserPid": 0,
+			"intercept":  r.GetBool("intercept"),
+			"state":      "stopped",
+			"running":    false,
+		}
+
+		// Pull ai_chat_id out of the data JSON column.
+		if dataRaw := r.Get("data"); dataRaw != nil {
+			dataMap, ok := dataRaw.(map[string]any)
+			if !ok {
+				dataMap = map[string]any{}
+				if b, err := json.Marshal(dataRaw); err == nil {
+					_ = json.Unmarshal(b, &dataMap)
+				}
+			}
+			if cid, ok := dataMap["ai_chat_id"].(string); ok && cid != "" {
+				entry["aiChatID"] = cid
+			}
+		}
+
+		// Layer live state on top — running is determined by presence in
+		// ProxyMgr.instances, not by the DB's state column.
+		if info, ok := live[id]; ok {
+			entry["state"] = "running"
+			entry["running"] = true
+			if info.listenAddr != "" {
+				entry["listenAddr"] = info.listenAddr
+			}
+			if info.label != "" {
+				entry["label"] = info.label
+			}
+			if info.browser != "" {
+				entry["browser"] = info.browser
+			}
+			entry["browserPid"] = info.browserPid
+			entry["intercept"] = info.intercept
+			if info.aiChatID != "" {
+				entry["aiChatID"] = info.aiChatID
+			}
+		}
+
+		proxies = append(proxies, entry)
+	}
+
+	return proxies, nil
+}
+
+func (backend *Backend) proxyListHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	proxies, err := listAllProxies(backend)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	return mcpJSONResult(map[string]any{
-		"proxies": instances,
-		"count":   len(instances),
+		"proxies": proxies,
+		"count":   len(proxies),
 	})
 }
 
@@ -890,7 +989,7 @@ func (backend *Backend) proxyScreenshotHandler(ctx context.Context, request mcp.
 	filename := fmt.Sprintf("screenshot-%s.png", timestamp)
 	savePath := path.Join(screenshotDir, filename)
 
-	_, filePath, err := ProxyMgr.TakeScreenshot(args.ID, args.TargetID, false, savePath)
+	_, filePath, err := ProxyMgr.TakeScreenshot(args.ID, args.TargetID, false, savePath, args.TimeoutMs)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -917,15 +1016,27 @@ func (backend *Backend) proxyClickHandler(ctx context.Context, request mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := ProxyMgr.ClickElement(args.ID, args.URL, args.Selector, args.WaitForNavigation); err != nil {
+	result, err := ProxyMgr.ClickElement(args.ID, args.URL, args.Selector, args.WaitForNavigation, args.WaitForSelector, args.UseJS)
+	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return mcpJSONResult(map[string]any{
+	resp := map[string]any{
 		"success":  true,
 		"message":  "Element clicked successfully",
 		"selector": args.Selector,
-	})
+	}
+	if result != nil {
+		if result.ClickMode != "" {
+			resp["clickMode"] = result.ClickMode
+		}
+		if len(result.NewTabs) > 0 {
+			resp["newTabOpened"] = true
+			resp["newTabs"] = result.NewTabs
+			resp["message"] = fmt.Sprintf("Element clicked; %d new tab(s) opened", len(result.NewTabs))
+		}
+	}
+	return mcpJSONResult(resp)
 }
 
 func (backend *Backend) proxyElementsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1091,7 +1202,7 @@ func (backend *Backend) proxyReloadTabHandler(ctx context.Context, request mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := chrome.ReloadTab(args.TargetID, args.BypassCache); err != nil {
+	if err := chrome.ReloadTab(args.TargetID, args.BypassCache, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to reload tab: %v", err)), nil
 	}
 
@@ -1115,7 +1226,7 @@ func (backend *Backend) proxyGoBackHandler(ctx context.Context, request mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := chrome.GoBack(args.TargetID); err != nil {
+	if err := chrome.GoBack(args.TargetID, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to go back: %v", err)), nil
 	}
 
@@ -1139,7 +1250,7 @@ func (backend *Backend) proxyGoForwardHandler(ctx context.Context, request mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := chrome.GoForward(args.TargetID); err != nil {
+	if err := chrome.GoForward(args.TargetID, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to go forward: %v", err)), nil
 	}
 
@@ -1326,6 +1437,31 @@ func (backend *Backend) proxyTypeHandler(ctx context.Context, request mcp.CallTo
 	})
 }
 
+func (backend *Backend) proxySetValueHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxySetValueArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.Selector == "" {
+		return mcp.NewToolResultError("selector is required"), nil
+	}
+
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := ProxyMgr.SetValue(args.ID, args.Selector, args.Value, args.TimeoutMs); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(map[string]any{
+		"success":  true,
+		"message":  "Value set successfully",
+		"selector": args.Selector,
+	})
+}
+
 func (backend *Backend) proxyEvalHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args ProxyEvalArgs
 	if err := request.BindArguments(&args); err != nil {
@@ -1365,7 +1501,7 @@ func (backend *Backend) proxyWaitForSelectorHandler(ctx context.Context, request
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := ProxyMgr.WaitForSelector(args.ID, args.Selector, args.TimeoutMs); err != nil {
+	if err := ProxyMgr.WaitForSelector(args.ID, args.Selector, args.TimeoutMs, args.State); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 

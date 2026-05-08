@@ -302,9 +302,10 @@ func (pm *ProxyManager) ApplyToAllProxies(fn func(proxy *RawProxyWrapper, proxyI
 	}
 }
 
-// TakeScreenshot captures a screenshot using the Chrome browser attached to a proxy instance
+// TakeScreenshot captures a screenshot using the Chrome browser attached to a proxy instance.
+// timeoutMs caps the capture (including readiness check + retry); 0 uses the default.
 // Returns: screenshot bytes, file path (if saved), error
-func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage bool, savePath string) ([]byte, string, error) {
+func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage bool, savePath string, timeoutMs int) ([]byte, string, error) {
 	pm.mu.Lock()
 	inst := pm.instances[proxyID]
 	if inst == nil {
@@ -358,7 +359,7 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage
 
 	// Capture the screenshot. If a targetID is supplied use it directly;
 	// otherwise chrome.TakeScreenshot("") falls back to the last activated tab.
-	screenshotBytes, err := chrome.TakeScreenshot(targetID, fullPage)
+	screenshotBytes, err := chrome.TakeScreenshot(targetID, fullPage, timeoutMs)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to capture screenshot: %v", err)
 	}
@@ -376,25 +377,30 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage
 	return screenshotBytes, filePath, nil
 }
 
-// ClickElement clicks an element on the page using the Chrome browser attached to a proxy instance
-func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string, waitForNavigation bool) error {
+// ClickElement clicks an element on the page using the Chrome browser attached to a proxy instance.
+// Returns any newly-spawned tab IDs (when the click opens a new tab instead of navigating in place).
+// waitForSelector is optional — when set, the click waits until that selector is visible (useful for SPAs).
+// useJS forces a JS .click() instead of CDP dispatchMouseEvent (useful when overlays / focus traps
+// intercept native mouse events). When false, native click is tried first with auto-fallback to JS
+// on timeout.
+func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string, waitForNavigation bool, waitForSelector string, useJS bool) (*browser.ClickResult, error) {
 	pm.mu.Lock()
 	inst := pm.instances[proxyID]
 	if inst == nil {
 		pm.mu.Unlock()
-		return fmt.Errorf("proxy %s not found", proxyID)
+		return nil, fmt.Errorf("proxy %s not found", proxyID)
 	}
 
 	if inst.Browser != "chrome" {
 		pm.mu.Unlock()
-		return fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
+		return nil, fmt.Errorf("proxy %s does not have a Chrome browser attached (browser: %s)", proxyID, inst.Browser)
 	}
 
 	// Initialize ChromeRemote if not already present
 	if inst.Chrome == nil {
 		if inst.BrowserCmd == nil || inst.BrowserCmd.Process == nil {
 			pm.mu.Unlock()
-			return fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
+			return nil, fmt.Errorf("Chrome browser process not running for proxy %s", proxyID)
 		}
 
 		var profileDir string
@@ -407,19 +413,19 @@ func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string
 
 		if profileDir == "" {
 			pm.mu.Unlock()
-			return fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
+			return nil, fmt.Errorf("could not determine Chrome profile directory for proxy %s", proxyID)
 		}
 
 		debugURL, err := browser.GetChromeDebugURL(profileDir)
 		if err != nil {
 			pm.mu.Unlock()
-			return fmt.Errorf("failed to get Chrome debug URL: %v", err)
+			return nil, fmt.Errorf("failed to get Chrome debug URL: %v", err)
 		}
 
 		cr, err := browser.NewChromeRemote(debugURL)
 		if err != nil {
 			pm.mu.Unlock()
-			return fmt.Errorf("failed to connect to Chrome: %v", err)
+			return nil, fmt.Errorf("failed to connect to Chrome: %v", err)
 		}
 		inst.Chrome = cr
 	}
@@ -427,11 +433,12 @@ func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string
 	pm.mu.Unlock()
 
 	// Click the element
-	if err := chrome.ClickElement("", url, selector, waitForNavigation); err != nil {
-		return fmt.Errorf("failed to click element: %v", err)
+	result, err := chrome.ClickElement("", url, selector, waitForNavigation, waitForSelector, useJS)
+	if err != nil {
+		return nil, fmt.Errorf("failed to click element: %v", err)
 	}
 
-	return nil
+	return result, nil
 }
 
 // GetElements retrieves information about clickable elements on the page
@@ -502,13 +509,26 @@ func (pm *ProxyManager) TypeText(proxyID string, selector string, text string, c
 	return chrome.TypeText("", selector, text, clearFirst, timeoutMs)
 }
 
-// WaitForSelector waits for a CSS selector to become visible on the page
-func (pm *ProxyManager) WaitForSelector(proxyID string, selector string, timeoutMs int) error {
+// SetValue sets a form element's value via the framework-aware path
+// (native value setter + input/change events). Used as a fallback when
+// proxyType is wedged by overlays / focus traps and as a way to make
+// React/Vue/Angular state notice the change.
+func (pm *ProxyManager) SetValue(proxyID string, selector string, value string, timeoutMs int) error {
 	chrome, err := pm.GetChromeRemote(proxyID)
 	if err != nil {
 		return err
 	}
-	return chrome.WaitForSelector("", selector, timeoutMs)
+	return chrome.SetValue("", selector, value, timeoutMs)
+}
+
+// WaitForSelector waits for a CSS selector to be present on the page.
+// state is "attached" (default — DOM presence) or "visible" (strict).
+func (pm *ProxyManager) WaitForSelector(proxyID string, selector string, timeoutMs int, state string) error {
+	chrome, err := pm.GetChromeRemote(proxyID)
+	if err != nil {
+		return err
+	}
+	return chrome.WaitForSelector("", selector, timeoutMs, state)
 }
 
 // Evaluate runs arbitrary JavaScript in the page context
@@ -1062,28 +1082,15 @@ func (backend *Backend) ListProxies(e *core.ServeEvent) error {
 				return c.String(http.StatusForbidden, "")
 			}
 
-			ProxyMgr.mu.RLock()
-			instances := make([]map[string]interface{}, 0, len(ProxyMgr.instances))
-			for id, inst := range ProxyMgr.instances {
-				if inst != nil && inst.Proxy != nil {
-					var browserPid int
-					if inst.BrowserCmd != nil && inst.BrowserCmd.Process != nil {
-						browserPid = inst.BrowserCmd.Process.Pid
-					}
-					instances = append(instances, map[string]interface{}{
-						"id":         id,                    // Formatted ID like "______________1"
-						"listenAddr": inst.Proxy.listenAddr, // Listen address like "127.0.0.1:8080"
-						"label":      inst.Label,
-						"browser":    inst.Browser,
-						"browserPid": browserPid,
-					})
-				}
+			// Returns every proxy persisted in _proxies (running + stopped),
+			// with live state layered in. See listAllProxies.
+			proxies, err := listAllProxies(backend)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
-			ProxyMgr.mu.RUnlock()
-
 			return c.JSON(http.StatusOK, map[string]interface{}{
-				"proxies": instances,
-				"count":   len(instances),
+				"proxies": proxies,
+				"count":   len(proxies),
 			})
 		},
 	})
@@ -1133,8 +1140,8 @@ func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
 				log.Printf("[ScreenshotProxy] Will save screenshot to: %s", savePath)
 			}
 
-			// Capture the screenshot using ProxyManager
-			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.TargetID, body.FullPage, savePath)
+			// Capture the screenshot using ProxyManager (0 timeout = default).
+			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.TargetID, body.FullPage, savePath, 0)
 			if err != nil {
 				log.Printf("[ScreenshotProxy] Error taking screenshot: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
@@ -1182,6 +1189,8 @@ func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
 				URL               string `json:"url,omitempty"`               // URL to navigate to (optional, empty = current page)
 				Selector          string `json:"selector"`                    // CSS selector for element to click (required)
 				WaitForNavigation bool   `json:"waitForNavigation,omitempty"` // Wait for navigation after click (default: false)
+				WaitForSelector   string `json:"waitForSelector,omitempty"`   // Optional CSS selector to wait for after click
+				UseJS             bool   `json:"useJS,omitempty"`             // Force JS .click() instead of native CDP click
 			}
 
 			var body ClickBody
@@ -1200,20 +1209,26 @@ func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
 			log.Printf("[ClickProxy] Clicking element for proxy %s (url=%s, selector=%s, waitNav=%v)",
 				body.ID, body.URL, body.Selector, body.WaitForNavigation)
 
-			// Click the element using ProxyManager
-			err := ProxyMgr.ClickElement(body.ID, body.URL, body.Selector, body.WaitForNavigation)
+			// Click the element using ProxyManager.
+			result, err := ProxyMgr.ClickElement(body.ID, body.URL, body.Selector, body.WaitForNavigation, body.WaitForSelector, body.UseJS)
 			if err != nil {
 				log.Printf("[ClickProxy] Error clicking element: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			log.Printf("[ClickProxy] Element clicked successfully")
-			return c.JSON(http.StatusOK, map[string]interface{}{
+			log.Printf("[ClickProxy] Element clicked successfully (clickMode=%s, newTabs=%v)", result.ClickMode, result.NewTabs)
+			resp := map[string]interface{}{
 				"success":   true,
 				"message":   "Element clicked successfully",
 				"selector":  body.Selector,
+				"clickMode": result.ClickMode,
 				"timestamp": time.Now().Format(time.RFC3339),
-			})
+			}
+			if len(result.NewTabs) > 0 {
+				resp["newTabs"] = result.NewTabs
+				resp["newTabOpened"] = true
+			}
+			return c.JSON(http.StatusOK, resp)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),
@@ -1489,6 +1504,55 @@ func (backend *Backend) TypeTextProxy(e *core.ServeEvent) error {
 	return nil
 }
 
+func (backend *Backend) SetValueProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/setvalue",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type SetValueBody struct {
+				ID        string `json:"id"`
+				Selector  string `json:"selector"`
+				Value     string `json:"value"`
+				TimeoutMs int    `json:"timeoutMs,omitempty"`
+			}
+
+			var body SetValueBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+			if body.Selector == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
+			}
+
+			if err := ProxyMgr.SetValue(body.ID, body.Selector, body.Value, body.TimeoutMs); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":  true,
+				"message":  "Value set successfully",
+				"selector": body.Selector,
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
 func (backend *Backend) WaitForSelectorProxy(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
@@ -1506,6 +1570,7 @@ func (backend *Backend) WaitForSelectorProxy(e *core.ServeEvent) error {
 				ID        string `json:"id"`
 				Selector  string `json:"selector"`
 				TimeoutMs int    `json:"timeoutMs,omitempty"`
+				State     string `json:"state,omitempty"`
 			}
 
 			var body WaitForSelectorBody
@@ -1520,7 +1585,7 @@ func (backend *Backend) WaitForSelectorProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
 			}
 
-			if err := ProxyMgr.WaitForSelector(body.ID, body.Selector, body.TimeoutMs); err != nil {
+			if err := ProxyMgr.WaitForSelector(body.ID, body.Selector, body.TimeoutMs, body.State); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 

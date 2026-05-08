@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
@@ -307,9 +308,19 @@ func (cr *ChromeRemote) Close() {
 
 // getContext returns a context for the specific target ID.
 // It caches contexts to avoid frequent opening/closing of sessions, which helps prevent tab closure.
+//
+// When targetID is empty we prefer the most-recently activated/opened/
+// navigated tab (lastActiveTargetID) so that proxyActivateTab actually
+// steers downstream tools (proxyType / proxyClick / proxyEval / etc.) to
+// the activated tab instead of always landing on tabs[0]. Falls back to
+// the first listed tab if no last-active is recorded yet.
 func (cr *ChromeRemote) getContext(targetID string) (context.Context, error) {
 	if targetID == "" {
-		// If no target ID, try to pick one
+		cr.mu.Lock()
+		targetID = cr.lastActiveTargetID
+		cr.mu.Unlock()
+	}
+	if targetID == "" {
 		tabs, err := cr.ListTabs()
 		if err != nil || len(tabs) == 0 {
 			return cr.browserCtx, nil
@@ -362,8 +373,11 @@ func (cr *ChromeRemote) CloseTargetContext(targetID string) {
 
 // TakeScreenshot captures a screenshot of a specific tab (targetID).
 // If targetID == "", it will try to pick a "best" tab (heuristic).
-func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool) ([]byte, error) {
-	log.Printf("[ChromeRemote] Starting screenshot (targetID=%s, fullPage=%v)", targetID, fullPage)
+func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs int) ([]byte, error) {
+	log.Printf("[ChromeRemote] Starting screenshot (targetID=%s, fullPage=%v, timeoutMs=%d)", targetID, fullPage, timeoutMs)
+	if timeoutMs <= 0 {
+		timeoutMs = 30000
+	}
 
 	// Fall back to the most recently activated/opened/navigated tab when no
 	// explicit targetID is given. This makes activate-then-screenshot work as
@@ -439,8 +453,8 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool) ([]byte, 
 		}
 	}
 
-	// Timeout for the screenshot operation
-	ctx, timeoutCancel := context.WithTimeout(ctx, 30*time.Second)
+	// Timeout for the screenshot operation (caller-configurable).
+	ctx, timeoutCancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer timeoutCancel()
 
 	// Bring it to front
@@ -449,20 +463,37 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool) ([]byte, 
 		return target.ActivateTarget(tid).Do(c)
 	}))
 
-	var buf []byte
-	var tasks []chromedp.Action
+	// Best-effort wait for the page to be done loading before we capture.
+	// Pages stuck in 'loading' (e.g. after a CAPTCHA) used to make the
+	// FullScreenshot action hang until the global timeout fired with a
+	// generic "context deadline exceeded".
+	readyCtx, readyCancel := context.WithTimeout(ctx, 3*time.Second)
+	var ready bool
+	_ = chromedp.Run(readyCtx, chromedp.Evaluate(`document.readyState === 'complete'`, &ready))
+	readyCancel()
 
-	// Wait for body to be ready
-	tasks = append(tasks, chromedp.WaitReady("body", chromedp.ByQuery))
-
-	if fullPage {
-		tasks = append(tasks, chromedp.FullScreenshot(&buf, 90))
-	} else {
-		tasks = append(tasks, chromedp.CaptureScreenshot(&buf))
+	capture := func() ([]byte, error) {
+		var buf []byte
+		var tasks []chromedp.Action
+		tasks = append(tasks, chromedp.WaitReady("body", chromedp.ByQuery))
+		if fullPage {
+			tasks = append(tasks, chromedp.FullScreenshot(&buf, 90))
+		} else {
+			tasks = append(tasks, chromedp.CaptureScreenshot(&buf))
+		}
+		err := chromedp.Run(ctx, tasks...)
+		return buf, err
 	}
 
-	if err := chromedp.Run(ctx, tasks...); err != nil {
-		return nil, fmt.Errorf("[ChromeRemote] failed to capture screenshot: %v", err)
+	buf, err := capture()
+	if err != nil {
+		// One short retry — the most common cause of a transient timeout
+		// is the page momentarily blocked on a heavy frame/CAPTCHA load.
+		log.Printf("[ChromeRemote] Screenshot retry after error: %v", err)
+		buf, err = capture()
+		if err != nil {
+			return nil, fmt.Errorf("[ChromeRemote] failed to capture screenshot: %v", err)
+		}
 	}
 
 	log.Printf("[ChromeRemote] Screenshot captured (%d bytes)", len(buf))
@@ -471,44 +502,225 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool) ([]byte, 
 
 // ClickElement clicks an element on the page using Chrome DevTools Protocol.
 // targetID can be empty to pick the best tab.
-func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector string, waitForNavigation bool) error {
-	log.Printf("[ChromeRemote] Starting click operation (targetID=%s, selector=%s, targetURL=%s, waitNav=%v)",
-		targetID, selector, targetURL, waitForNavigation)
+// ClickResult is what ClickElement returns. NewTabs lists any page-type
+// targets that appeared between the start and end of the click — useful for
+// callers because clicking links like Bing's "Images" can silently spawn a
+// new tab instead of navigating the current one. WaitedFor reports whether
+// the optional waitForSelector matched. ClickMode is "native" (CDP
+// dispatchMouseEvent), "js" (caller asked for JS click directly), or
+// "js-fallback" (native click timed out so we fell back to el.click()).
+type ClickResult struct {
+	NewTabs   []string `json:"newTabs"`
+	WaitedFor string   `json:"waitedFor,omitempty"`
+	NavWaited bool     `json:"navWaited,omitempty"`
+	ClickMode string   `json:"clickMode,omitempty"`
+}
+
+// ClickElement clicks an element on the page using CDP and reports any new
+// tabs that opened as a side effect. If waitForSelector is non-empty, after
+// the click it waits until that selector becomes visible — useful for SPAs
+// where waitForNavigation never fires because the route swap is client-side.
+//
+// useJS forces a JS .click() instead of CDP dispatchMouseEvent (skips the
+// native path entirely). Useful when overlays/focus-traps intercept native
+// mouse events on complex sites. When useJS is false, native CDP click is
+// tried first; if it times out within its 5s budget the function auto-falls
+// back to JS .click() so the AI agent doesn't have to retry. The result's
+// ClickMode reports which path actually fired.
+//
+// Implementation notes (re: the "waitForNavigation/waitForSelector never
+// resolve" bugs):
+//   - Phases are split into separate chromedp.Run calls so that the click
+//     completing doesn't poison the post-click waits.
+//   - waitForNavigation listens for page.EventFrameNavigated registered
+//     BEFORE the click. WaitReady("body") on its own can return on the
+//     pre-navigation document and look like a false positive.
+//   - When the click spawns a new tab, the post-click waits are routed to
+//     the new tab's context — otherwise WaitVisible would poll the old tab
+//     forever for a selector that only appears in the new one.
+func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector string, waitForNavigation bool, waitForSelector string, useJS bool) (*ClickResult, error) {
+	log.Printf("[ChromeRemote] Starting click operation (targetID=%s, selector=%s, targetURL=%s, waitNav=%v, waitForSelector=%q, useJS=%v)",
+		targetID, selector, targetURL, waitForNavigation, waitForSelector, useJS)
 
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer timeoutCancel()
 
-	var tasks []chromedp.Action
+	// Snapshot existing target IDs so we can diff after the click and report
+	// any new tabs that were spawned.
+	existing := make(map[target.ID]bool)
+	if err := chromedp.Run(timeoutCtx, chromedp.ActionFunc(func(c context.Context) error {
+		infos, err := chromedp.Targets(c)
+		if err != nil {
+			return err
+		}
+		for _, info := range infos {
+			existing[info.TargetID] = true
+		}
+		return nil
+	})); err != nil {
+		return nil, fmt.Errorf("[ChromeRemote] failed to enumerate existing targets: %v", err)
+	}
 
-	// Navigate to URL if provided
+	// Optional pre-navigation runs in its own phase so a failure here doesn't
+	// look like a click failure.
 	if targetURL != "" {
 		log.Printf("[ChromeRemote] Navigating to URL: %s", targetURL)
-		tasks = append(tasks, chromedp.Navigate(targetURL))
-		tasks = append(tasks, chromedp.WaitReady("body"))
+		if err := chromedp.Run(timeoutCtx,
+			chromedp.Navigate(targetURL),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+		); err != nil {
+			return nil, fmt.Errorf("[ChromeRemote] navigate before click failed: %v", err)
+		}
 	}
 
-	// Wait for the element to be visible
-	log.Printf("[ChromeRemote] Waiting for element: %s", selector)
-	tasks = append(tasks, chromedp.WaitVisible(selector))
-
-	// Click the element
-	log.Printf("[ChromeRemote] Clicking element: %s", selector)
-	tasks = append(tasks, chromedp.Click(selector, chromedp.ByQuery))
+	// Register a frameNavigated listener BEFORE the click so we don't miss
+	// the event. We only fire navDone for the main frame so subframe loads
+	// (ads/iframes/etc.) don't trip the wait.
+	navDone := make(chan struct{}, 1)
 	if waitForNavigation {
-		tasks = append(tasks, chromedp.WaitReady("body"))
+		chromedp.ListenTarget(timeoutCtx, func(ev interface{}) {
+			if e, ok := ev.(*page.EventFrameNavigated); ok && e.Frame != nil && e.Frame.ParentID == "" {
+				select {
+				case navDone <- struct{}{}:
+				default:
+				}
+			}
+		})
 	}
 
-	if err := chromedp.Run(timeoutCtx, tasks...); err != nil {
-		return fmt.Errorf("[ChromeRemote] failed to click element: %v", err)
+	// Stepwise click: each phase has its own short timeout so a failure
+	// surfaces as "click step X failed" instead of eating the global budget.
+	runStep := func(name string, action chromedp.Action, perStepMs int) error {
+		sctx, scancel := context.WithTimeout(timeoutCtx, time.Duration(perStepMs)*time.Millisecond)
+		defer scancel()
+		if err := chromedp.Run(sctx, action); err != nil {
+			return fmt.Errorf("[ChromeRemote] click step %q failed: %v", name, err)
+		}
+		return nil
 	}
 
-	log.Printf("[ChromeRemote] Element clicked successfully")
-	return nil
+	if err := runStep("waitVisible", chromedp.WaitVisible(selector, chromedp.ByQuery), 5000); err != nil {
+		return nil, err
+	}
+	// Best-effort scroll into view so the click coordinates resolve to the
+	// element instead of an off-screen point.
+	_ = runStep("scrollIntoView", chromedp.ScrollIntoView(selector, chromedp.ByQuery), 3000)
+
+	// JS click — runs el.click() via Runtime.evaluate. Fires synthetic
+	// (untrusted) events but reliably bypasses overlays/focus-traps that
+	// intercept native mouse events.
+	jsClick := func() error {
+		expr := fmt.Sprintf(`(function(){var e=document.querySelector(%q); if(!e) return false; e.click(); return true;})()`, selector)
+		var ok bool
+		jctx, jcancel := context.WithTimeout(timeoutCtx, 5*time.Second)
+		defer jcancel()
+		if err := chromedp.Run(jctx, chromedp.Evaluate(expr, &ok)); err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("element not found for JS click")
+		}
+		return nil
+	}
+
+	clickMode := ""
+	if useJS {
+		log.Printf("[ChromeRemote] JS click (caller-requested) on %s", selector)
+		if err := jsClick(); err != nil {
+			return nil, fmt.Errorf("[ChromeRemote] click step %q failed: %v", "jsClick", err)
+		}
+		clickMode = "js"
+	} else {
+		// Native CDP click first; auto-fall back to JS click on timeout so
+		// callers don't have to retry on overlay-heavy pages.
+		log.Printf("[ChromeRemote] Native click on %s", selector)
+		nativeErr := runStep("click", chromedp.Click(selector, chromedp.ByQuery), 5000)
+		if nativeErr == nil {
+			clickMode = "native"
+		} else {
+			log.Printf("[ChromeRemote] native click failed, falling back to JS: %v", nativeErr)
+			if err := jsClick(); err != nil {
+				return nil, fmt.Errorf("[ChromeRemote] click failed (native: %v; JS fallback: %v)", nativeErr, err)
+			}
+			clickMode = "js-fallback"
+		}
+	}
+
+	// Settle window for new tab detection. Some pop-ups don't appear in
+	// chromedp.Targets immediately after the click returns.
+	settle, settleCancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer settleCancel()
+	var after []*target.Info
+	_ = chromedp.Run(settle, chromedp.ActionFunc(func(c context.Context) error {
+		infos, err := chromedp.Targets(c)
+		if err != nil {
+			return err
+		}
+		after = infos
+		return nil
+	}))
+
+	result := &ClickResult{NavWaited: waitForNavigation, WaitedFor: waitForSelector, ClickMode: clickMode}
+	for _, info := range after {
+		if info.Type != "page" {
+			continue
+		}
+		if !existing[info.TargetID] {
+			result.NewTabs = append(result.NewTabs, info.TargetID.String())
+		}
+	}
+
+	// Route post-click waits: if a new tab spawned, run them in the new
+	// tab's chromedp context; otherwise stay in the original tab.
+	waitCtx := ctx
+	if len(result.NewTabs) > 0 {
+		if newCtx, err := cr.getContext(result.NewTabs[0]); err == nil {
+			waitCtx = newCtx
+		}
+	}
+
+	// waitForNavigation: rely on the frameNavigated listener registered
+	// before the click. New-tab opens count as the navigation succeeding.
+	if waitForNavigation {
+		if len(result.NewTabs) > 0 {
+			// New tab is its own navigation; wait briefly for the body in it.
+			ready, readyCancel := context.WithTimeout(waitCtx, 5*time.Second)
+			_ = chromedp.Run(ready, chromedp.WaitReady("body", chromedp.ByQuery))
+			readyCancel()
+		} else {
+			navWait, navCancel := context.WithTimeout(timeoutCtx, 10*time.Second)
+			select {
+			case <-navDone:
+				// Frame navigated; wait for the new doc to be ready.
+				_ = chromedp.Run(navWait, chromedp.WaitReady("body", chromedp.ByQuery))
+			case <-navWait.Done():
+				// No frameNavigated within the budget — either an SPA route
+				// change (no real navigation) or a click that didn't
+				// navigate. Don't error: caller can use waitForSelector.
+				log.Printf("[ChromeRemote] waitForNavigation: no frameNavigated in 10s (likely SPA or no-op click)")
+			}
+			navCancel()
+		}
+	}
+
+	// waitForSelector: poll on the routed context with its own short timeout
+	// so a missing selector doesn't eat the global click budget.
+	if waitForSelector != "" {
+		ws, wsCancel := context.WithTimeout(waitCtx, 10*time.Second)
+		err := chromedp.Run(ws, chromedp.WaitVisible(waitForSelector, chromedp.ByQuery))
+		wsCancel()
+		if err != nil {
+			return result, fmt.Errorf("[ChromeRemote] waitForSelector %q timed out: %v", waitForSelector, err)
+		}
+	}
+
+	log.Printf("[ChromeRemote] Element clicked successfully, newTabs=%v", result.NewTabs)
+	return result, nil
 }
 
 // ElementInfo represents information about a clickable element on the page
@@ -770,49 +982,131 @@ func (cr *ChromeRemote) ActivateTab(targetID string) error {
 	return nil
 }
 
-// CloseTab closes a specific tab
+// CloseTab closes a specific tab.
+//
+// Running target.CloseTarget via chromedp.Run on a chromedp-managed context
+// fails with "to close the target, cancel its context or use chromedp.Cancel".
+// chromedp.Cancel sends Target.closeTarget over the target's own session and
+// then waits for the listener to disconnect — that is the documented way to
+// close a chromedp-managed target.
 func (cr *ChromeRemote) CloseTab(targetID string) error {
 	log.Printf("[ChromeRemote] Closing tab: %s", targetID)
+	if targetID == "" {
+		return fmt.Errorf("targetID is required")
+	}
 
-	// Clean up cache first
-	cr.CloseTargetContext(targetID)
+	// Pop the cached context so concurrent callers can't reuse a context that's
+	// about to be cancelled.
+	cr.mu.Lock()
+	ctx, hasCtx := cr.targetCtxs[targetID]
+	cancel := cr.targetCancel[targetID]
+	if hasCtx {
+		delete(cr.targetCtxs, targetID)
+		delete(cr.targetCancel, targetID)
+	}
+	cr.mu.Unlock()
 
-	err := chromedp.Run(cr.browserCtx, target.CloseTarget(target.ID(targetID)))
-	if err != nil {
+	var closeCtx context.Context
+	var closeCancel context.CancelFunc
+	if hasCtx {
+		closeCtx, closeCancel = ctx, cancel
+	} else {
+		// No cached chromedp context — attach a temporary one bound to this
+		// target so chromedp.Cancel has a target-scoped context to operate on.
+		closeCtx, closeCancel = chromedp.NewContext(cr.browserCtx, chromedp.WithTargetID(target.ID(targetID)))
+		if err := chromedp.Run(closeCtx); err != nil {
+			closeCancel()
+			return fmt.Errorf("failed to attach to target %s: %v", targetID, err)
+		}
+	}
+
+	if err := chromedp.Cancel(closeCtx); err != nil {
+		closeCancel()
 		return fmt.Errorf("failed to close target %s: %v", targetID, err)
 	}
+	closeCancel()
 	return nil
 }
 
-// ReloadTab reloads a specific tab
-func (cr *ChromeRemote) ReloadTab(targetID string, bypassCache bool) error {
-	log.Printf("[ChromeRemote] Reloading tab %s (bypassCache=%v)", targetID, bypassCache)
+// ReloadTab reloads a specific tab.
+//
+// Uses raw Page.reload so the call returns as soon as Chrome ACKs the
+// command instead of blocking until Page.frameStoppedLoading fires —
+// which on ad/analytics-heavy sites can take 10+ seconds. timeoutMs
+// caps the ACK round-trip; the actual reload continues in the browser
+// after we return. Default 5s.
+func (cr *ChromeRemote) ReloadTab(targetID string, bypassCache bool, timeoutMs int) error {
+	log.Printf("[ChromeRemote] Reloading tab %s (bypassCache=%v, timeoutMs=%d)", targetID, bypassCache, timeoutMs)
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return err
 	}
-
-	return chromedp.Run(ctx, chromedp.Reload())
+	if timeoutMs <= 0 {
+		timeoutMs = 5000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+	return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
+		return page.Reload().WithIgnoreCache(bypassCache).Do(c)
+	}))
 }
 
-// GoBack navigates back in browser history
-func (cr *ChromeRemote) GoBack(targetID string) error {
-	log.Printf("[ChromeRemote] Going back in tab: %s", targetID)
+// GoBack navigates back in browser history.
+//
+// Uses raw Page.getNavigationHistory + Page.navigateToHistoryEntry so the
+// call returns immediately after Chrome ACKs instead of blocking on
+// frameStoppedLoading. The previous chromedp.NavigateBack() helper waited
+// for full load completion, which was unbearably slow on heavy pages.
+// Callers that need to wait can chain proxyWaitForSelector.
+func (cr *ChromeRemote) GoBack(targetID string, timeoutMs int) error {
+	log.Printf("[ChromeRemote] Going back in tab: %s (timeoutMs=%d)", targetID, timeoutMs)
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return err
 	}
-	return chromedp.Run(ctx, chromedp.NavigateBack())
+	if timeoutMs <= 0 {
+		timeoutMs = 5000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+	return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
+		current, entries, err := page.GetNavigationHistory().Do(c)
+		if err != nil {
+			return err
+		}
+		idx := int(current) - 1
+		if idx < 0 || idx >= len(entries) {
+			return fmt.Errorf("no history entry to go back to")
+		}
+		return page.NavigateToHistoryEntry(entries[idx].ID).Do(c)
+	}))
 }
 
-// GoForward navigates forward in browser history
-func (cr *ChromeRemote) GoForward(targetID string) error {
-	log.Printf("[ChromeRemote] Going forward in tab: %s", targetID)
+// GoForward navigates forward in browser history. Same fast-path semantics
+// as GoBack — fires Page.navigateToHistoryEntry and returns without waiting
+// for frameStoppedLoading.
+func (cr *ChromeRemote) GoForward(targetID string, timeoutMs int) error {
+	log.Printf("[ChromeRemote] Going forward in tab: %s (timeoutMs=%d)", targetID, timeoutMs)
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return err
 	}
-	return chromedp.Run(ctx, chromedp.NavigateForward())
+	if timeoutMs <= 0 {
+		timeoutMs = 5000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+	return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
+		current, entries, err := page.GetNavigationHistory().Do(c)
+		if err != nil {
+			return err
+		}
+		idx := int(current) + 1
+		if idx < 0 || idx >= len(entries) {
+			return fmt.Errorf("no history entry to go forward to")
+		}
+		return page.NavigateToHistoryEntry(entries[idx].ID).Do(c)
+	}))
 }
 
 // DebugURL returns the Chrome remote debugging WebSocket URL.
@@ -837,7 +1131,13 @@ func (cr *ChromeRemote) Evaluate(targetID string, jsExpr string, dest interface{
 }
 
 // TypeText types text into an element identified by a CSS selector using CDP.
-// It clicks the element first to focus it, clears any existing value, then types the text.
+//
+// Bing-style overlay/focus-trap inputs used to wedge the original
+// "WaitVisible → Click → SendKeys all in one Run" flow until the global
+// timeout expired. This implementation breaks the operation into discrete
+// steps each with its own short timeout so the caller learns *which* step
+// failed (visible / scroll / focus / clear / sendKeys) instead of getting a
+// generic timeout. The total wall-clock budget is still capped by timeoutMs.
 func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, clearFirst bool, timeoutMs int) error {
 	log.Printf("[ChromeRemote] Typing text into %s (targetID=%s, clearFirst=%v)", selector, targetID, clearFirst)
 
@@ -848,35 +1148,111 @@ func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, 
 	if timeoutMs <= 0 {
 		timeoutMs = 15000
 	}
-	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	overall, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	var tasks []chromedp.Action
-
-	// Wait for element and click to focus
-	tasks = append(tasks, chromedp.WaitVisible(selector))
-	tasks = append(tasks, chromedp.Click(selector, chromedp.ByQuery))
-
-	if clearFirst {
-		// Clear existing value via JS
-		clearJS := fmt.Sprintf(`document.querySelector(%q).value = ''`, selector)
-		tasks = append(tasks, chromedp.Evaluate(clearJS, nil))
+	runStep := func(name string, action chromedp.Action, perStepMs int) error {
+		sctx, scancel := context.WithTimeout(overall, time.Duration(perStepMs)*time.Millisecond)
+		defer scancel()
+		if err := chromedp.Run(sctx, action); err != nil {
+			return fmt.Errorf("[ChromeRemote] type step %q failed: %v", name, err)
+		}
+		return nil
 	}
 
-	// Type the text using SendKeys (dispatches real key events)
-	tasks = append(tasks, chromedp.SendKeys(selector, text, chromedp.ByQuery))
-
-	if err := chromedp.Run(tctx, tasks...); err != nil {
-		return fmt.Errorf("[ChromeRemote] failed to type text: %v", err)
+	if err := runStep("waitVisible", chromedp.WaitVisible(selector, chromedp.ByQuery), 5000); err != nil {
+		return err
+	}
+	if err := runStep("scrollIntoView", chromedp.ScrollIntoView(selector, chromedp.ByQuery), 3000); err != nil {
+		return err
+	}
+	if err := runStep("focus", chromedp.Focus(selector, chromedp.ByQuery), 3000); err != nil {
+		return err
+	}
+	if clearFirst {
+		clearJS := fmt.Sprintf(`(function(){var e=document.querySelector(%q); if(e){e.value=''; e.dispatchEvent(new Event('input',{bubbles:true}));}})()`, selector)
+		if err := runStep("clear", chromedp.Evaluate(clearJS, nil), 2000); err != nil {
+			return err
+		}
+	}
+	if err := runStep("sendKeys", chromedp.SendKeys(selector, text, chromedp.ByQuery), 5000); err != nil {
+		return err
 	}
 
 	log.Printf("[ChromeRemote] Text typed successfully into %s", selector)
 	return nil
 }
 
-// WaitForSelector waits for a CSS selector to become visible on the page.
-func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeoutMs int) error {
-	log.Printf("[ChromeRemote] Waiting for selector %s (targetID=%s, timeout=%dms)", selector, targetID, timeoutMs)
+// SetValue sets an input/textarea element's value through the framework-
+// friendly path: it uses the prototype's native value setter (so React's
+// internal tracker sees the change) and dispatches input + change events
+// with bubbles:true so Vue/Angular/React state syncs to the DOM.
+//
+// This is the workaround for sites where SendKeys-based proxyType wedges
+// (Bug 2 on Bing) and where naive `el.value = ...` via proxyEval doesn't
+// notify the framework.
+func (cr *ChromeRemote) SetValue(targetID string, selector string, value string, timeoutMs int) error {
+	log.Printf("[ChromeRemote] SetValue selector=%s (targetID=%s)", selector, targetID)
+	if selector == "" {
+		return fmt.Errorf("selector is required")
+	}
+	ctx, err := cr.getContext(targetID)
+	if err != nil {
+		return err
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 5000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	js := fmt.Sprintf(`(function(){
+  var el = document.querySelector(%q);
+  if (!el) return { ok: false, error: "selector not found" };
+  var proto = el.tagName === 'TEXTAREA'
+    ? HTMLTextAreaElement.prototype
+    : (el.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype);
+  var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+  if (desc && desc.set) {
+    desc.set.call(el, %q);
+  } else {
+    el.value = %q;
+  }
+  el.dispatchEvent(new Event('input',  { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return { ok: true, tag: el.tagName };
+})()`, selector, value, value)
+
+	var res struct {
+		Ok    bool   `json:"ok"`
+		Error string `json:"error"`
+		Tag   string `json:"tag"`
+	}
+	if err := chromedp.Run(tctx, chromedp.Evaluate(js, &res)); err != nil {
+		return fmt.Errorf("[ChromeRemote] failed to set value: %v", err)
+	}
+	if !res.Ok {
+		return fmt.Errorf("[ChromeRemote] failed to set value: %s", res.Error)
+	}
+	return nil
+}
+
+// WaitForSelector waits for a CSS selector to be present on the page.
+//
+// state controls the predicate:
+//   - "attached" (default, empty): wait for the element to exist in the DOM
+//     (chromedp.WaitReady). This is what most callers actually want.
+//   - "visible": wait for the element to also be visible — non-zero size,
+//     not display:none, etc. (chromedp.WaitVisible). Strict; many "real"
+//     elements (collapsed <details>, off-screen sticky bars, nodes with
+//     opacity:0) fail this even when they exist on the page.
+//
+// The selector is always evaluated through chromedp.ByQuery (i.e.
+// document.querySelector), so it accepts any standard CSS selector and
+// produces consistent results — instead of chromedp's default
+// DOM.performSearch path which has different matching semantics.
+func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeoutMs int, state string) error {
+	log.Printf("[ChromeRemote] Waiting for selector %s (targetID=%s, timeout=%dms, state=%q)", selector, targetID, timeoutMs, state)
 
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
@@ -888,8 +1264,22 @@ func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeou
 	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	if err := chromedp.Run(tctx, chromedp.WaitVisible(selector)); err != nil {
-		return fmt.Errorf("[ChromeRemote] timeout waiting for selector %s: %v", selector, err)
+	var action chromedp.Action
+	switch state {
+	case "", "attached":
+		action = chromedp.WaitReady(selector, chromedp.ByQuery)
+	case "visible":
+		action = chromedp.WaitVisible(selector, chromedp.ByQuery)
+	default:
+		return fmt.Errorf("[ChromeRemote] invalid state %q for waitForSelector (must be \"attached\" or \"visible\")", state)
+	}
+
+	if err := chromedp.Run(tctx, action); err != nil {
+		effectiveState := state
+		if effectiveState == "" {
+			effectiveState = "attached"
+		}
+		return fmt.Errorf("[ChromeRemote] timeout waiting for selector %s (state=%s): %v", selector, effectiveState, err)
 	}
 
 	log.Printf("[ChromeRemote] Selector %s found", selector)
@@ -904,7 +1294,7 @@ func TakeChromeScreenshot(debugURL string, targetID string, fullPage bool) ([]by
 		return nil, err
 	}
 	defer cr.Close()
-	return cr.TakeScreenshot(targetID, fullPage)
+	return cr.TakeScreenshot(targetID, fullPage, 0)
 }
 
 func ClickChromeElement(debugURL string, targetURL string, selector string, waitForNavigation bool) error {
@@ -913,7 +1303,8 @@ func ClickChromeElement(debugURL string, targetURL string, selector string, wait
 		return err
 	}
 	defer cr.Close()
-	return cr.ClickElement("", targetURL, selector, waitForNavigation)
+	_, err = cr.ClickElement("", targetURL, selector, waitForNavigation, "", false)
+	return err
 }
 
 func GetChromeElements(debugURL string, targetURL string) ([]ElementInfo, error) {
@@ -976,7 +1367,7 @@ func ReloadTab(debugURL string, targetID string, bypassCache bool) error {
 		return err
 	}
 	defer cr.Close()
-	return cr.ReloadTab(targetID, bypassCache)
+	return cr.ReloadTab(targetID, bypassCache, 0)
 }
 
 func GoBack(debugURL string, targetID string) error {
@@ -985,7 +1376,7 @@ func GoBack(debugURL string, targetID string) error {
 		return err
 	}
 	defer cr.Close()
-	return cr.GoBack(targetID)
+	return cr.GoBack(targetID, 0)
 }
 
 func GoForward(debugURL string, targetID string) error {
@@ -994,5 +1385,5 @@ func GoForward(debugURL string, targetID string) error {
 		return err
 	}
 	defer cr.Close()
-	return cr.GoForward(targetID)
+	return cr.GoForward(targetID, 0)
 }

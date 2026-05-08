@@ -491,12 +491,12 @@ func TestIntegration_ReloadTab(t *testing.T) {
 	defer cr.CloseTab(tabID)
 
 	// Normal reload
-	if err := cr.ReloadTab(tabID, false); err != nil {
+	if err := cr.ReloadTab(tabID, false, 0); err != nil {
 		t.Fatalf("ReloadTab(bypassCache=false) failed: %v", err)
 	}
 
 	// Bypass cache reload
-	if err := cr.ReloadTab(tabID, true); err != nil {
+	if err := cr.ReloadTab(tabID, true, 0); err != nil {
 		t.Fatalf("ReloadTab(bypassCache=true) failed: %v", err)
 	}
 }
@@ -518,12 +518,12 @@ func TestIntegration_GoBackAndForward(t *testing.T) {
 	}
 
 	// Go back
-	if err := cr.GoBack(tabID); err != nil {
+	if err := cr.GoBack(tabID, 0); err != nil {
 		t.Fatalf("GoBack failed: %v", err)
 	}
 
 	// Go forward
-	if err := cr.GoForward(tabID); err != nil {
+	if err := cr.GoForward(tabID, 0); err != nil {
 		t.Fatalf("GoForward failed: %v", err)
 	}
 }
@@ -539,7 +539,7 @@ func TestIntegration_TakeScreenshot(t *testing.T) {
 	defer cr.CloseTab(tabID)
 
 	// Viewport screenshot
-	buf, err := cr.TakeScreenshot(tabID, false)
+	buf, err := cr.TakeScreenshot(tabID, false, 0)
 	if err != nil {
 		t.Fatalf("TakeScreenshot(fullPage=false) failed: %v", err)
 	}
@@ -548,7 +548,7 @@ func TestIntegration_TakeScreenshot(t *testing.T) {
 	}
 
 	// Full-page screenshot
-	bufFull, err := cr.TakeScreenshot(tabID, true)
+	bufFull, err := cr.TakeScreenshot(tabID, true, 0)
 	if err != nil {
 		t.Fatalf("TakeScreenshot(fullPage=true) failed: %v", err)
 	}
@@ -562,7 +562,7 @@ func TestIntegration_TakeScreenshot_AutoPickTab(t *testing.T) {
 	defer cr.Close()
 
 	// Empty targetID should auto-pick a tab
-	buf, err := cr.TakeScreenshot("", false)
+	buf, err := cr.TakeScreenshot("", false, 0)
 	if err != nil {
 		t.Fatalf("TakeScreenshot with auto-pick failed: %v", err)
 	}
@@ -618,9 +618,456 @@ func TestIntegration_ClickElement(t *testing.T) {
 	defer cr.CloseTab(tabID)
 
 	// Navigate and click the "More information..." link on example.com
-	err = cr.ClickElement(tabID, "https://example.com", "a", true)
+	if _, err := cr.ClickElement(tabID, "https://example.com", "a", true, "", false); err != nil {
+		t.Fatalf("ClickElement failed: %v", err)
+	}
+}
+
+// ============================================================================
+// Integration Tests — Bug fixes (Bugs 1-6)
+//
+// These exercise the new behavior added when the bug report came in:
+//   Bug 1 — CloseTab uses chromedp.Cancel; works for both cached and untouched
+//           target contexts (the old chromedp.Run + target.CloseTarget path
+//           failed on the browser ctx with a chromedp internal error).
+//   Bug 2 — TypeText is broken into stepwise actions (waitVisible →
+//           scrollIntoView → focus → [clear] → sendKeys).
+//   Bug 3 — ClickElement returns ClickResult.NewTabs when a click spawns
+//           a new tab (e.g. <a target="_blank">).
+//   Bug 4 — TakeScreenshot accepts timeoutMs and waits for readyState.
+//   Bug 5 — ClickElement accepts waitForSelector for SPA-style transitions.
+//   Bug 6 — SetValue uses the framework-aware native setter and dispatches
+//           bubbling input + change events.
+// ============================================================================
+
+// loadDataURL opens a fresh tab and navigates it to the given data: URL,
+// returning the new target ID. Centralizes the "set up a tiny test page"
+// pattern used by the bug-fix tests below.
+func loadDataURL(t *testing.T, cr *ChromeRemote, dataURL string) string {
+	t.Helper()
+	tabID, err := cr.OpenTab("about:blank")
+	if err != nil {
+		t.Fatalf("OpenTab failed: %v", err)
+	}
+	if _, err := cr.Navigate(tabID, dataURL, "load", 5000); err != nil {
+		_ = cr.CloseTab(tabID)
+		t.Fatalf("Navigate(data:) failed: %v", err)
+	}
+	return tabID
+}
+
+// Bug 1: CloseTab works on both cached and untouched target contexts.
+func TestIntegration_CloseTab_BothPaths(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	// (a) untouched target — never went through getContext, so no cached chromedp.Context.
+	untouched, err := cr.OpenTab("about:blank")
+	if err != nil {
+		t.Fatalf("OpenTab failed: %v", err)
+	}
+	if err := cr.CloseTab(untouched); err != nil {
+		t.Fatalf("CloseTab(untouched) failed: %v", err)
+	}
+
+	// (b) cached target — explicitly populate the targetCtxs cache, then close.
+	cached, err := cr.OpenTab("about:blank")
+	if err != nil {
+		t.Fatalf("OpenTab failed: %v", err)
+	}
+	if _, err := cr.getContext(cached); err != nil {
+		_ = cr.CloseTab(cached)
+		t.Fatalf("getContext failed: %v", err)
+	}
+	if err := cr.CloseTab(cached); err != nil {
+		t.Fatalf("CloseTab(cached) failed: %v", err)
+	}
+
+	// (c) empty targetID is rejected.
+	if err := cr.CloseTab(""); err == nil {
+		t.Error("expected error for empty targetID, got nil")
+	}
+}
+
+// Bug 2: TypeText writes into a real input and the value is observable.
+func TestIntegration_TypeText_Stepwise(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	tabID := loadDataURL(t, cr, `data:text/html,<input id="q"/>`)
+	defer cr.CloseTab(tabID)
+
+	if err := cr.TypeText(tabID, "#q", "hello", false, 0); err != nil {
+		t.Fatalf("TypeText failed: %v", err)
+	}
+
+	var got string
+	if err := cr.Evaluate(tabID, `document.getElementById('q').value`, &got, 0); err != nil {
+		t.Fatalf("Evaluate failed: %v", err)
+	}
+	if got != "hello" {
+		t.Errorf("expected value 'hello', got %q", got)
+	}
+}
+
+// Bug 3: ClickElement reports new tabs spawned by an <a target="_blank"> click.
+func TestIntegration_ClickElement_NewTabs(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	tabID := loadDataURL(t, cr, `data:text/html,<a id="x" href="about:blank" target="_blank">go</a>`)
+	defer cr.CloseTab(tabID)
+
+	result, err := cr.ClickElement(tabID, "", "#x", false, "", false)
 	if err != nil {
 		t.Fatalf("ClickElement failed: %v", err)
+	}
+	if result == nil || len(result.NewTabs) == 0 {
+		t.Fatalf("expected ClickResult.NewTabs to be populated, got %+v", result)
+	}
+	for _, id := range result.NewTabs {
+		_ = cr.CloseTab(id)
+	}
+}
+
+// Bug 5: ClickElement waitForSelector blocks until the named selector
+// becomes visible (set up to be appended via setTimeout after the click).
+func TestIntegration_ClickElement_WaitForSelector(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	html := `data:text/html,<button id="b" onclick="setTimeout(function(){var d=document.createElement('div');d.id='after';d.textContent='hi';document.body.appendChild(d);},200)">go</button>`
+	tabID := loadDataURL(t, cr, html)
+	defer cr.CloseTab(tabID)
+
+	result, err := cr.ClickElement(tabID, "", "#b", false, "#after", false)
+	if err != nil {
+		t.Fatalf("ClickElement(waitForSelector) failed: %v", err)
+	}
+	if result.WaitedFor != "#after" {
+		t.Errorf("expected ClickResult.WaitedFor=%q, got %q", "#after", result.WaitedFor)
+	}
+}
+
+// Bug 4: TakeScreenshot honors a custom timeoutMs and produces image bytes.
+func TestIntegration_TakeScreenshot_TimeoutMs(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	tabID := loadDataURL(t, cr, "data:text/html,<h1>hi</h1>")
+	defer cr.CloseTab(tabID)
+
+	buf, err := cr.TakeScreenshot(tabID, false, 5000)
+	if err != nil {
+		t.Fatalf("TakeScreenshot(timeoutMs=5000) failed: %v", err)
+	}
+	if len(buf) == 0 {
+		t.Error("expected non-empty screenshot data")
+	}
+}
+
+// Bug: waitForNavigation never resolves when used with proxyClick.
+// Re-exercises the post-click waits after the rewrite that registers a
+// page.EventFrameNavigated listener BEFORE the click and splits the run
+// phases.
+//
+// Click an in-page anchor that triggers a same-tab navigation to another
+// data: URL with a marker element, then verify the navigation completed
+// (the marker is reachable from the routed context).
+func TestIntegration_ClickElement_WaitForNavigation_Resolves(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	// Page A holds a link that navigates the same tab to page B (a data:
+	// URL containing #marker). data: URL navigation fires frameNavigated.
+	pageB := `data:text/html,<div id="marker">on-page-b</div>`
+	pageA := `data:text/html,<a id="go" href="` + pageB + `">go</a>`
+
+	tabID := loadDataURL(t, cr, pageA)
+	defer cr.CloseTab(tabID)
+
+	start := time.Now()
+	result, err := cr.ClickElement(tabID, "", "#go", true, "", false)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("ClickElement(waitForNavigation) failed: %v", err)
+	}
+	if !result.NavWaited {
+		t.Errorf("expected ClickResult.NavWaited=true, got %v", result.NavWaited)
+	}
+	// Sanity check: the wait should resolve well under the 30s ceiling. Old
+	// behavior pegged 30s. Allow up to 15s for a slow CI host.
+	if elapsed > 15*time.Second {
+		t.Errorf("waitForNavigation took %v — expected to resolve well under 15s", elapsed)
+	}
+
+	// The new document should be the marker page.
+	var marker string
+	if err := cr.Evaluate(tabID, `(document.getElementById('marker')||{}).textContent || ''`, &marker, 0); err != nil {
+		t.Fatalf("Evaluate(marker) failed: %v", err)
+	}
+	if marker != "on-page-b" {
+		t.Errorf("expected to be on page B, got marker=%q", marker)
+	}
+}
+
+// Bug: waitForSelector never resolves on a click that opens a new tab —
+// because the original-tab chromedp context was being polled forever for
+// a selector that only exists in the spawned tab.
+//
+// Verifies the post-click wait routes to the new tab when the click was
+// `<a target="_blank">`.
+func TestIntegration_ClickElement_WaitForSelector_NewTab(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	newTabPage := `data:text/html,<div id="found">hello</div>`
+	parent := `data:text/html,<a id="x" href="` + newTabPage + `" target="_blank">go</a>`
+	tabID := loadDataURL(t, cr, parent)
+	defer cr.CloseTab(tabID)
+
+	start := time.Now()
+	result, err := cr.ClickElement(tabID, "", "#x", false, "#found", false)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("ClickElement(waitForSelector, new tab) failed: %v", err)
+	}
+	if len(result.NewTabs) == 0 {
+		t.Fatal("expected NewTabs to be populated for target=_blank click")
+	}
+	for _, id := range result.NewTabs {
+		defer cr.CloseTab(id)
+	}
+	if elapsed > 15*time.Second {
+		t.Errorf("waitForSelector took %v — expected to resolve well under 15s", elapsed)
+	}
+}
+
+// Bug 7: ActivateTab must steer subsequent CDP tools to the activated tab.
+// Previously, getContext("") fell back to tabs[0] regardless of which tab
+// was last activated, so proxyType/proxyClick/proxyEval/proxySetValue all
+// went to the wrong tab when more than one was open.
+func TestIntegration_ActivateTab_SteersTools(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	tabA := loadDataURL(t, cr, `data:text/html,<input id="x" value="A"/>`)
+	defer cr.CloseTab(tabA)
+	tabB := loadDataURL(t, cr, `data:text/html,<input id="x" value="B"/>`)
+	defer cr.CloseTab(tabB)
+
+	// Activate tab B explicitly.
+	if err := cr.ActivateTab(tabB); err != nil {
+		t.Fatalf("ActivateTab failed: %v", err)
+	}
+
+	// Tools that pass an empty targetID should now hit tab B, not tab A.
+	var got string
+	if err := cr.Evaluate("", `document.getElementById('x').value`, &got, 0); err != nil {
+		t.Fatalf("Evaluate('') failed: %v", err)
+	}
+	if got != "B" {
+		t.Errorf("Evaluate steered to wrong tab: got value=%q, want %q", got, "B")
+	}
+
+	// Switch back to A; same call should now follow.
+	if err := cr.ActivateTab(tabA); err != nil {
+		t.Fatalf("ActivateTab(A) failed: %v", err)
+	}
+	if err := cr.Evaluate("", `document.getElementById('x').value`, &got, 0); err != nil {
+		t.Fatalf("Evaluate('') failed: %v", err)
+	}
+	if got != "A" {
+		t.Errorf("Evaluate steered to wrong tab after re-activate: got value=%q, want %q", got, "A")
+	}
+}
+
+// Bug 8: ClickElement reports clickMode="native" on a clean click, and
+// "js" when the caller explicitly asks (useJS=true). The auto-fallback
+// path is harder to exercise reliably without a real overlay, so we
+// validate the explicit useJS path here.
+func TestIntegration_ClickElement_UseJS(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	html := `data:text/html,<button id="b" onclick="window.__clicked=true">go</button>`
+	tabID := loadDataURL(t, cr, html)
+	defer cr.CloseTab(tabID)
+
+	// Native click: clickMode should report "native".
+	result, err := cr.ClickElement(tabID, "", "#b", false, "", false)
+	if err != nil {
+		t.Fatalf("ClickElement(native) failed: %v", err)
+	}
+	if result.ClickMode != "native" {
+		t.Errorf("expected ClickMode=%q, got %q", "native", result.ClickMode)
+	}
+
+	// useJS=true: clickMode should report "js" and the JS handler should
+	// still see the click.
+	tabID2 := loadDataURL(t, cr, html)
+	defer cr.CloseTab(tabID2)
+	result, err = cr.ClickElement(tabID2, "", "#b", false, "", true)
+	if err != nil {
+		t.Fatalf("ClickElement(useJS) failed: %v", err)
+	}
+	if result.ClickMode != "js" {
+		t.Errorf("expected ClickMode=%q, got %q", "js", result.ClickMode)
+	}
+	var clicked bool
+	if err := cr.Evaluate(tabID2, `!!window.__clicked`, &clicked, 0); err != nil {
+		t.Fatalf("Evaluate failed: %v", err)
+	}
+	if !clicked {
+		t.Error("expected JS click handler to fire")
+	}
+}
+
+// Bug: waitForSelector never resolves when the selector simply doesn't
+// appear. Should fail with a meaningful timeout error inside its own short
+// budget (10s), not eat the global 30s.
+func TestIntegration_ClickElement_WaitForSelector_TimesOut(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	tabID := loadDataURL(t, cr, `data:text/html,<button id="b">go</button>`)
+	defer cr.CloseTab(tabID)
+
+	start := time.Now()
+	_, err := cr.ClickElement(tabID, "", "#b", false, "#never-appears", false)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected waitForSelector to time out, got nil error")
+	}
+	if !strings.Contains(err.Error(), "waitForSelector") {
+		t.Errorf("expected error to mention waitForSelector, got: %v", err)
+	}
+	// Should bail well before the global 30s — its own 10s budget plus
+	// pre-click overhead. Allow generous slack but flag a regression.
+	if elapsed > 20*time.Second {
+		t.Errorf("waitForSelector timeout took %v — expected to bail under 20s", elapsed)
+	}
+}
+
+// Bug 6: SetValue updates the DOM .value AND dispatches bubbling input +
+// change events (the framework-aware path that React/Vue/Angular pick up).
+func TestIntegration_SetValue(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	html := `data:text/html,<input id="q"/><script>window.__ev=[];var el=document.getElementById('q');el.addEventListener('input',function(){window.__ev.push('input')});el.addEventListener('change',function(){window.__ev.push('change')});</script>`
+	tabID := loadDataURL(t, cr, html)
+	defer cr.CloseTab(tabID)
+
+	if err := cr.SetValue(tabID, "#q", "hello", 0); err != nil {
+		t.Fatalf("SetValue failed: %v", err)
+	}
+
+	var value string
+	if err := cr.Evaluate(tabID, `document.getElementById('q').value`, &value, 0); err != nil {
+		t.Fatalf("Evaluate(value) failed: %v", err)
+	}
+	if value != "hello" {
+		t.Errorf("expected DOM value 'hello', got %q", value)
+	}
+
+	var events []string
+	if err := cr.Evaluate(tabID, `window.__ev`, &events, 0); err != nil {
+		t.Fatalf("Evaluate(events) failed: %v", err)
+	}
+	hasInput := false
+	hasChange := false
+	for _, e := range events {
+		if e == "input" {
+			hasInput = true
+		}
+		if e == "change" {
+			hasChange = true
+		}
+	}
+	if !hasInput {
+		t.Errorf("expected 'input' event, got %v", events)
+	}
+	if !hasChange {
+		t.Errorf("expected 'change' event, got %v", events)
+	}
+
+	// Missing selector should error.
+	if err := cr.SetValue(tabID, "#nope", "x", 0); err == nil {
+		t.Error("expected error for missing selector")
+	}
+}
+
+// Bug: WaitForSelector consistently times out even when the element exists
+// on the page. Root cause was chromedp.WaitVisible's strict visibility
+// check (zero-size / display:none / collapsed elements all fail it). The
+// rewrite defaults to state="attached" (DOM presence) and uses
+// chromedp.ByQuery for predictable selector matching.
+//
+// This test exercises a hidden-but-attached element (display:none): the
+// default attached state should resolve, while the strict "visible" state
+// should time out.
+func TestIntegration_WaitForSelector_HiddenElement(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	html := `data:text/html,<div id="hidden" style="display:none">i exist</div>`
+	tabID := loadDataURL(t, cr, html)
+	defer cr.CloseTab(tabID)
+
+	// Default state — element exists in DOM, should resolve fast.
+	start := time.Now()
+	if err := cr.WaitForSelector(tabID, "#hidden", 5000, ""); err != nil {
+		t.Fatalf("WaitForSelector(default) failed: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("default WaitForSelector took %v on present element — expected fast", elapsed)
+	}
+
+	// Explicit "attached" — same expectation.
+	if err := cr.WaitForSelector(tabID, "#hidden", 5000, "attached"); err != nil {
+		t.Fatalf("WaitForSelector(attached) failed: %v", err)
+	}
+
+	// Strict "visible" — should time out because display:none fails the check.
+	start = time.Now()
+	err := cr.WaitForSelector(tabID, "#hidden", 2000, "visible")
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Error("WaitForSelector(visible) should have timed out on display:none element")
+	}
+	if elapsed > 4*time.Second {
+		t.Errorf("WaitForSelector(visible) timeout took %v — expected to bail near 2s budget", elapsed)
+	}
+
+	// Invalid state — bail with a clear error, no polling.
+	if err := cr.WaitForSelector(tabID, "#hidden", 5000, "bogus"); err == nil {
+		t.Error("expected error for invalid state, got nil")
+	}
+}
+
+// WaitForSelector should also resolve quickly on an element that is added
+// to the DOM after the call begins, proving the polling loop actually works
+// for the dynamic case.
+func TestIntegration_WaitForSelector_AppearsLater(t *testing.T) {
+	cr := getTestChromeRemote(t)
+	defer cr.Close()
+
+	html := `data:text/html,<button id="b" onclick="setTimeout(function(){var d=document.createElement('div');d.id='late';document.body.appendChild(d);},200)">go</button>`
+	tabID := loadDataURL(t, cr, html)
+	defer cr.CloseTab(tabID)
+
+	// Trigger the delayed append, then wait.
+	if _, err := cr.ClickElement(tabID, "", "#b", false, "", false); err != nil {
+		t.Fatalf("ClickElement failed: %v", err)
+	}
+
+	start := time.Now()
+	if err := cr.WaitForSelector(tabID, "#late", 5000, ""); err != nil {
+		t.Fatalf("WaitForSelector(#late) failed: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("WaitForSelector took %v for element appearing in 200ms — polling sluggish?", elapsed)
 	}
 }
 
@@ -780,7 +1227,7 @@ func TestIntegration_MultiTabWorkflow(t *testing.T) {
 			t.Fatalf("ActivateTab %s failed: %v", step.label, err)
 		}
 
-		buf, err := cr.TakeScreenshot(id, false)
+		buf, err := cr.TakeScreenshot(id, false, 0)
 		if err != nil {
 			t.Fatalf("TakeScreenshot of %s failed: %v", step.label, err)
 		}
@@ -861,7 +1308,7 @@ func TestIntegration_MultiTabWorkflow(t *testing.T) {
 	}
 
 	// ── Step 4: Take final screenshot after click ───────────────────────
-	finalBuf, err := cr.TakeScreenshot(raycastTabID, false)
+	finalBuf, err := cr.TakeScreenshot(raycastTabID, false, 0)
 	if err != nil {
 		t.Fatalf("Final screenshot of Raycast failed: %v", err)
 	}
