@@ -18,6 +18,40 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// reclaimFocusWhenChromeSteals fires off an AppleScript that captures
+// whichever macOS app is currently frontmost, then waits for Chrome to
+// actually grab focus, and immediately re-activates the captured app.
+// Event-driven (the script polls *inside* AppleScript on the system-events
+// runloop and exits the moment the condition is met), so we're not guessing
+// timing in Go. Bounded to ~5s so a stuck Chrome can't leak the script.
+// No-op when not on darwin or when the user was already focused on Chrome.
+func reclaimFocusWhenChromeSteals() {
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	const script = `
+tell application "System Events"
+    set prevApp to name of first application process whose frontmost is true
+    if prevApp starts with "Google Chrome" then return
+    if prevApp starts with "Chromium" then return
+    repeat 50 times
+        try
+            set chromeFront to false
+            repeat with p in (every application process whose name starts with "Google Chrome")
+                if frontmost of p then set chromeFront to true
+            end repeat
+            if chromeFront then
+                tell application prevApp to activate
+                return
+            end if
+        end try
+        delay 0.1
+    end repeat
+end tell
+`
+	go func() { _ = exec.Command("osascript", "-e", script).Run() }()
+}
+
 func launchChrome(proxyAddress string, customCertPath string, profileDir string, startURL string) (*exec.Cmd, error) {
 	log.Println("[launchChrome] Starting Chrome launch process")
 
@@ -129,6 +163,11 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string,
 	log.Printf("[launchChrome] Attempting to launch Chrome with command: %s %v", chromePath, args)
 	cmd := exec.Command(chromePath, args...)
 	log.Println("[launchChrome] " + cmd.String())
+	// macOS hands OS focus to any newly exec'd GUI app and CDP flags can't
+	// prevent it. Kick off an AppleScript that watches for Chrome to actually
+	// become frontmost and re-activates the previously-frontmost app the
+	// moment that happens — event-driven, not timing-based.
+	reclaimFocusWhenChromeSteals()
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("[launchChrome] failed to launch Chrome: %v", err)
 	}
@@ -457,11 +496,10 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs
 	ctx, timeoutCancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer timeoutCancel()
 
-	// Bring it to front
-	_ = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
-		tid := chromedp.FromContext(c).Target.TargetID
-		return target.ActivateTarget(tid).Do(c)
-	}))
+	// Note: we deliberately do NOT call target.ActivateTarget here. CDP's
+	// Page.captureScreenshot (and chromedp.FullScreenshot) work on background
+	// tabs, and activating the target steals OS focus on macOS — Chrome.app
+	// pops over grroxy on every AI-driven screenshot.
 
 	// Best-effort wait for the page to be done loading before we capture.
 	// Pages stuck in 'loading' (e.g. after a CAPTCHA) used to make the
@@ -882,9 +920,13 @@ func (cr *ChromeRemote) OpenTab(url string) (string, error) {
 	log.Printf("[ChromeRemote] Opening new tab with URL: %s", url)
 
 	var targetID target.ID
+	// Background:true creates the tab as a non-active tab in its window;
+	// reclaimFocusWhenChromeSteals() handles the rare case where new-tab
+	// creation also raises the Chrome window on macOS.
+	reclaimFocusWhenChromeSteals()
 	err := chromedp.Run(cr.browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
 		var err error
-		targetID, err = target.CreateTarget(url).Do(ctx)
+		targetID, err = target.CreateTarget(url).WithBackground(true).Do(ctx)
 		return err
 	}))
 	if err != nil {

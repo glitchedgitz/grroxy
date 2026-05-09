@@ -146,6 +146,7 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.OpenChromeTab)
 	API.App.OnBeforeServe().Add(API.NavigateChromeTab)
 	API.App.OnBeforeServe().Add(API.ActivateTab)
+	API.App.OnBeforeServe().Add(API.FocusWindow)
 	API.App.OnBeforeServe().Add(API.CloseTab)
 	API.App.OnBeforeServe().Add(API.ReloadTab)
 	API.App.OnBeforeServe().Add(API.GoBack)
