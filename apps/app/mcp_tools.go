@@ -990,16 +990,15 @@ func (backend *Backend) proxyScreenshotHandler(ctx context.Context, request mcp.
 	filename := fmt.Sprintf("screenshot-%s.png", timestamp)
 	savePath := path.Join(screenshotDir, filename)
 
-	_, filePath, err := ProxyMgr.TakeScreenshot(args.ID, args.TargetID, false, savePath, args.TimeoutMs)
+	result, filePath, err := ProxyMgr.TakeScreenshot(args.ID, args.TargetID, false, savePath, args.TimeoutMs)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// screenshotBase64 := base64.StdEncoding.EncodeToString(screenshotBytes)
 	return mcpJSONResult(map[string]any{
-		// "screenshot": screenshotBase64,
-		// "size":     len(screenshotBytes),
 		"filePath": filePath,
+		"title":    result.Title,
+		"url":      result.URL,
 	})
 }
 

@@ -539,20 +539,20 @@ func TestIntegration_TakeScreenshot(t *testing.T) {
 	defer cr.CloseTab(tabID)
 
 	// Viewport screenshot
-	buf, err := cr.TakeScreenshot(tabID, false, 0)
+	result, err := cr.TakeScreenshot(tabID, false, 0)
 	if err != nil {
 		t.Fatalf("TakeScreenshot(fullPage=false) failed: %v", err)
 	}
-	if len(buf) == 0 {
+	if len(result.Bytes) == 0 {
 		t.Error("expected non-empty screenshot data")
 	}
 
 	// Full-page screenshot
-	bufFull, err := cr.TakeScreenshot(tabID, true, 0)
+	resultFull, err := cr.TakeScreenshot(tabID, true, 0)
 	if err != nil {
 		t.Fatalf("TakeScreenshot(fullPage=true) failed: %v", err)
 	}
-	if len(bufFull) == 0 {
+	if len(resultFull.Bytes) == 0 {
 		t.Error("expected non-empty full-page screenshot data")
 	}
 }
@@ -562,11 +562,11 @@ func TestIntegration_TakeScreenshot_AutoPickTab(t *testing.T) {
 	defer cr.Close()
 
 	// Empty targetID should auto-pick a tab
-	buf, err := cr.TakeScreenshot("", false, 0)
+	result, err := cr.TakeScreenshot("", false, 0)
 	if err != nil {
 		t.Fatalf("TakeScreenshot with auto-pick failed: %v", err)
 	}
-	if len(buf) == 0 {
+	if len(result.Bytes) == 0 {
 		t.Error("expected non-empty screenshot data")
 	}
 }
@@ -757,11 +757,11 @@ func TestIntegration_TakeScreenshot_TimeoutMs(t *testing.T) {
 	tabID := loadDataURL(t, cr, "data:text/html,<h1>hi</h1>")
 	defer cr.CloseTab(tabID)
 
-	buf, err := cr.TakeScreenshot(tabID, false, 5000)
+	result, err := cr.TakeScreenshot(tabID, false, 5000)
 	if err != nil {
 		t.Fatalf("TakeScreenshot(timeoutMs=5000) failed: %v", err)
 	}
-	if len(buf) == 0 {
+	if len(result.Bytes) == 0 {
 		t.Error("expected non-empty screenshot data")
 	}
 }
@@ -1227,15 +1227,15 @@ func TestIntegration_MultiTabWorkflow(t *testing.T) {
 			t.Fatalf("ActivateTab %s failed: %v", step.label, err)
 		}
 
-		buf, err := cr.TakeScreenshot(id, false, 0)
+		result, err := cr.TakeScreenshot(id, false, 0)
 		if err != nil {
 			t.Fatalf("TakeScreenshot of %s failed: %v", step.label, err)
 		}
-		if len(buf) == 0 {
+		if len(result.Bytes) == 0 {
 			t.Errorf("expected non-empty screenshot for %s", step.label)
 		}
 
-		saveScreenshot(t, screenshotDir, step.filename, buf)
+		saveScreenshot(t, screenshotDir, step.filename, result.Bytes)
 	}
 
 	// ── Step 3: Go to Raycast (tab 3) and click login ───────────────────
@@ -1308,14 +1308,14 @@ func TestIntegration_MultiTabWorkflow(t *testing.T) {
 	}
 
 	// ── Step 4: Take final screenshot after click ───────────────────────
-	finalBuf, err := cr.TakeScreenshot(raycastTabID, false, 0)
+	finalResult, err := cr.TakeScreenshot(raycastTabID, false, 0)
 	if err != nil {
 		t.Fatalf("Final screenshot of Raycast failed: %v", err)
 	}
-	if len(finalBuf) == 0 {
+	if len(finalResult.Bytes) == 0 {
 		t.Error("expected non-empty final screenshot")
 	}
-	saveScreenshot(t, screenshotDir, "4_raycast_after_click", finalBuf)
+	saveScreenshot(t, screenshotDir, "4_raycast_after_click", finalResult.Bytes)
 
 	fmt.Println("✅ Multi-tab workflow completed — screenshots saved to grx/browser/screenshots/")
 }

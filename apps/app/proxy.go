@@ -304,8 +304,8 @@ func (pm *ProxyManager) ApplyToAllProxies(fn func(proxy *RawProxyWrapper, proxyI
 
 // TakeScreenshot captures a screenshot using the Chrome browser attached to a proxy instance.
 // timeoutMs caps the capture (including readiness check + retry); 0 uses the default.
-// Returns: screenshot bytes, file path (if saved), error
-func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage bool, savePath string, timeoutMs int) ([]byte, string, error) {
+// Returns: ScreenshotResult (bytes + page title + page URL), file path (if saved), error.
+func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage bool, savePath string, timeoutMs int) (*browser.ScreenshotResult, string, error) {
 	pm.mu.Lock()
 	inst := pm.instances[proxyID]
 	if inst == nil {
@@ -359,7 +359,7 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage
 
 	// Capture the screenshot. If a targetID is supplied use it directly;
 	// otherwise chrome.TakeScreenshot("") falls back to the last activated tab.
-	screenshotBytes, err := chrome.TakeScreenshot(targetID, fullPage, timeoutMs)
+	result, err := chrome.TakeScreenshot(targetID, fullPage, timeoutMs)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to capture screenshot: %v", err)
 	}
@@ -367,14 +367,14 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage
 	// Save to file if path is provided
 	var filePath string
 	if savePath != "" {
-		if err := os.WriteFile(savePath, screenshotBytes, 0644); err != nil {
-			return screenshotBytes, "", fmt.Errorf("failed to save screenshot to %s: %v", savePath, err)
+		if err := os.WriteFile(savePath, result.Bytes, 0644); err != nil {
+			return result, "", fmt.Errorf("failed to save screenshot to %s: %v", savePath, err)
 		}
 		filePath = savePath
 		log.Printf("[TakeScreenshot] Screenshot saved to: %s", filePath)
 	}
 
-	return screenshotBytes, filePath, nil
+	return result, filePath, nil
 }
 
 // ClickElement clicks an element on the page using the Chrome browser attached to a proxy instance.
@@ -1141,18 +1141,20 @@ func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
 			}
 
 			// Capture the screenshot using ProxyManager (0 timeout = default).
-			screenshotBytes, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.TargetID, body.FullPage, savePath, 0)
+			result, filePath, err := ProxyMgr.TakeScreenshot(body.ID, body.TargetID, body.FullPage, savePath, 0)
 			if err != nil {
 				log.Printf("[ScreenshotProxy] Error taking screenshot: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
 			// Encode screenshot as base64 for JSON response
-			screenshotBase64 := base64.StdEncoding.EncodeToString(screenshotBytes)
+			screenshotBase64 := base64.StdEncoding.EncodeToString(result.Bytes)
 
 			response := map[string]interface{}{
 				"screenshot": screenshotBase64,
-				"size":       len(screenshotBytes),
+				"size":       len(result.Bytes),
+				"title":      result.Title,
+				"url":        result.URL,
 				"timestamp":  time.Now().Format(time.RFC3339),
 			}
 
@@ -1160,7 +1162,7 @@ func (backend *Backend) ScreenshotProxy(e *core.ServeEvent) error {
 				response["filePath"] = filePath
 			}
 
-			log.Printf("[ScreenshotProxy] Screenshot captured successfully (%d bytes)", len(screenshotBytes))
+			log.Printf("[ScreenshotProxy] Screenshot captured successfully (%d bytes)", len(result.Bytes))
 			return c.JSON(http.StatusOK, response)
 		},
 		Middlewares: []echo.MiddlewareFunc{

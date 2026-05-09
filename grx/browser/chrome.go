@@ -410,9 +410,18 @@ func (cr *ChromeRemote) CloseTargetContext(targetID string) {
 	}
 }
 
+// ScreenshotResult bundles the PNG bytes with the captured page's title
+// and current URL — useful so AI callers can reason about what they just
+// captured without having to issue a follow-up Page.getNavigationHistory.
+type ScreenshotResult struct {
+	Bytes []byte
+	Title string
+	URL   string
+}
+
 // TakeScreenshot captures a screenshot of a specific tab (targetID).
 // If targetID == "", it will try to pick a "best" tab (heuristic).
-func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs int) ([]byte, error) {
+func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs int) (*ScreenshotResult, error) {
 	log.Printf("[ChromeRemote] Starting screenshot (targetID=%s, fullPage=%v, timeoutMs=%d)", targetID, fullPage, timeoutMs)
 	if timeoutMs <= 0 {
 		timeoutMs = 30000
@@ -534,8 +543,16 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs
 		}
 	}
 
-	log.Printf("[ChromeRemote] Screenshot captured (%d bytes)", len(buf))
-	return buf, nil
+	// Best-effort title + URL fetch on the same tab. Failures here shouldn't
+	// fail the screenshot call — return whatever we got.
+	var title, pageURL string
+	_ = chromedp.Run(ctx,
+		chromedp.Title(&title),
+		chromedp.Location(&pageURL),
+	)
+
+	log.Printf("[ChromeRemote] Screenshot captured (%d bytes), title=%q url=%s", len(buf), title, pageURL)
+	return &ScreenshotResult{Bytes: buf, Title: title, URL: pageURL}, nil
 }
 
 // ClickElement clicks an element on the page using Chrome DevTools Protocol.
@@ -1330,7 +1347,7 @@ func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeou
 
 // --- Legacy Wrappers (Deprecated) ---
 
-func TakeChromeScreenshot(debugURL string, targetID string, fullPage bool) ([]byte, error) {
+func TakeChromeScreenshot(debugURL string, targetID string, fullPage bool) (*ScreenshotResult, error) {
 	cr, err := NewChromeRemote(debugURL)
 	if err != nil {
 		return nil, err
