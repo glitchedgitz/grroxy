@@ -159,6 +159,7 @@ type TemplateUpdateArgs struct {
 
 type ProxyScreenshotArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	Note      string `json:"note" jsonschema:"required" jsonschema_description:"A 3-word note describing what this screenshot captures (e.g., 'Apple homepage hero', 'Login form view'). Used as a caption."`
 	TargetID  string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to capture (returned by proxyOpenTab / proxyListTabs). If empty, captures the most recently activated/opened/navigated tab."`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Total time budget for capture in milliseconds, including readiness check and one retry on timeout. Default: 30000"`
 }
