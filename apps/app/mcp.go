@@ -15,6 +15,7 @@ import (
 
 	"github.com/glitchedgitz/grroxy/grx/version"
 	"github.com/glitchedgitz/grroxy/internal/save"
+	"github.com/glitchedgitz/pocketbase/apis"
 	"github.com/glitchedgitz/pocketbase/core"
 	"github.com/labstack/echo/v5"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -45,6 +46,13 @@ func ChatIDFromContext(ctx context.Context) string {
 	return ""
 }
 
+func mcpContextWithChatID(ctx context.Context, r *http.Request) context.Context {
+	if chatID := r.URL.Query().Get("chatId"); chatID != "" {
+		return context.WithValue(ctx, chatIDCtxKey{}, chatID)
+	}
+	return ctx
+}
+
 func mcpGenerateSessionID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -58,10 +66,11 @@ func mcpGenerateSessionID() (string, error) {
 // ---------------------------------------------------------------------------
 
 type MCP struct {
-	server    *mcpserver.MCPServer
-	sseServer *mcpserver.SSEServer
-	active    bool
-	conns     atomic.Int64
+	server     *mcpserver.MCPServer
+	sseServer  *mcpserver.SSEServer
+	httpServer *mcpserver.StreamableHTTPServer
+	active     bool
+	conns      atomic.Int64
 }
 
 // ---------------------------------------------------------------------------
@@ -417,10 +426,15 @@ func (backend *Backend) mcpInit() {
 		}),
 	)
 
+	httpServer := mcpserver.NewStreamableHTTPServer(s,
+		mcpserver.WithHTTPContextFunc(mcpContextWithChatID),
+	)
+
 	backend.MCP = &MCP{
-		server:    s,
-		sseServer: sseServer,
-		active:    true,
+		server:     s,
+		sseServer:  sseServer,
+		httpServer: httpServer,
+		active:     true,
 	}
 }
 
@@ -535,6 +549,26 @@ func (backend *Backend) MCPEndpoint(e *core.ServeEvent) error {
 			return nil
 		},
 	})
+
+	streamableHTTPHandler := func(c echo.Context) error {
+		if backend.MCP == nil || !backend.MCP.active {
+			return c.JSON(http.StatusServiceUnavailable, map[string]any{"error": "MCP server not active"})
+		}
+		backend.MCP.conns.Add(1)
+		defer backend.MCP.conns.Add(-1)
+		backend.MCP.httpServer.ServeHTTP(c.Response(), c.Request())
+		return nil
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
+		e.Router.AddRoute(echo.Route{
+			Method:  method,
+			Path:    "/mcp/http",
+			Handler: streamableHTTPHandler,
+			Middlewares: []echo.MiddlewareFunc{
+				apis.ActivityLogger(backend.App),
+			},
+		})
+	}
 
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
