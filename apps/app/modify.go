@@ -78,6 +78,7 @@ func (backend *Backend) ModifyRequest(e *core.ServeEvent) error {
 
 			reqRecord := make(map[string]any)
 			reqRecord["method"] = parsedRequest.Method
+			reqRecord["http_version"] = parsedRequest.HTTPVersion
 			reqRecord["url"] = rawURL
 			reqRecord["path"] = parsedPath
 			reqRecord["query"] = parsedQuery
@@ -160,8 +161,36 @@ func runActions(tasks []templates.Action, requestData map[string]any) (string, e
 	return modifiedRequest, nil
 }
 
+// splitRawRequest splits a raw request into its head (request line + headers),
+// the header/body separator it actually uses, and its body. A request written
+// with LF line endings uses "\n\n", so matching only "\r\n\r\n" drops its body.
+func splitRawRequest(raw string) (head string, sep string, body string) {
+	for _, s := range []string{"\r\n\r\n", "\n\n"} {
+		if idx := strings.Index(raw, s); idx != -1 {
+			return raw[:idx], s, raw[idx+len(s):]
+		}
+	}
+	return raw, "", ""
+}
+
 func buildRawRequest(requestData map[string]any) string {
 	var builder strings.Builder
+
+	rawReq, _ := requestData["raw"].(string)
+	_, sep, body := splitRawRequest(rawReq)
+
+	// Keep the line break the request came in with instead of forcing CRLF.
+	// The separator is the line break doubled; with no body fall back to the
+	// first line break in the request itself.
+	lineBreak := "\r\n"
+	switch {
+	case sep != "":
+		lineBreak = sep[:len(sep)/2]
+	case strings.Contains(rawReq, "\r\n"):
+		lineBreak = "\r\n"
+	case strings.Contains(rawReq, "\n"):
+		lineBreak = "\n"
+	}
 
 	// Build request line
 	method := "GET"
@@ -174,10 +203,17 @@ func buildRawRequest(requestData map[string]any) string {
 		urlStr = u
 	}
 
+	httpVersion := "HTTP/1.1"
+	if v, ok := requestData["http_version"].(string); ok && v != "" {
+		httpVersion = v
+	}
+
 	builder.WriteString(method)
 	builder.WriteString(" ")
 	builder.WriteString(urlStr)
-	builder.WriteString(" HTTP/1.1\r\n")
+	builder.WriteString(" ")
+	builder.WriteString(httpVersion)
+	builder.WriteString(lineBreak)
 
 	// Build headers
 	if headers, ok := requestData["headers"].([][]string); ok {
@@ -185,20 +221,13 @@ func buildRawRequest(requestData map[string]any) string {
 			if len(header) >= 2 {
 				builder.WriteString(header[0])
 				builder.WriteString(header[1])
-				builder.WriteString("\r\n")
+				builder.WriteString(lineBreak)
 			}
 		}
 	}
 
-	builder.WriteString("\r\n")
-
-	// Add body if present
-	if rawReq, ok := requestData["raw"].(string); ok {
-		parts := strings.SplitN(rawReq, "\r\n\r\n", 2)
-		if len(parts) == 2 {
-			builder.WriteString(parts[1])
-		}
-	}
+	builder.WriteString(lineBreak)
+	builder.WriteString(body)
 
 	return builder.String()
 }
@@ -265,9 +294,9 @@ func RequestUpdateKey(requestData map[string]any, key string, value any) {
 		requestData["length"] = len(newBody)
 		// Update the raw request body part
 		if rawReq, ok := requestData["raw"].(string); ok {
-			parts := strings.SplitN(rawReq, "\r\n\r\n", 2)
-			if len(parts) == 2 {
-				requestData["raw"] = parts[0] + "\r\n\r\n" + newBody
+			head, sep, _ := splitRawRequest(rawReq)
+			if sep != "" {
+				requestData["raw"] = head + sep + newBody
 			}
 		}
 	}
@@ -335,9 +364,9 @@ func RequestDeleteKey(requestData map[string]any, key string) {
 	} else if key == "req.body" {
 		requestData["length"] = 0
 		if rawReq, ok := requestData["raw"].(string); ok {
-			parts := strings.SplitN(rawReq, "\r\n\r\n", 2)
-			if len(parts) == 2 {
-				requestData["raw"] = parts[0] + "\r\n\r\n"
+			head, sep, _ := splitRawRequest(rawReq)
+			if sep != "" {
+				requestData["raw"] = head + sep
 			}
 		}
 	}
@@ -377,6 +406,7 @@ func RequestReplace(requestData map[string]any, search string, value string, isR
 
 	// Update all relevant fields
 	requestData["method"] = parsedRequest.Method
+	requestData["http_version"] = parsedRequest.HTTPVersion
 	requestData["url"] = parsedRequest.URL
 	requestData["path"] = parsedURL.Path
 	requestData["query"] = parsedURL.RawQuery
