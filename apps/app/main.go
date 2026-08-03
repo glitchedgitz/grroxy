@@ -27,6 +27,7 @@ type Backend struct {
 	CounterManager *CounterManager
 	XtermManager   *XtermManager
 	MCP            *MCP
+	AIBridge       *AIBridge
 	Templates        *templates.Templates
 	TemplatesEnabled bool
 

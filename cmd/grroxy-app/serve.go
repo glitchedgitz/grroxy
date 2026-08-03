@@ -176,6 +176,13 @@ func serve(projectPath string) {
 	// MCP
 	API.App.OnBeforeServe().Add(API.MCPEndpoint)
 
+	// AI CLI bridges (Claude Code / Codex), proxied under /api/aibridge/
+	API.App.OnBeforeServe().Add(API.AIBridgeEndpoint)
+	API.App.OnTerminate().Add(func(e *core.TerminateEvent) error {
+		API.AIBridge.StopAll()
+		return nil
+	})
+
 	// Xterm (Terminal)
 	API.RegisterXtermRoutes()
 

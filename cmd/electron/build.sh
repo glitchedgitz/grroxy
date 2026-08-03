@@ -2,6 +2,7 @@
 set -e
 
 rm -rf bin
+rm -rf bridges
 rm -rf dist
 
 # Full build: Go binaries + frontend + Electron app
@@ -27,6 +28,12 @@ done
 set -- "${ARGS[@]}"
 
 BINARIES=(grroxy grroxy-app grroxy-tool cook)
+
+# AI CLI bridges (Claude Code / Codex) live in the frontend repo and are staged
+# into bridges/${os}/${arch}/ to match the extraResources mapping. They carry a
+# per-platform native binary (Codex), so each target needs its own install.
+BRIDGE_BUILDER="${GRROXY_BRIDGE_BUILDER:-$PROJECT_ROOT/../cybernetic-ui/build-bridges.sh}"
+SKIP_BRIDGES="${GRROXY_SKIP_BRIDGES:-0}"
 
 ALL_PLATFORMS=(
     "darwin:arm64"
@@ -135,7 +142,39 @@ build_go_platform() {
         codesign_binary "${OUT_DIR}/${binary}${EXT}"
     done
 
+    stage_bridges "$TARGET_OS" "$TARGET_ARCH" "$PLATFORM_DIR" "$ARCH_DIR"
+
     echo
+}
+
+stage_bridges() {
+    local TARGET_OS="$1"
+    local TARGET_ARCH="$2"
+    local PLATFORM_DIR="$3"
+    local ARCH_DIR="$4"
+
+    if [ "$SKIP_BRIDGES" = "1" ]; then
+        return
+    fi
+
+    if [ ! -x "$BRIDGE_BUILDER" ]; then
+        echo "  Warning: $BRIDGE_BUILDER not found; AI bridges will be missing from this build."
+        echo "           Set GRROXY_BRIDGE_BUILDER, or GRROXY_SKIP_BRIDGES=1 to silence this."
+        return
+    fi
+
+    # npm's --os/--cpu vocabulary differs from Go's GOOS/GOARCH.
+    local NPM_OS="$TARGET_OS"
+    if [ "$TARGET_OS" = "windows" ]; then
+        NPM_OS="win32"
+    fi
+    local NPM_CPU="$ARCH_DIR"
+
+    echo "  Staging AI bridges for ${NPM_OS}/${NPM_CPU} ..."
+    "$BRIDGE_BUILDER" \
+        --out "${SCRIPT_DIR}/bridges/${PLATFORM_DIR}/${ARCH_DIR}" \
+        --platform "$NPM_OS" \
+        --arch "$NPM_CPU"
 }
 
 # --- Step 1: Build Go binaries ---

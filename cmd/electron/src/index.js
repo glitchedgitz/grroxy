@@ -23,6 +23,17 @@ function getBinPath(name) {
     return path.join(getBinDir(), name + ext)
 }
 
+// The AI CLI bridges (Claude Code / Codex) are staged next to the binaries by
+// build-bridges.sh. grroxy spawns them on demand; it just needs to know where
+// they live and which Node to run them with.
+function getBridgesDir() {
+    if (app.isPackaged) {
+        return path.join(process.resourcesPath, 'bridges')
+    }
+    const plat = platformMap[process.platform] || process.platform
+    return path.join(__dirname, '..', 'bridges', plat, process.arch)
+}
+
 function findAvailablePort(startPort) {
     return new Promise((resolve, reject) => {
         const server = net.createServer()
@@ -43,7 +54,12 @@ function startGrroxy(host) {
 
     const env = {
         ...process.env,
-        PATH: binDir + path.delimiter + (process.env.PATH || '')
+        PATH: binDir + path.delimiter + (process.env.PATH || ''),
+        GRROXY_BRIDGES_DIR: getBridgesDir(),
+        // Electron embeds Node, so pointing grroxy at our own binary means a
+        // packaged install doesn't need a system Node to run the AI bridges.
+        // grroxy sets ELECTRON_RUN_AS_NODE=1 on the child it spawns.
+        GRROXY_NODE_BIN: process.execPath,
     }
 
     grroxyProcess = spawn(grroxyPath, ['start', '--host', host], {

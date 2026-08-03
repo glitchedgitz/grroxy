@@ -24,6 +24,15 @@ node_modules/
 **/node_modules/
 */electron/dist/
 
+# Release archives from cmd/release.sh (hundreds of MB per platform)
+/dist/
+
+# Staged AI CLI bridges. Build output only — cmd/electron/build.sh wipes and
+# regenerates this on every run from the sources in the cybernetic-ui repo.
+# Scoped to this path on purpose: a bare `bridges/` would also swallow the
+# bridge sources if they are ever moved into this repo.
+cmd/electron/bridges/
+
 cmd/grroxy/builds*
 
 # macOS system files

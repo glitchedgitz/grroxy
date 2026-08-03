@@ -29,6 +29,10 @@
       {
         "from": "../../grx/frontend/dist/",
         "to": "frontend"
+      },
+      {
+        "from": "bridges/${os}/${arch}/",
+        "to": "bridges"
       }
     ],
     "files": [
