@@ -1,6 +1,11 @@
 package schemas
 
-import "github.com/glitchedgitz/pocketbase/models/schema"
+import (
+	"fmt"
+	"regexp"
+
+	"github.com/glitchedgitz/pocketbase/models/schema"
+)
 
 var Searches = schema.NewSchema(
 	&schema.SchemaField{
@@ -24,6 +29,43 @@ type SearchPattern struct {
 	Regexp        bool   `json:"regexp"`
 	CaseSensitive bool   `json:"caseSensitive"`
 	WholeWord     bool   `json:"wholeWord"`
+}
+
+// Compile turns a stored pattern into a Go regexp.
+//
+// The stored patterns are written for the JS engine (see DefaultSearches), so
+// this is the RE2 conversion the doc comment there talks about. RE2 has no
+// lookaround, a pattern that relies on it fails to compile and the error is
+// returned as is — better a clear failure than silently different matches.
+//
+// Mirrors cmd/grroxy-search/search.go: a non-regexp search is quoted so it is
+// matched literally, case-insensitivity is a flag on the whole pattern, and
+// whole-word wraps the result in word boundaries.
+func (p SearchPattern) Compile() (*regexp.Regexp, error) {
+	if p.Search == "" {
+		return nil, fmt.Errorf("search pattern is empty")
+	}
+
+	expr := p.Search
+	if !p.Regexp {
+		expr = regexp.QuoteMeta(expr)
+	}
+
+	// wrap before the flag so the flag stays in front and applies to all of it
+	if p.WholeWord {
+		expr = `\b(?:` + expr + `)\b`
+	}
+
+	if !p.CaseSensitive {
+		expr = "(?i)" + expr
+	}
+
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compile search pattern: %w", err)
+	}
+
+	return re, nil
 }
 
 // DefaultSearch is a seeded row for the _searches collection

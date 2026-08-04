@@ -172,6 +172,8 @@ func serve(projectPath string) {
 
 	// Extractor
 	API.App.OnBeforeServe().Add(API.ExtractDataEndpoint)
+	API.App.OnBeforeServe().Add(API.ExtractValuesEndpoint)
+	API.App.OnBeforeServe().Add(API.DownloadRequestEndpoint)
 
 	// MCP
 	API.App.OnBeforeServe().Add(API.MCPEndpoint)

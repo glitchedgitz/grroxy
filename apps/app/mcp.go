@@ -104,6 +104,22 @@ func (backend *Backend) mcpInit() {
 	)
 
 	s.AddTool(
+		mcp.NewTool("extractValues",
+			mcp.WithDescription("Extract values out of stored raw requests/responses with a search pattern. Point it at rows by id and give it either a saved quick search by name (\"Link Finder\", \"Emails\", ...) or an inline pattern. Returns a flat deduped list of the matched strings. Prefer this over reading whole responses when you only want the parts that match something"),
+			mcp.WithInputSchema[ExtractValuesArgs](),
+		),
+		backend.extractValuesHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("downloadRequest",
+			mcp.WithDescription("Save the raw request and/or response of stored rows to files on disk, one file per row. Each file is requests/{id}_{part}.txt under the project working directory, the one the file explorer shows. Takes row ids and returns the paths written, so the files can then be read or fed to other tools"),
+			mcp.WithInputSchema[DownloadRequestArgs](),
+		),
+		backend.downloadRequestHandler,
+	)
+
+	s.AddTool(
 		mcp.NewTool("hostPrintSitemap",
 			mcp.WithDescription("Get the sitemap for a host"),
 			mcp.WithInputSchema[HostPrintSitemapArgs](),

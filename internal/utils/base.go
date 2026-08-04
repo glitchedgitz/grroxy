@@ -173,6 +173,16 @@ func ResponseToByte(resp *http.Response) ([]byte, error) {
 		decompressed = false
 	}
 
+	// Cloned rather than shared: the header is edited below, and callers still
+	// hold the response this was built from.
+	header := resp.Header.Clone()
+
+	// The body written out is the decompressed one, so leaving Content-Encoding
+	// in place would tell whoever reads this dump to decompress it again.
+	if decompressed {
+		header.Del("Content-Encoding")
+	}
+
 	// Create a new response without the chunked encoding information
 	newResp := &http.Response{
 		Status:        resp.Status,
@@ -180,15 +190,10 @@ func ResponseToByte(resp *http.Response) ([]byte, error) {
 		Proto:         resp.Proto,
 		ProtoMajor:    resp.ProtoMajor,
 		ProtoMinor:    resp.ProtoMinor,
-		Header:        resp.Header,
+		Header:        header,
 		ContentLength: int64(len(body)),
 		Body:          io.NopCloser(bytes.NewReader(body)),
 		Request:       resp.Request,
-	}
-
-	// Remove Content-Encoding header only if we successfully decompressed
-	if decompressed {
-		// newResp.Header.Del("Content-Encoding")
 	}
 
 	respBytes, err := httputil.DumpResponse(newResp, true)

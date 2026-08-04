@@ -3,6 +3,7 @@
 package sdk
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
@@ -17,7 +18,29 @@ const (
 	defaultURL = "http://127.0.0.1:8090"
 )
 
-// REMEMBER to start the Pocketbase before running this example with `make serve` command
+// Everything below TestAuthorizeAnonymous talks to a live PocketBase seeded
+// with the r--w/pocketbase migration fixtures — the posts_admin, posts_public
+// and posts_user collections and their accounts. Nothing in this repo starts
+// one.
+//
+// requireFixtureServer skips rather than fails when it is absent, so a plain
+// `go test ./...` stays honest instead of reporting failures for a server that
+// was never meant to be running. It probes for a fixture collection rather than
+// for the port: grroxy itself listens on defaultURL during normal use, and that
+// server answers without being the fixture.
+func requireFixtureServer(t *testing.T) {
+	t.Helper()
+
+	resp, err := http.Get(defaultURL + "/api/collections/" + migrations.PostsPublic + "/records?perPage=1")
+	if err != nil {
+		t.Skipf("no PocketBase on %s: %v", defaultURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Skipf("the PocketBase on %s is not seeded with the %q fixture (status %d)", defaultURL, migrations.PostsPublic, resp.StatusCode)
+	}
+}
 
 func TestAuthorizeAnonymous(t *testing.T) {
 	tests := []struct {
@@ -39,6 +62,8 @@ func TestAuthorizeAnonymous(t *testing.T) {
 }
 
 func TestListAccess(t *testing.T) {
+	requireFixtureServer(t)
+
 	type auth struct {
 		email    string
 		password string
@@ -101,6 +126,8 @@ func TestListAccess(t *testing.T) {
 }
 
 func TestAuthorizeEmailPassword(t *testing.T) {
+	requireFixtureServer(t)
+
 	type args struct {
 		email    string
 		password string
@@ -147,6 +174,8 @@ func TestAuthorizeEmailPassword(t *testing.T) {
 }
 
 func TestClient_List(t *testing.T) {
+	requireFixtureServer(t)
+
 	defaultClient := NewClient(defaultURL)
 
 	tests := []struct {
@@ -202,6 +231,8 @@ func TestClient_List(t *testing.T) {
 }
 
 func TestClient_Delete(t *testing.T) {
+	requireFixtureServer(t)
+
 	client := NewClient(defaultURL)
 	field := "value_" + time.Now().Format(time.StampMilli)
 
@@ -232,6 +263,8 @@ func TestClient_Delete(t *testing.T) {
 }
 
 func TestClient_Update(t *testing.T) {
+	requireFixtureServer(t)
+
 	client := NewClient(defaultURL)
 	field := "value_" + time.Now().Format(time.StampMilli)
 
@@ -268,6 +301,8 @@ func TestClient_Update(t *testing.T) {
 }
 
 func TestClient_Create(t *testing.T) {
+	requireFixtureServer(t)
+
 	defaultClient := NewClient(defaultURL)
 	defaultBody := map[string]interface{}{
 		"field": "value_" + time.Now().Format(time.StampMilli),
@@ -322,6 +357,8 @@ func TestClient_Create(t *testing.T) {
 // Create test function for SitemapNew by suppling values of types.SitemapGet
 
 func TestClient_SitemapNew(t *testing.T) {
+	requireFixtureServer(t)
+
 	defaultClient := NewClient(defaultURL)
 	tests := []struct {
 		name    string

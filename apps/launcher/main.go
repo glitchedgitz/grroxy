@@ -25,13 +25,13 @@ type Launcher struct {
 func (launcher *Launcher) Serve() {
 	launcher.App.Bootstrap()
 
+	// no proxy line here: proxies are started per project through
+	// /api/proxy/start, so the launcher has no listen address to print at boot
 	fmt.Printf(`
 Application:        http://%s
 Database:           http://%s/_/
 API:                http://%s/api/
 Cert:               http://%s/cacert.crt
-
-Proxy Listening On: %s
 
 	`, launcher.Config.HostAddr, launcher.Config.HostAddr, launcher.Config.HostAddr, launcher.Config.HostAddr)
 

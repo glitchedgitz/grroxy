@@ -201,6 +201,29 @@ type HostPrintRowsArgs struct {
 	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search, eg. \"req.url ~ '.js'\" or \"resp.status = 200\". Fields: req/req_edited (url, path, query, fragment, ext, raw, length, has_cookies, headers.NAME), resp/resp_edited (title, mime, status, length, raw, has_cookies), host, port, is_https, http, has_params, has_resp, generated_by, index. Use empty string for no filter"`
 }
 
+type ExtractValuesArgs struct {
+	IDs []string `json:"ids" jsonschema:"required" jsonschema_description:"record ids of the rows to extract from, as strings, eg. [\"5\", \"5.11\"]. These are the ids in the requests table, not indexes — one index can hold several rows (5, 5.1, 5.11), so only the id picks out the one you want. Underscore padding is optional, \"5\" and \"______________5\" both work"`
+
+	Name string `json:"name,omitempty" jsonschema_description:"name of a saved quick search to use as the pattern, eg. \"Link Finder\", \"Juicy Words\", \"Emails\". Call getQuickSearchSets to list them. Ignored when search is set"`
+
+	Search        string `json:"search,omitempty" jsonschema_description:"an inline pattern to extract with, instead of a saved search. RE2 syntax, no lookahead or backreferences"`
+	Regexp        *bool  `json:"regexp,omitempty" jsonschema_description:"whether search is a regex, default true. Set false to match it literally"`
+	CaseSensitive bool   `json:"caseSensitive,omitempty" jsonschema_description:"match case sensitively, default false"`
+	WholeWord     bool   `json:"wholeWord,omitempty" jsonschema_description:"only match whole words, default false"`
+
+	Fields []string `json:"fields,omitempty" jsonschema_description:"fields to search on each row, default [\"req.raw\", \"resp.raw\"]. Any req/req_edited/resp/resp_edited field works, eg. \"resp.raw\", \"req.url\", \"resp.headers\""`
+	Group  int      `json:"group,omitempty" jsonschema_description:"capture group to return instead of the whole match, default 0 (the whole match)"`
+	Unique *bool    `json:"unique,omitempty" jsonschema_description:"dedupe the flat values list, default true"`
+	Limit  int      `json:"limit,omitempty" jsonschema_description:"max matches per field, 0 (default) for all of them"`
+}
+
+type DownloadRequestArgs struct {
+	IDs []string `json:"ids" jsonschema:"required" jsonschema_description:"record ids of the rows to write out, as strings, eg. [\"5\", \"5.11\"]. These are the ids in the requests table, not indexes — one index can hold several rows (5, 5.1, 5.11), so only the id picks out the one you want. Underscore padding is optional, \"5\" and \"______________5\" both work"`
+
+	Part   string `json:"part,omitempty" jsonschema_description:"which side to save: \"req\" (default), \"resp\", or \"both\". \"both\" writes two files per row"`
+	Edited bool   `json:"edited,omitempty" jsonschema_description:"prefer the edited copy of the request/response, falling back to the original when the row was never edited. Default false"`
+}
+
 type SendRequestArgs struct {
 	TLS                     bool     `json:"tls" jsonschema:"required" jsonschema_description:"use https or http"`
 	Host                    string   `json:"host" jsonschema:"required" jsonschema_description:"the host to send the request to"`
@@ -469,6 +492,55 @@ func (backend *Backend) getRequestResponseFromIDHandler(ctx context.Context, req
 
 	if respRecord != nil {
 		result["response"] = respRecord.GetString("raw")
+	}
+
+	return mcpJSONResult(result)
+}
+
+func (backend *Backend) extractValuesHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ExtractValuesArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, skipped, err := backend.extractValuesLogic(ExtractValuesRequest{
+		RowTargets:    RowTargets{IDs: args.IDs},
+		Name:          args.Name,
+		Search:        args.Search,
+		Regexp:        args.Regexp,
+		CaseSensitive: args.CaseSensitive,
+		WholeWord:     args.WholeWord,
+		Fields:        args.Fields,
+		Group:         args.Group,
+		Unique:        args.Unique,
+		Limit:         args.Limit,
+	})
+	if err != nil {
+		if len(skipped) > 0 {
+			return mcp.NewToolResultError(fmt.Sprintf("%v: %v", err, skipped)), nil
+		}
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(result)
+}
+
+func (backend *Backend) downloadRequestHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args DownloadRequestArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, skipped, err := backend.downloadRequestLogic(DownloadRequest{
+		RowTargets: RowTargets{IDs: args.IDs},
+		Part:       args.Part,
+		Edited:     args.Edited,
+	})
+	if err != nil {
+		if len(skipped) > 0 {
+			return mcp.NewToolResultError(fmt.Sprintf("%v: %v", err, skipped)), nil
+		}
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	return mcpJSONResult(result)

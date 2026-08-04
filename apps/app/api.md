@@ -42,6 +42,13 @@ POST      /api/label/attach
 # Regex
 POST      /api/regex
 
+# Extractor
+POST      /api/extract
+POST      /api/extract/values
+
+# Requests
+POST      /api/request/download
+
 # Sitemap
 POST      /api/sitemap/new
 POST      /api/sitemap/fetch
@@ -835,6 +842,129 @@ POST /api/regex
   "matched": true
 }
 ```
+
+---
+
+## Extractor
+
+Two different jobs: `/api/extract` dumps named _fields_ of every record for a
+host to a file, `/api/extract/values` returns the substrings a _pattern_ matched
+inside specific rows. Full reference and examples in `docs/app_api_docs.md`.
+
+### Extract Values
+
+Runs a search pattern over the raw request/response of specific rows.
+
+Target rows by `ids` — ids, not indexes: `index_minor` splits one index across
+several rows, so `5`, `5.1` and `5.11` are different requests. Underscore
+padding is optional. The pattern is either `name` (a saved search from
+`_searches`, read off the launcher) or an inline `search`. Patterns are stored
+in the JS dialect and compiled with RE2 here, so one that relies on lookaround is
+rejected rather than matched differently.
+
+```http
+POST /api/extract/values
+```
+
+```json
+{
+  "ids": ["476", "5.11"],
+  "name": "Link Finder",
+  "search": "an inline pattern instead of name",
+  "regexp": true,
+  "caseSensitive": false,
+  "wholeWord": false,
+  "fields": ["req.raw", "resp.raw"],
+  "group": 0,
+  "unique": true,
+  "limit": 0
+}
+```
+
+```json
+{
+  "success": true,
+  "name": "Link Finder",
+  "regex": "the compiled RE2 pattern",
+  "values": ["https://example.com/app.js", "/v2/auth/authorize/"],
+  "count": 2
+}
+```
+
+`values` is the whole result — no per-row breakdown and no match offsets. An id
+that could not be used lands in `skipped` instead of failing the batch. MCP and
+the frontend AI expose the same thing as `extractValues`.
+
+---
+
+### Extract Fields
+
+Writes chosen fields of every record for a host out to a file.
+
+```http
+POST /api/extract
+```
+
+```json
+{
+  "host": "string",
+  "fields": ["req.method", "req.url"],
+  "outputFile": "string"
+}
+```
+
+```json
+{
+  "success": true,
+  "filePath": "/abs/path/to/file",
+  "host": "string",
+  "fields": ["req.method", "req.url"],
+  "extractedAt": "2026-08-04T12:00:00Z"
+}
+```
+
+---
+
+## Requests
+
+### Download Request
+
+Writes the raw request/response of stored rows out to files on disk, one file
+per row, and returns the absolute paths. Saves server side and hands back a
+path — not a browser download. Full reference in `docs/app_api_docs.md`.
+
+```http
+POST /api/request/download
+```
+
+```json
+{
+  "ids": ["476", "5.11"],
+  "part": "both",
+  "edited": false
+}
+```
+
+```json
+{
+  "success": true,
+  "count": 2,
+  "files": [
+    { "id": "____________476", "path": "/path/to/projects/proj1/requests/476_req.txt", "bytes": 412 },
+    { "id": "____________476", "path": "/path/to/projects/proj1/requests/476_resp.txt", "bytes": 8192 }
+  ]
+}
+```
+
+Target rows by `ids` — ids, not indexes: `index_minor` splits one index across
+several rows, so `5`, `5.1` and `5.11` are different requests. Underscore
+padding is optional.
+
+Location and name are not caller options. Every file is `requests/{id}_{part}.txt`
+under the project working directory — the one the CWD explorer browses, not the
+process cwd — so `part: "both"` writes `476_req.txt` and `476_resp.txt` rather
+than overwriting one with the other. `part` is `req` (default), `resp`, or
+`both`. MCP and the frontend AI expose the same thing as `downloadRequest`.
 
 ---
 

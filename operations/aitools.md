@@ -46,3 +46,5 @@
 | 42 | ✅ | `proxyType` | Type in Browser | Proxy | Easy | Type text into form fields, clicks to focus, optionally clears, dispatches real key events |
 | 43 | ✅ | `proxyEval` | Evaluate JS | Proxy | Medium | Execute arbitrary JavaScript in page context and return result |
 | 44 | ✅ | `proxyWaitForSelector` | Wait for Selector | Proxy | Easy | Wait for a CSS selector to become visible, useful for SPA transitions |
+| 45 | ✅ | `extractValues` | Extracting Values | Search | Medium | Pattern-matches raw req/resp for given indexes; saved `_searches` pattern by name or inline, compiled RE2 backend side |
+| 46 | ✅ | `downloadRequest` | Saving Request | Requests | Easy | Writes raw req/resp of given indexes to files server side, one per row, returns absolute paths |

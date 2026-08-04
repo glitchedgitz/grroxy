@@ -1359,6 +1359,125 @@ POST /api/request/modify
 
 ---
 
+### Download Request
+
+Writes the raw request and/or response of stored rows out to files on disk, one file per row, and returns the paths.
+
+This saves server side and hands back a path — it is not a browser download. That is what makes it usable from MCP and from the AI, which can then read the file or feed it to another tool.
+
+```http
+POST /api/request/download
+```
+
+**Request Body:**
+
+```json
+{
+  "ids": ["476", "5.11"],
+
+  "part": "both",
+  "edited": false
+}
+```
+
+**Fields:**
+
+Pick the rows:
+
+- `ids` (array of strings, required): Record ids of the rows to write out. Underscore padding is optional — an id containing `_` is taken as is, otherwise it is left-padded to 15 chars, so `"476"` and `"____________476"` both work. Ids longer than 15, or carrying a `/` or `\`, are rejected into `skipped` — an id becomes a file name here, so a separator in one would write outside the target directory.
+
+  These are **ids, not indexes**. `index_minor` splits one index across several rows, so `5`, `5.1` and `5.11` are different requests. Matching on index would write all of them and give you no way to ask for `5.11` on its own.
+
+Pick what to write:
+
+- `part` (string, default `"req"`): `"req"`, `"resp"`, or `"both"`. `"both"` writes _two files_ per row rather than concatenating two raw HTTP messages into one. `"request"` / `"response"` / `"all"` are accepted as aliases.
+- `edited` (bool, default `false`): Prefer the `_req_edited` / `_resp_edited` copy, falling back to the original when the row was never edited. The response does not report which of the two it landed on.
+
+There is nothing to pick about where it lands:
+
+Every file is written as `requests/{id}_{part}.txt` under the **project working directory** — `{ProjectsDirectory}/{ProjectID}`, the one the CWD file explorer browses. Neither the directory nor the name is a caller option. A download the user asked for has to turn up where they are already looking, under a name that points back at the row, so there is nothing useful to configure and plenty to get wrong.
+
+- The `requests/` subfolder keeps downloads from littering the top of the CWD the explorer opens on. It is created on first use.
+- The id names the file, not the index: `5` and `5.11` are different requests that a bare index would collide onto one file.
+- The part suffix — `476_req.txt`, `476_resp.txt` — keeps `part: "both"` from writing the two sides over each other, and says which side a file is without opening it.
+
+Note this is the _project_ working directory, not the process one. `/api/savefile` resolves its `"cwd"` folder to `os.Getwd()`, wherever the binary happened to be started from; that is deliberately not what this endpoint uses.
+
+**Response (Success):**
+
+```json
+{
+  "success": true,
+  "count": 2,
+  "files": [
+    {
+      "id": "____________476",
+      "path": "/path/to/projects/proj1/requests/476_req.txt",
+      "bytes": 412
+    },
+    {
+      "id": "____________476",
+      "path": "/path/to/projects/proj1/requests/476_resp.txt",
+      "bytes": 8192
+    }
+  ],
+  "skipped": {
+    "477/resp": "no resp stored for this row"
+  }
+}
+```
+
+- `id` is the padded form the row is stored under, whichever form you sent. `bytes` is the size of the file written.
+- The `_req` / `_resp` suffix in `path` is what says which side a file holds; there is no separate field for it.
+- `skipped` covers both an id that was rejected outright (keyed on the id as you sent it) and a row that had nothing stored for a side (keyed `{id}/{part}`). The rest of the batch still runs either way.
+
+**Examples:**
+
+One request, landing as `requests/476_req.txt` in the project working directory:
+
+```sh
+curl -X POST http://127.0.0.1:8090/api/request/download \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: $TOKEN" \
+  -d '{ "ids": ["476"] }'
+```
+
+The full exchange for one row — writes `476_req.txt` and `476_resp.txt`:
+
+```json
+{ "ids": ["476"], "part": "both" }
+```
+
+One specific `index_minor` row, not everything sharing index 5:
+
+```json
+{ "ids": ["5.11"] }
+```
+
+The edited requests of several rows, falling back to the originals where nothing was edited:
+
+```json
+{ "ids": ["476", "477", "480"], "part": "req", "edited": true }
+```
+
+**Error Responses:**
+
+- 400 Bad Request - No target rows, an unknown `part`, or none of the rows had anything stored for that part. The body carries `error`, plus `skipped` when rows were the problem.
+- 403 Forbidden - Unauthorized.
+
+**Same tool elsewhere:**
+
+MCP and the frontend AI both expose this as `downloadRequest`, sharing `downloadRequestLogic` with the endpoint. Same inputs.
+
+```json
+{
+  "name": "downloadRequest",
+  "arguments": { "ids": ["476"], "part": "both" }
+}
+```
+
+---
+
 ## Repeater
 
 The Repeater allows you to send modified HTTP requests and analyze responses.
@@ -1478,7 +1597,10 @@ POST /api/filter/check
 
 ## Extractor
 
-The Extractor lets you export request/response data for a specific host into a JSONL file, using the same field structure as filters and `_data` records.
+The Extractor covers two different jobs:
+
+- **Extract Data** (`/api/extract`) takes a _host_, dumps named _fields_ of every record it has, and writes them to a JSONL file.
+- **Extract Values** (`/api/extract/values`) takes _specific rows_ and returns the substrings a _pattern_ matched inside them.
 
 ### Extract Data
 
@@ -1605,6 +1727,159 @@ Each line in the output file is a JSON object matching the filter-style structur
 - 400 Bad Request - Missing `host` or invalid body.
 - 403 Forbidden - Unauthorized.
 - 500 Internal Server Error - Failed to query or write data.
+
+---
+
+### Extract Values
+
+Runs a search pattern over the raw request/response of specific rows and returns what it matched.
+
+```http
+POST /api/extract/values
+```
+
+**Request Body:**
+
+```json
+{
+  "ids": ["476", "5.11"],
+
+  "name": "Link Finder",
+
+  "search": "Authorization: Bearer ([A-Za-z0-9._-]+)",
+  "pattern": "alias for search",
+  "regexp": true,
+  "caseSensitive": false,
+  "wholeWord": false,
+
+  "fields": ["req.raw", "resp.raw"],
+  "group": 0,
+  "unique": true,
+  "limit": 0
+}
+```
+
+**Fields:**
+
+Pick the rows:
+
+- `ids` (array of strings, required): Record ids of the rows to search. Underscore padding is optional — an id containing `_` is taken as is, otherwise it is left-padded to 15 chars, so `"476"` and `"____________476"` both work. Ids longer than 15, or carrying a `/` or `\`, are rejected into `skipped`.
+
+  These are **ids, not indexes**. `index_minor` splits one index across several rows, so `5`, `5.1` and `5.11` are different requests. Matching on index would return all of them and give you no way to ask for `5.11` on its own.
+
+Pick the pattern — `search` wins if both are given:
+
+- `name` (string): A saved quick search to use, eg. `Link Finder`, `Juicy Words`, `JS Comments`, `HTML Comments`, `Hidden Fields`, `Emails`. Matched case-insensitively. Read from `_searches` on the launcher, falling back to the project db if the launcher is unreachable.
+- `search` (string, alias `pattern`): An inline pattern instead of a saved one.
+- `regexp` (bool, default `true`): Whether `search` is a regex. `false` matches it literally. Saved searches carry their own flag.
+- `caseSensitive` (bool, default `false`).
+- `wholeWord` (bool, default `false`): Wraps the pattern in `\b` word boundaries.
+
+Shape the output:
+
+- `fields` (array, default `["req.raw", "resp.raw"]`): Which fields to search on each row. Any `req.*`, `resp.*`, `req_edited.*`, `resp_edited.*` field works, so `req.url` or `resp.headers` are searchable too, not just the raw bodies.
+- `group` (number, default `0`): Capture group to return instead of the whole match. Out of range falls back to the whole match; a group that did not participate in a match skips that match.
+- `unique` (bool, default `true`): Drops repeated values. Set `false` to keep every hit, which is what you want when the count of a value matters.
+- `limit` (number, default `0`): Max matches per field. `0` is all of them.
+
+**Response (Success):**
+
+```json
+{
+  "success": true,
+  "name": "Link Finder",
+  "pattern": {
+    "search": "(http(s?)://...)",
+    "regexp": true,
+    "caseSensitive": false,
+    "wholeWord": false
+  },
+  "regex": "(?i)(http(s?)://...)",
+  "values": [
+    "https://example.com/app.js",
+    "/v2/auth/authorize/"
+  ],
+  "count": 2,
+  "skipped": {
+    "1234567890123456": "too long to be a record id"
+  }
+}
+```
+
+- `values` is the whole result: the matched strings, in the order the ids and then the `fields` were given, deduped unless `unique` is `false`. `count` is its length.
+- There is no per-row or per-field breakdown and no match offsets. An extraction is wanted as a list, and carrying every hit a second time with its position was bulk rather than signal — particularly for the AI, which pays for it by the token.
+- `pattern` echoes the pattern that ran, `regex` is what it compiled to — useful for seeing where the `(?i)` and `\b` came from.
+- `skipped` only appears when an id was unusable — keyed on the id as you sent it. The rest of the batch still runs.
+
+**Examples:**
+
+Every link in one response, using the seeded search:
+
+```sh
+curl -X POST http://127.0.0.1:8090/api/extract/values \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: $TOKEN" \
+  -d '{ "ids": ["476"], "name": "Link Finder" }'
+```
+
+An inline pattern across several rows, keeping only the capture group:
+
+```json
+{
+  "ids": ["476", "477", "480"],
+  "search": "Authorization: Bearer ([A-Za-z0-9._-]+)",
+  "group": 1,
+  "fields": ["req.raw"]
+}
+```
+
+A literal, case-sensitive, whole-word search rather than a pattern:
+
+```json
+{
+  "ids": ["476"],
+  "search": "DEBUG",
+  "regexp": false,
+  "caseSensitive": true,
+  "wholeWord": true
+}
+```
+
+The first 5 emails per response, duplicates kept:
+
+```json
+{
+  "ids": ["476", "477"],
+  "name": "Emails",
+  "fields": ["resp.raw"],
+  "limit": 5,
+  "unique": false
+}
+```
+
+**Pattern dialect:**
+
+Saved searches are stored in the JavaScript dialect — the frontend feeds them straight to `new RegExp()`. This endpoint compiles them with Go's RE2, which has no lookaround and no backreferences. A pattern that needs either is rejected with a 400 rather than quietly matching something else. All six seeded defaults compile.
+
+**Error Responses:**
+
+- 400 Bad Request - No target rows, no pattern, an unknown `name`, or a pattern RE2 cannot compile. The body carries `error`, plus `skipped` when targets were the problem.
+- 403 Forbidden - Unauthorized.
+
+**Same tool elsewhere:**
+
+The MCP server and the frontend AI both expose this as `extractValues`, sharing `extractValuesLogic` with the endpoint. Same inputs.
+
+```json
+{
+  "name": "extractValues",
+  "arguments": {
+    "ids": ["476"],
+    "name": "Juicy Words",
+    "fields": ["resp.raw"]
+  }
+}
+```
 
 ---
 

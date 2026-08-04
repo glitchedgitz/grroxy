@@ -3,6 +3,45 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v2026.4.3]
+
+### Changed
+
+- **Quick searches moved to the launcher** — Saved searches (Link Finder, Juicy Words, JS Comments, HTML Comments, Hidden Fields, Emails) are global settings, so they now live in `_searches` on the launcher instead of a frontend-created `search` collection inside each project DB. A search saved in one project is visible in all of them.
+- **Backend owns the defaults** — `schemas.DefaultSearches` in `internal/schemas/search.go` is the single source; seeded by `cmd/grroxy/migrations/1785847142_searches.go`. Insert is keyed on name and skips existing rows, so restarts don't duplicate. `_searches` schema unchanged (`name` + `data`).
+- **Frontend `quicksearch` store repointed** — `lib/scripts/quicksearch.ts` now talks to `launcher.pb()` instead of `backend.pb()`, and maps the collection's `data` field to `search` at the store boundary so no consumer changed. Collection creation and the JS-side default seeding are gone.
+- **One-time import of custom searches** — `importFromProject()` copies any project-side `search` row whose name isn't already in `_searches` when a project is opened. Idempotent via the unique name index; the old project collection is left in place.
+
+### Added
+
+- **`/dev/searches`** — Dev page to test saved searches against a sample body. Runs each pattern through `new RegExp(p, 'gi')`, the same path `search_worker.ts` uses, and shows the raw stored pattern JSON-escaped so double-escaping bugs are visible rather than silently matching nothing.
+- **Search pattern tests** — `internal/schemas/search_test.go` guards unique names, doubled backslashes, and literal newlines in `DefaultSearches`.
+- **`POST /api/extract/values`** — Extracts values out of stored raw requests/responses with a quick search. Target rows by `ids`. The pattern is either inline (`search`/`pattern` plus `regexp`, `caseSensitive`, `wholeWord`) or named with `name`, which reads the saved search off the launcher and falls back to the project db. Searches `req.raw` + `resp.raw` by default, any `req.*`/`resp.*`/`*_edited.*` field via `fields`. Supports `group` (capture group), `unique`, and `limit`. Returns a flat `values` list and nothing else — no per-row or per-field breakdown, no match offsets. An extraction is wanted as a list, and carrying every hit a second time with its position was bulk rather than signal, which the AI pays for by the token. Unusable ids land in `skipped` instead of failing the batch.
+- **Rows are targeted by id, never by index** — `RowTargets` (shared by both endpoints above) is a single `ids []string`. An index does not identify a row: `index_minor` splits one index across several, so `5`, `5.1` and `5.11` are different requests. The first cut resolved indexes through `_data` with `index = {:index}`, which returned all of them — asking for `5` downloaded `5.1` too, and there was no way to ask for `5.11` alone. Ids also drop the `_data` round trip entirely, since `_req`/`_resp` are keyed on the same id. Underscore padding is optional: an id containing `_` is taken as stored, otherwise it is left-padded to 15. Ids over 15 chars, or carrying a `/` or `\`, are rejected — `downloadRequest` turns an id into a file name, and `../../../etc/pw` is exactly 15 chars with no underscore, so it would otherwise have passed validation untouched and written outside the target directory. Singular `index`/`id` aliases are gone — an array covers the one-item case.
+- **`SearchPattern.Compile()`** — The JS→RE2 conversion the notes below call for, in `internal/schemas/search.go`. Non-regexp searches are quoted, `caseSensitive` becomes a pattern flag, `wholeWord` wraps a *grouped* pattern in `\b` so boundaries bind to the whole alternation. A pattern RE2 can't compile errors out rather than matching differently.
+- **`POST /api/request/download`** — Writes the raw request/response of stored rows out to files and returns the paths. Rows come from `ids`, sharing `resolveExtractTargets` with `/api/extract/values`. `part` is `req` (default), `resp`, or `both` — `both` writes two files per row rather than concatenating two raw HTTP messages. `edited: true` prefers the `_req_edited`/`_resp_edited` copy and falls back to the original. The response is `{success, files, count}`, each file `{id, path, bytes}` — the `_req`/`_resp` suffix in the path is what distinguishes the two sides, so a separate field for it would only be noise. No `_data` read: the id already carries the index, so the row's raw text is two lookups at most.
+
+  Location and name are deliberately not caller options — every file is `requests/{id}_{part}.txt` (`requests/476_req.txt`, `requests/476_resp.txt`) under the project working directory (`Config.CWD()`, new), the one the CWD explorer browses, in a `requests/` subfolder so downloads don't litter the top of it. The part suffix keeps `part: "both"` from writing the two sides over each other, and says which side a file is without opening it. A download the user asked for has to turn up where they are already looking, so there is nothing useful to configure and plenty to get wrong. The id names the file for the same reason it targets the row: `5` and `5.11` are different requests a bare index would have collided. Note `Config.CWD()` is the *project* directory, not `GetFilePath`'s `"cwd"`, which resolves to the process working directory.
+
+  Saves server side rather than streaming a browser download, which is what makes it usable from MCP and the AI. Exposed as `downloadRequest` on both.
+- **`extractValues` on MCP and the frontend AI** — The same extraction as an agent tool on both surfaces, sharing `extractValuesLogic` with the endpoint. Registered in `apps/app/mcp.go` (`ExtractValuesArgs` + `extractValuesHandler`) and defined in `aitools.ts` with its handler in `aibackend.ts`, which forwards to the new `backend.extractValues()` client method. Inline titles in `aitooltitles.ts`; `optimizeMessages` drops `rows` from older turns since `values` already carries the result.
+
+### Fixed
+
+- **`ResponseToByte` left a `Content-Encoding` header on a decompressed body** — The function has always decompressed gzip/br/x-gzip before dumping, but the `Header.Del("Content-Encoding")` was commented out, so the stored raw response claimed to be compressed while holding plaintext. Anything reading it back would try to decompress again. The header is now cloned rather than shared with the caller's response, then the encoding dropped on the decompressed path. `internal/utils` `TestResponseToByte` and `TestResponseToByteWithChunkedEncoding` were already asserting this and had been failing.
+- **Launcher startup banner had a format verb with no argument** — Five `%s`, four arguments; `go vet` flagged it, which failed the whole `apps/launcher` package under `go test`. The extra verb was a "Proxy Listening On" line, which has no value to print at launcher boot: proxies are started per project through `/api/proxy/start`. Line removed.
+- **`internal/sdk` tests failed instead of skipping without their fixture** — Every test there but `TestAuthorizeAnonymous` needs a live PocketBase on `127.0.0.1:8090` seeded with the `r--w/pocketbase` migration collections, and nothing in this repo starts one. They now probe for a fixture collection and skip when it is absent. The probe checks for the collection rather than the port because grroxy itself listens on that address during normal use, and answers without being the fixture.
+
+### Removed
+
+- **`quicksearch.reset()`** — Deleted the collection it was pointed at, which is now backend-managed schema. Its "Reset Quicksearch" dev button is gone too.
+
+### Notes
+
+- Stored patterns are **JavaScript dialect** — the frontend feeds them straight to `new RegExp()`. Anything consuming them from Go has to convert: RE2 has no lookahead and no backreferences.
+- Patterns copied out of the old `DEFAULT_SEARCHES()` need their escapes halved. The template literals collapsed `\\s` to `\s` before storing; a Go raw string does not.
+- MCP still has no quick-search tools, so `getQuickSearchSets` / `addQuickSearchSet` / `deleteQuickSearchSet` remain frontend-AI only.
+
 ## [v2026.4.2] - v0.29.1
 
 - Fix: Proxy tab reactivity issue due to svelte 3 and svelte 5 conflicts.
