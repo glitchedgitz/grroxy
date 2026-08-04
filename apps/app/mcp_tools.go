@@ -10,13 +10,17 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 	"time"
+
+	"github.com/glitchedgitz/dadql/fexpr"
 
 	"github.com/glitchedgitz/grroxy/grx/templates"
 	"github.com/glitchedgitz/grroxy/grx/version"
 	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/glitchedgitz/pocketbase/models"
+	"github.com/glitchedgitz/pocketbase/models/schema"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/pocketbase/dbx"
 )
@@ -28,6 +32,129 @@ func trimHost(host string) string {
 		return host
 	}
 	return u.Scheme + "://" + u.Host
+}
+
+// dataFields are the root field names that live on the "_data" collection (or on
+// its own relations, eg. req.url / resp.status) instead of on the per-host
+// sitemap collection. A filter run against a host collection has to reach them
+// through the "data" relation.
+var dataFields = map[string]bool{
+	"id":               true,
+	"index":            true,
+	"index_minor":      true,
+	"host":             true,
+	"port":             true,
+	"has_params":       true,
+	"has_resp":         true,
+	"is_https":         true,
+	"http":             true,
+	"proxy_id":         true,
+	"is_req_edited":    true,
+	"is_resp_edited":   true,
+	"req":              true,
+	"resp":             true,
+	"req_edited":       true,
+	"resp_edited":      true,
+	"req_json":         true,
+	"resp_json":        true,
+	"req_edited_json":  true,
+	"resp_edited_json": true,
+	"generated_by":     true,
+	"extra":            true,
+	"attached":         true,
+	"action":           true,
+}
+
+// isSitemapCollection reports whether the collection reaches request data through
+// a "data" relation (per-host sitemap collections) rather than holding it directly
+// (eg. "_data" itself).
+func isSitemapCollection(collection *models.Collection) bool {
+	field := collection.Schema.GetFieldByName("data")
+	return field != nil && field.Type == schema.FieldTypeRelation
+}
+
+// prefixDataFilter rewrites a user/AI supplied filter so that fields belonging to
+// "_data" are addressed through the sitemap collection's "data" relation, eg.
+// "req.url ~ '.js'" → "data.req.url ~ '.js'". Only meaningful for sitemap
+// collections — see isSitemapCollection. Mirrors updateFilterForHosts() in the
+// frontend (cybernetic-ui/src/lib/scripts/utility.ts).
+//
+// The filter is broken up with the same fexpr scanner the query itself uses, so
+// only real identifier tokens are touched — quoted text, regexes and comments are
+// left alone. An unscannable filter is returned as-is so that the query reports
+// the actual syntax error instead of this.
+func prefixDataFilter(filter string) string {
+	prefixed, err := prefixDataTokens(filter)
+	if err != nil {
+		return filter
+	}
+	return prefixed
+}
+
+func prefixDataTokens(filter string) (string, error) {
+	scanner := fexpr.NewScanner(strings.NewReader(filter))
+
+	parts := []string{}
+
+	for {
+		t, err := scanner.Scan()
+		if err != nil {
+			return "", err
+		}
+
+		switch t.Type {
+		case fexpr.TokenEOF:
+			return strings.Join(parts, " "), nil
+		case fexpr.TokenWS, fexpr.TokenComment:
+			continue // dropped, the parts are re-joined with a single space
+		case fexpr.TokenIdentifier:
+			parts = append(parts, prefixDataIdentifier(t.Literal))
+		case fexpr.TokenText:
+			// the scanner unquotes and unescapes, so quote it back
+			parts = append(parts, "'"+strings.ReplaceAll(t.Literal, "'", `\'`)+"'")
+		case fexpr.TokenRegex:
+			parts = append(parts, "/"+strings.ReplaceAll(t.Literal, "/", `\/`)+"/")
+		case fexpr.TokenGroup:
+			// the group literal holds the unwrapped inner expression
+			inner, err := prefixDataTokens(t.Literal)
+			if err != nil {
+				return "", err
+			}
+			parts = append(parts, "("+inner+")")
+		default: // sign, logical op, number
+			parts = append(parts, t.Literal)
+		}
+	}
+}
+
+// hostSearchFilter builds the "_hosts" filter for a free text search, returning
+// an empty filter when there is nothing to search for (the caller then has to
+// fall back to FindRecordsByExpr).
+//
+// NB! the filter grammar only understands the AND/OR/NOT keywords, not && / ||
+// — see the fexpr scanner in glitchedgitz/dadql.
+func hostSearchFilter(search string) (string, dbx.Params) {
+	search = strings.TrimSpace(search)
+
+	params := dbx.Params{"search": search}
+	if search == "" {
+		return "", params
+	}
+
+	return "host ~ {:search} OR title ~ {:search} OR domain ~ {:search}", params
+}
+
+// prefixDataIdentifier prefixes a single identifier if its root field lives on
+// "_data". Values that happen to be identifiers (true, false, null, ...) and
+// fields of the sitemap collection itself (path, query, ext, ...) are left alone.
+func prefixDataIdentifier(identifier string) string {
+	root, _, _ := strings.Cut(identifier, ".")
+
+	if root == "data" || !dataFields[root] {
+		return identifier
+	}
+
+	return "data." + identifier
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +174,7 @@ type HostPrintSitemapArgs struct {
 type HostPrintRowsArgs struct {
 	Host   string `json:"host" jsonschema:"required" jsonschema_description:"the host to get the table for"`
 	Page   int    `json:"page" jsonschema:"required" jsonschema_description:"the page to get the data from, start from 1"`
-	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search"`
+	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search, eg. \"req.url ~ '.js'\" or \"resp.status = 200\". Fields: req/req_edited (url, path, query, fragment, ext, raw, length, has_cookies, headers.NAME), resp/resp_edited (title, mime, status, length, raw, has_cookies), host, port, is_https, http, has_params, has_resp, generated_by, index. Use empty string for no filter"`
 }
 
 type SendRequestArgs struct {
@@ -149,12 +276,12 @@ type TemplateReadArgs struct {
 }
 
 type TemplateUpdateArgs struct {
-	Id      string            `json:"id" jsonschema:"required" jsonschema_description:"Template record ID to update"`
-	Title   string            `json:"title,omitempty" jsonschema_description:"Update title"`
-	Mode    string            `json:"mode,omitempty" jsonschema_description:"Update mode"`
+	Id      string              `json:"id" jsonschema:"required" jsonschema_description:"Template record ID to update"`
+	Title   string              `json:"title,omitempty" jsonschema_description:"Update title"`
+	Mode    string              `json:"mode,omitempty" jsonschema_description:"Update mode"`
 	Hooks   map[string][]string `json:"hooks,omitempty" jsonschema_description:"Update hooks"`
-	Tasks   []TemplateTaskArg `json:"tasks,omitempty" jsonschema_description:"Update tasks"`
-	Enabled *bool             `json:"enabled,omitempty" jsonschema_description:"Enable/disable template"`
+	Tasks   []TemplateTaskArg   `json:"tasks,omitempty" jsonschema_description:"Update tasks"`
+	Enabled *bool               `json:"enabled,omitempty" jsonschema_description:"Enable/disable template"`
 }
 
 type ProxyScreenshotArgs struct {
@@ -365,13 +492,17 @@ func (backend *Backend) hostPrintRowsInDetailsHandler(ctx context.Context, reque
 	}
 
 	var records []*models.Record
-	if args.Filter == "" {
+	filter := strings.TrimSpace(args.Filter)
+	if isSitemapCollection(collection) {
+		filter = prefixDataFilter(filter)
+	}
+	if filter == "" {
 		records, err = dao.FindRecordsByExpr(collection.Id)
 	} else {
-		records, err = dao.FindRecordsByFilter(collection.Id, args.Filter, "-created", perPage, offset)
+		records, err = dao.FindRecordsByFilter(collection.Id, filter, "-created", perPage, offset)
 	}
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to fetch records: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to fetch records with filter %q: %v", filter, err)), nil
 	}
 
 	// Expand the "data" relation to get _data records
@@ -472,10 +603,7 @@ func (backend *Backend) listHostsHandler(ctx context.Context, request mcp.CallTo
 		offset = (args.Page - 1) * perPage
 	}
 
-	filter := ""
-	if args.Search != "" {
-		filter = fmt.Sprintf("host ~ '%s' || title ~ '%s' || domain ~ '%s'", args.Search, args.Search, args.Search)
-	}
+	filter, params := hostSearchFilter(args.Search)
 
 	var records []*models.Record
 	var err error
@@ -483,11 +611,11 @@ func (backend *Backend) listHostsHandler(ctx context.Context, request mcp.CallTo
 	if filter == "" {
 		records, err = dao.FindRecordsByExpr("_hosts")
 	} else {
-		records, err = dao.FindRecordsByFilter("_hosts", filter, "-created", perPage, offset)
+		records, err = dao.FindRecordsByFilter("_hosts", filter, "-created", perPage, offset, params)
 	}
 
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to fetch hosts: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to fetch hosts with search %q: %v", args.Search, err)), nil
 	}
 
 	// Expand tech and labels relations
@@ -524,7 +652,7 @@ func (backend *Backend) listHostsHandler(ctx context.Context, request mcp.CallTo
 	if filter == "" {
 		total, _ = dao.FindRecordsByExpr("_hosts")
 	} else {
-		total, _ = dao.FindRecordsByFilter("_hosts", filter, "", 0, 0)
+		total, _ = dao.FindRecordsByFilter("_hosts", filter, "", 0, 0, params)
 	}
 
 	result := map[string]any{
@@ -1600,16 +1728,16 @@ func (backend *Backend) templateCreateHandler(ctx context.Context, request mcp.C
 	}
 
 	body := map[string]any{
-		"name":       args.Name,
-		"title":      args.Title,
+		"name":        args.Name,
+		"title":       args.Title,
 		"description": args.Description,
-		"type":       "actions",
-		"mode":       args.Mode,
-		"hooks":      args.Hooks,
-		"tasks":      args.Tasks,
-		"enabled":    args.Enabled,
-		"global":     true,
-		"is_default": false,
+		"type":        "actions",
+		"mode":        args.Mode,
+		"hooks":       args.Hooks,
+		"tasks":       args.Tasks,
+		"enabled":     args.Enabled,
+		"global":      true,
+		"is_default":  false,
 	}
 	if args.Mode == "" {
 		body["mode"] = "any"
