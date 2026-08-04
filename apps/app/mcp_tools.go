@@ -21,6 +21,7 @@ import (
 	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/glitchedgitz/pocketbase/models"
 	"github.com/glitchedgitz/pocketbase/models/schema"
+	pbtypes "github.com/glitchedgitz/pocketbase/tools/types"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/pocketbase/dbx"
 )
@@ -125,6 +126,29 @@ func prefixDataTokens(filter string) (string, error) {
 			parts = append(parts, t.Literal)
 		}
 	}
+}
+
+// withoutHeaders decodes a json column value and drops its "headers" entry.
+//
+// NB! record.Get() returns a json column as types.JsonRaw (raw bytes), never as
+// a map, so a json field has to be unmarshalled before anything can be removed
+// from it. Headers are by far the bulk of a req/resp row and are useless in a
+// listing — leaving them in blows the tool result past the token limit.
+func withoutHeaders(value any) any {
+	raw, ok := value.(pbtypes.JsonRaw)
+	if !ok {
+		return value
+	}
+
+	// decoded stays nil for a json null, which must not turn into an empty object
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil || decoded == nil {
+		return value // not an object, hand it back untouched
+	}
+
+	delete(decoded, "headers")
+
+	return decoded
 }
 
 // hostSearchFilter builds the "_hosts" filter for a free text search, returning
@@ -485,24 +509,36 @@ func (backend *Backend) hostPrintRowsInDetailsHandler(ctx context.Context, reque
 		return mcp.NewToolResultError(fmt.Sprintf("host not found: %s", host)), nil
 	}
 
-	perPage := 50
-	offset := 0
-	if args.Page > 1 {
-		offset = (args.Page - 1) * perPage
+	perPage := 20
+	page := args.Page
+	if page < 1 {
+		page = 1
 	}
+	offset := (page - 1) * perPage
 
 	var records []*models.Record
 	filter := strings.TrimSpace(args.Filter)
 	if isSitemapCollection(collection) {
 		filter = prefixDataFilter(filter)
 	}
+	// one extra record is fetched to tell whether a next page exists
 	if filter == "" {
-		records, err = dao.FindRecordsByExpr(collection.Id)
+		records = []*models.Record{}
+		err = dao.RecordQuery(collection).
+			OrderBy("created DESC").
+			Limit(int64(perPage + 1)).
+			Offset(int64(offset)).
+			All(&records)
 	} else {
-		records, err = dao.FindRecordsByFilter(collection.Id, filter, "-created", perPage, offset)
+		records, err = dao.FindRecordsByFilter(collection.Id, filter, "-created", perPage+1, offset)
 	}
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to fetch records with filter %q: %v", filter, err)), nil
+	}
+
+	hasMore := len(records) > perPage
+	if hasMore {
+		records = records[:perPage]
 	}
 
 	// Expand the "data" relation to get _data records
@@ -514,16 +550,9 @@ func (backend *Backend) hostPrintRowsInDetailsHandler(ctx context.Context, reque
 	for _, record := range records {
 		expanded := record.ExpandedAll("data")
 		for _, dataRecord := range expanded {
-			reqJSON := dataRecord.Get("req_json")
-			respJSON := dataRecord.Get("resp_json")
-
-			// Remove headers from req/resp to keep response compact
-			if req, ok := reqJSON.(map[string]any); ok {
-				delete(req, "headers")
-			}
-			if resp, ok := respJSON.(map[string]any); ok {
-				delete(resp, "headers")
-			}
+			// Remove headers from req/resp to keep the response compact
+			reqJSON := withoutHeaders(dataRecord.Get("req_json"))
+			respJSON := withoutHeaders(dataRecord.Get("resp_json"))
 
 			rows = append(rows, map[string]any{
 				"id":           dataRecord.GetString("id"),
@@ -542,9 +571,11 @@ func (backend *Backend) hostPrintRowsInDetailsHandler(ctx context.Context, reque
 	}
 
 	result := map[string]any{
-		"host":      host,
-		"totalRows": len(rows),
-		"rows":      rows,
+		"host":    host,
+		"page":    page,
+		"perPage": perPage,
+		"rows":    rows,
+		"hasMore": hasMore,
 	}
 
 	return mcpJSONResult(result)

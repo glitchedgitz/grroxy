@@ -1,12 +1,15 @@
 package app
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/glitchedgitz/grroxy/internal/schemas"
 	"github.com/glitchedgitz/pocketbase/models"
 	"github.com/glitchedgitz/pocketbase/tools/search"
+	pbtypes "github.com/glitchedgitz/pocketbase/tools/types"
 )
 
 // sitemapResolver accepts the fields a per-host sitemap collection actually
@@ -109,6 +112,78 @@ func TestIsSitemapCollection(t *testing.T) {
 	data := &models.Collection{Schema: schemas.Rows}
 	if isSitemapCollection(data) {
 		t.Fatal("isSitemapCollection(_data collection) = true, want false")
+	}
+}
+
+// --- bug: headers were never stripped, blowing the result past the token limit ---
+
+// record.Get() hands back a json column as types.JsonRaw, so a plain
+// map[string]any type assertion silently never matches. The rows must come out
+// of a real record to keep that trap covered.
+func dataRecord(t *testing.T, reqJSON string) *models.Record {
+	t.Helper()
+
+	collection := &models.Collection{Schema: schemas.Rows}
+	collection.Name = "_data"
+
+	record := models.NewRecord(collection)
+	record.Set("req_json", reqJSON)
+
+	return record
+}
+
+func TestWithoutHeadersStripsRecordJSON(t *testing.T) {
+	record := dataRecord(t, `{"url":"/a.js","ext":".js","headers":{"Cookie":"secret","User-Agent":"x"}}`)
+
+	stripped := withoutHeaders(record.Get("req_json"))
+
+	decoded, ok := stripped.(map[string]any)
+	if !ok {
+		t.Fatalf("withoutHeaders() = %T, want map[string]any", stripped)
+	}
+
+	if _, exists := decoded["headers"]; exists {
+		t.Fatal("withoutHeaders() kept the headers entry")
+	}
+
+	if decoded["url"] != "/a.js" || decoded["ext"] != ".js" {
+		t.Fatalf("withoutHeaders() = %v, want the other fields preserved", decoded)
+	}
+}
+
+// the regression itself: headers must not survive into the marshalled result
+func TestWithoutHeadersKeepsMarshalledRowSmall(t *testing.T) {
+	record := dataRecord(t, `{"url":"/a.js","headers":{"Cookie":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}`)
+
+	row := map[string]any{"req": withoutHeaders(record.Get("req_json"))}
+
+	encoded, err := json.Marshal(row)
+	if err != nil {
+		t.Fatalf("json.Marshal() = %v", err)
+	}
+
+	if strings.Contains(string(encoded), "headers") || strings.Contains(string(encoded), "Cookie") {
+		t.Fatalf("marshalled row still carries the headers: %s", encoded)
+	}
+}
+
+func TestWithoutHeadersPassesThroughNonObjects(t *testing.T) {
+	scenarios := []struct {
+		name  string
+		value any
+	}{
+		{"not a json column", "plain string"},
+		{"json null", pbtypes.JsonRaw([]byte("null"))},
+		{"json array", pbtypes.JsonRaw([]byte(`["a"]`))},
+		{"invalid json", pbtypes.JsonRaw([]byte("{oops"))},
+	}
+
+	for _, s := range scenarios {
+		t.Run(s.name, func(t *testing.T) {
+			if got := withoutHeaders(s.value); !reflect.DeepEqual(got, s.value) {
+				t.Fatalf("withoutHeaders(%v) = %v, want it returned untouched", s.value, got)
+			}
+		})
 	}
 }
 
