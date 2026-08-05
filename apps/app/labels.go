@@ -1,8 +1,11 @@
 package app
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/pocketbase/apis"
@@ -10,6 +13,13 @@ import (
 	"github.com/glitchedgitz/pocketbase/models"
 	"github.com/labstack/echo/v5"
 	"github.com/pocketbase/dbx"
+)
+
+// A label needs a color and a type, and a caller attaching one rarely cares
+// which — these are what the template actions already default to.
+const (
+	defaultLabelColor = "blue"
+	defaultLabelType  = "custom"
 )
 
 func (backend *Backend) LabelNew(e *core.ServeEvent) error {
@@ -133,6 +143,36 @@ func (backend *Backend) LabelDelete(e *core.ServeEvent) error {
 	return nil
 }
 
+// AttachLabelRequest is the POST /api/label/attach body.
+//
+// The label is named, not id'd, and created when it does not exist yet —
+// attaching a label the user has not defined first is the common case.
+type AttachLabelRequest struct {
+	// IDs are the rows to attach to, by record id.
+	RowTargets
+	// ID is the single row form the endpoint has always taken, kept so the
+	// existing callers (frontend sidebar, sdk) keep working.
+	ID string `json:"id"`
+
+	Name  string `json:"name"`
+	Color string `json:"color"`
+	Type  string `json:"type"`
+}
+
+type AttachLabelResponse struct {
+	Success bool      `json:"success"`
+	Label   LabelInfo `json:"label"`
+	// Created reports whether the label itself was new.
+	Created bool `json:"created"`
+	// Attached holds the rows the label was put on by this call,
+	// AlreadyAttached the ones that already carried it.
+	Attached        []string          `json:"attached"`
+	AlreadyAttached []string          `json:"alreadyAttached,omitempty"`
+	Skipped         map[string]string `json:"skipped,omitempty"`
+}
+
+// LabelAttach attaches a label to one or more rows, creating the label if it is
+// new.
 func (backend *Backend) LabelAttach(e *core.ServeEvent) error {
 	e.Router.AddRoute(echo.Route{
 		Method: http.MethodPost,
@@ -147,85 +187,184 @@ func (backend *Backend) LabelAttach(e *core.ServeEvent) error {
 				return c.String(http.StatusForbidden, "")
 			}
 
-			var data types.Label
-			if err := c.Bind(&data); err != nil {
-				log.Println("[LabelNew]: ", err)
-				return err
+			var body AttachLabelRequest
+			if err := c.Bind(&body); err != nil {
+				log.Println("[LabelAttach]: ", err)
+				return c.JSON(http.StatusBadRequest, map[string]any{"error": "Invalid request body"})
 			}
 
-			// Saving to main collection if doesn't exists
-			mainCollection, err := backend.App.Dao().FindCollectionByNameOrId("_labels")
+			resp, skipped, err := backend.attachLabelLogic(body)
 			if err != nil {
-				log.Println("[LabelNew]: ", err)
-				return err
+				log.Println("[LabelAttach]: ", err)
+				return c.JSON(http.StatusBadRequest, map[string]any{"error": err.Error(), "skipped": skipped})
 			}
 
-			record := models.NewRecord(mainCollection)
-
-			// set individual fields
-			// or bulk load with record.Load(map[string]any{...})
-			record.Set("name", data.Name)
-			record.Set("color", data.Color)
-			record.Set("type", data.Type)
-
-			err = backend.App.Dao().SaveRecord(record)
-			// =====================
-
-			// Fetching ID
-			// TOOD: we should have list of labels here with ids, instead of fetching it every time
-			labelRecord, err2 := backend.App.Dao().FindFirstRecordByData("_labels", "name", data.Name)
-
-			if err2 != nil {
-				log.Println("[LabelNew]: ", err)
-				return err
-			}
-
-			// // If first error is not nil, means row just created, we need to create respective `label_[id]` collection
-			// var collection = "label_" + labelRecord.Id
-			// if err == nil {
-			// 	// TODO: This is unnecessary todo everytime
-			// 	// Create Collection if not exists
-			// 	err = backend.CreateCollection(collection, schemas.LabelCollection)
-			// 	if err != nil {
-			// 		log.Println("[LabelNew]: ", err)
-			// 		return err
-			// 	}
-			// }
-
-			// // Inserting in the `label_[id]` Collection
-			// result2, err := backend.App.Dao().DB().Insert(collection, dbx.Params{
-			// 	"id":   data.ID,
-			// 	"data": data.ID,
-			// }).Execute()
-			// if err != nil {
-			// 	log.Println("[LabelNew]: ", err)
-			// 	return err
-			// }
-
-			// log.Println("[LabelNew]: ", result2)
-
-			// Attaching to the row
-			record3, err := backend.App.Dao().FindRecordById("_attached", data.ID)
-			if err != nil {
-				log.Println("[LabelNew]: ", err)
-				return err
-			}
-
-			record3.Set("labels", append(record3.GetStringSlice("labels"), labelRecord.Id))
-
-			if err := backend.App.Dao().SaveRecord(record3); err != nil {
-				log.Println("[LabelNew]: ", err)
-				return err
-			}
-
-			// Increment counter for this label
-			backend.CounterManager.Increment("label:"+labelRecord.Id, "_labels", "")
-
-			return c.String(http.StatusOK, "Created")
+			return c.JSON(http.StatusOK, resp)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
+}
+
+// attachLabelLogic is the work behind /api/label/attach and the attachLabel MCP
+// tool.
+//
+// A row that cannot be attached to lands in skipped rather than failing the
+// batch — one bad id out of twenty should not cost the other nineteen.
+func (backend *Backend) attachLabelLogic(body AttachLabelRequest) (AttachLabelResponse, map[string]string, error) {
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		return AttachLabelResponse{}, nil, fmt.Errorf("name is required")
+	}
+
+	ids, skipped, err := backend.resolveExtractTargets(attachTargets(body))
+	if err != nil {
+		return AttachLabelResponse{}, skipped, err
+	}
+	if skipped == nil {
+		skipped = make(map[string]string)
+	}
+
+	label, created, err := backend.findOrCreateLabel(name, body.Color, body.Type)
+	if err != nil {
+		return AttachLabelResponse{}, skipped, err
+	}
+
+	dao := backend.App.Dao()
+
+	attached := []string{}
+	already := []string{}
+
+	for _, id := range ids {
+		// the _attached record shares the row id and is written when the row
+		// is stored, so a missing one means the row itself is not there
+		record, err := dao.FindRecordById("_attached", id)
+		if err != nil || record == nil {
+			skipped[id] = "no such row"
+			continue
+		}
+
+		labels := record.GetStringSlice("labels")
+		if slices.Contains(labels, label.Id) {
+			already = append(already, id)
+			continue
+		}
+
+		record.Set("labels", append(labels, label.Id))
+		if err := dao.SaveRecord(record); err != nil {
+			skipped[id] = err.Error()
+			continue
+		}
+
+		// only a real attach moves the counter, or re-attaching an existing
+		// label would inflate the count the sidebar shows
+		if backend.CounterManager != nil {
+			backend.CounterManager.Increment("label:"+label.Id, "_labels", "")
+		}
+
+		attached = append(attached, id)
+	}
+
+	resp := AttachLabelResponse{
+		Success:         true,
+		Label:           backend.labelInfo(label),
+		Created:         created,
+		Attached:        attached,
+		AlreadyAttached: already,
+	}
+	if len(skipped) > 0 {
+		resp.Skipped = skipped
+	}
+
+	return resp, skipped, nil
+}
+
+// attachTargets is the rows an attach call names. The endpoint has always taken
+// a single "id" and the tools take "ids", so both are accepted and folded into
+// one list — resolveExtractTargets drops the duplicate when a caller sends the
+// same row in both.
+func attachTargets(body AttachLabelRequest) RowTargets {
+	targets := body.RowTargets
+
+	if id := strings.TrimSpace(body.ID); id != "" {
+		targets.IDs = append(targets.IDs, id)
+	}
+
+	return targets
+}
+
+// findOrCreateLabel returns the label with this name, creating it when there is
+// none. The name is matched case-insensitively so that "SQLi" attaches to an
+// existing "sqli" instead of creating a near duplicate.
+func (backend *Backend) findOrCreateLabel(name, color, labelType string) (*models.Record, bool, error) {
+	dao := backend.App.Dao()
+
+	if record, err := backend.findLabelByName(name); err != nil {
+		return nil, false, err
+	} else if record != nil {
+		return record, false, nil
+	}
+
+	if color = strings.TrimSpace(color); color == "" {
+		color = defaultLabelColor
+	}
+	if labelType = strings.TrimSpace(labelType); labelType == "" {
+		labelType = defaultLabelType
+	}
+
+	collection, err := dao.FindCollectionByNameOrId("_labels")
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to find the labels collection: %w", err)
+	}
+
+	record := models.NewRecord(collection)
+	record.Set("name", name)
+	record.Set("color", color)
+	record.Set("type", labelType)
+
+	if err := dao.SaveRecord(record); err != nil {
+		// names are unique, so a save that fails here is most likely a label
+		// created in between the lookup and this write
+		existing, ferr := backend.findLabelByName(name)
+		if ferr != nil || existing == nil {
+			return nil, false, fmt.Errorf("failed to create label %q: %w", name, err)
+		}
+		return existing, false, nil
+	}
+
+	return record, true, nil
+}
+
+// findLabelByName looks a label up by its exact name, case-insensitively.
+// A missing label is not an error — it is what tells the caller to create one.
+func (backend *Backend) findLabelByName(name string) (*models.Record, error) {
+	records, err := backend.labelsMatchingName(name)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, record := range records {
+		if strings.EqualFold(record.GetString("name"), name) {
+			return record, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// labelsMatchingName returns the labels whose name contains the given one —
+// "~" is a LIKE, so an exact hit and the labels that merely contain it come
+// back together and the caller decides which of them it meant.
+func (backend *Backend) labelsMatchingName(name string) ([]*models.Record, error) {
+	records, err := backend.App.Dao().FindRecordsByFilter(
+		"_labels", "name ~ {:name}", "name", 0, 0,
+		dbx.Params{"name": name},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read labels: %w", err)
+	}
+
+	return records, nil
 }

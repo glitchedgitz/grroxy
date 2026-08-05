@@ -176,6 +176,30 @@ func (backend *Backend) mcpInit() {
 	)
 
 	s.AddTool(
+		mcp.NewTool("listLabels",
+			mcp.WithDescription("List the labels that exist, with their color, type and how many rows each one is attached to. Labels are how requests are tagged and grouped — call this first to learn the names, then getRequestsByLabel to read the requests behind one"),
+			mcp.WithInputSchema[ListLabelsArgs](),
+		),
+		backend.listLabelsHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("getRequestsByLabel",
+			mcp.WithDescription("Get the requests carrying a label, by label name. Returns a page of rows with their id, host, request and response (headers stripped), plus the other labels on the row. Narrow further with an extra filter or a host. Use the returned ids with getRequestResponseFromID, extractValues or downloadRequest"),
+			mcp.WithInputSchema[GetRequestsByLabelArgs](),
+		),
+		backend.getRequestsByLabelHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("attachLabel",
+			mcp.WithDescription("Attach a label to one or more requests, by row id. The label is named — an existing one of that name is reused, otherwise it is created. This is how a finding is marked on the rows it was found in, so it can be read back later with getRequestsByLabel"),
+			mcp.WithInputSchema[AttachLabelArgs](),
+		),
+		backend.attachLabelHandler,
+	)
+
+	s.AddTool(
 		mcp.NewTool("modifyHostNotes",
 			mcp.WithDescription("Add, update, or remove notes for a host"),
 			mcp.WithInputSchema[ModifyHostNotesArgs](),

@@ -38,6 +38,8 @@ POST      /api/cook/search
 POST      /api/label/new
 POST      /api/label/delete
 POST      /api/label/attach
+POST      /api/label/list
+POST      /api/label/requests
 
 # Regex
 POST      /api/regex
@@ -801,7 +803,14 @@ _Response:_
 
 ### Attach Label
 
-Attaches a label to a record.
+Attaches a label to one or more rows, by record id. The label is named: an
+existing one of that name is reused (matched case-insensitively), otherwise it
+is created with `color`/`type` — defaults `blue` and `custom`.
+
+Target rows by `ids`; the single `id` form is still accepted. A row that already
+carries the label is reported in `alreadyAttached` and does not move the label's
+counter twice; one that cannot be attached to lands in `skipped` rather than
+failing the batch.
 
 ```http
 POST /api/label/attach
@@ -809,14 +818,109 @@ POST /api/label/attach
 
 ```json
 {
-  "id": "string",
-  "name": "string"
+  "ids": ["476", "5.11"],
+  "name": "sqli",
+  "color": "red",
+  "type": "custom"
 }
 ```
 
-_Response:_
+```json
+{
+  "success": true,
+  "label": { "id": "abc123", "name": "sqli", "color": "red", "type": "custom", "count": 2 },
+  "created": true,
+  "attached": ["____________476"],
+  "alreadyAttached": ["___________5.11"]
+}
+```
 
-- 200 OK on success.
+MCP and the frontend AI expose the same call as `attachLabel`.
+
+---
+
+### List Labels
+
+Lists the labels that exist. `count` is how many rows the label is attached to,
+read off the same `label:{id}` counter the sidebar counts with. Both fields are
+optional, an empty body lists every label.
+
+```http
+POST /api/label/list
+```
+
+```json
+{
+  "search": "sql",
+  "type": "custom"
+}
+```
+
+```json
+{
+  "success": true,
+  "count": 2,
+  "labels": [
+    { "id": "abc123", "name": "sqli", "color": "#ff0000", "type": "custom", "count": 12 },
+    { "id": "def456", "name": "sql-error", "color": "#ffaa00", "type": "custom", "count": 3 }
+  ]
+}
+```
+
+---
+
+### Requests By Label
+
+Returns the requests carrying a label, named by label name — a name is what the
+row shows, so it is what the caller has. An exact name wins, a partial one is
+taken when only one label matches it; anything ambiguous is reported back rather
+than guessed at.
+
+Rows come back 20 at a time, sorted newest index first, with the headers
+stripped off `req`/`resp` to keep a page compact. `filter` is ANDed with the
+label and takes the same fields as a row filter elsewhere.
+
+```http
+POST /api/label/requests
+```
+
+```json
+{
+  "label": "sqli",
+  "page": 1,
+  "filter": "resp.status = 500",
+  "host": "https://example.com"
+}
+```
+
+```json
+{
+  "success": true,
+  "label": { "id": "abc123", "name": "sqli", "color": "#ff0000", "type": "custom", "count": 12 },
+  "page": 1,
+  "perPage": 20,
+  "count": 1,
+  "hasMore": false,
+  "rows": [
+    {
+      "id": "____________476",
+      "index": 476,
+      "index_minor": 0,
+      "host": "https://example.com",
+      "port": "443",
+      "has_resp": true,
+      "req": { "method": "GET", "url": "https://example.com/item?id=1" },
+      "resp": { "status": 500 },
+      "labels": ["sqli"],
+      "note": "error on quote"
+    }
+  ]
+}
+```
+
+`labels` is every label on the row, not just the one asked for. The row ids are
+the ones `/api/extract/values` and `/api/request/download` take. MCP and the
+frontend AI expose the same two calls as `listLabels` and `getRequestsByLabel`.
 
 ---
 

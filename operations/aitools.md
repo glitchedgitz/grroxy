@@ -48,3 +48,6 @@
 | 44 | ✅ | `proxyWaitForSelector` | Wait for Selector | Proxy | Easy | Wait for a CSS selector to become visible, useful for SPA transitions |
 | 45 | ✅ | `extractValues` | Extracting Values | Search | Medium | Pattern-matches raw req/resp for given indexes; saved `_searches` pattern by name or inline, compiled RE2 backend side |
 | 46 | ✅ | `downloadRequest` | Saving Request | Requests | Easy | Writes raw req/resp of given indexes to files server side, one per row, returns absolute paths |
+| 47 | ✅ | `listLabels` | List Labels | Labels | Easy | Lists `_labels` with color/type and the `label:{id}` counter, optional name/type narrowing |
+| 48 | ✅ | `getRequestsByLabel` | Get Requests By Label | Labels | Medium | Resolves a label name to its id, pages `_data` on `attached.labels`, returns rows with req/resp JSON (headers stripped) plus every label on the row |
+| 49 | ✅ | `attachLabel` | Attach Label | Labels | Medium | Finds or creates the label by name, attaches it to rows by id through `_attached`, dedupes and moves the `label:{id}` counter only on a real attach |

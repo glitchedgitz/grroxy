@@ -84,6 +84,8 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.LabelAttach)
 	API.App.OnBeforeServe().Add(API.LabelDelete)
 	API.App.OnBeforeServe().Add(API.LabelNew)
+	API.App.OnBeforeServe().Add(API.ListLabelsEndpoint)
+	API.App.OnBeforeServe().Add(API.LabelRequestsEndpoint)
 
 	// Load the frontend
 	API.App.OnBeforeServe().Add(API.BindFrontend)

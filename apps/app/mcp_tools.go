@@ -273,6 +273,28 @@ type HostLabelAction struct {
 	Type   string `json:"type,omitempty" jsonschema_description:"the type of the label (only for add/toggle)"`
 }
 
+// --- Label arg structs ---
+
+type ListLabelsArgs struct {
+	Search string `json:"search,omitempty" jsonschema_description:"substring of the label name to narrow the listing, matched case-insensitively. Empty (default) lists every label"`
+	Type   string `json:"type,omitempty" jsonschema_description:"only list labels of this type, eg. \"custom\", \"severity\", \"tech\". Empty (default) lists every type"`
+}
+
+type GetRequestsByLabelArgs struct {
+	Label  string `json:"label" jsonschema:"required" jsonschema_description:"name of the label to fetch the requests of, as shown on the row, eg. \"sqli\". Call listLabels for the names that exist"`
+	Page   int    `json:"page,omitempty" jsonschema_description:"page of rows to read, starts at 1 (default). 20 rows per page"`
+	Filter string `json:"filter,omitempty" jsonschema_description:"extra filter ANDed with the label, eg. \"resp.status = 200\" or \"req.url ~ '.js'\". Same fields as hostPrintRowsInDetails. Empty (default) for no extra filter"`
+	Host   string `json:"host,omitempty" jsonschema_description:"only rows of this host. With a scheme (\"https://example.com\") it has to match exactly, without one (\"example.com\") it is matched as a substring. Empty (default) for every host"`
+}
+
+type AttachLabelArgs struct {
+	IDs  []string `json:"ids" jsonschema:"required" jsonschema_description:"record ids of the rows to label, as strings, eg. [\"5\", \"5.11\"]. These are the ids in the requests table, not indexes — one index can hold several rows (5, 5.1, 5.11), so only the id picks out the one you want. Underscore padding is optional, \"5\" and \"______________5\" both work"`
+	Name string   `json:"name" jsonschema:"required" jsonschema_description:"name of the label to attach, eg. \"sqli\". An existing label of that name is reused (matched case-insensitively), otherwise it is created"`
+
+	Color string `json:"color,omitempty" jsonschema_description:"color of the label, only used when it has to be created. Default \"blue\""`
+	Type  string `json:"type,omitempty" jsonschema_description:"type of the label, only used when it has to be created, eg. \"custom\", \"severity\", \"tech\". Default \"custom\""`
+}
+
 type ModifyHostNotesArgs struct {
 	Host  string           `json:"host" jsonschema:"required" jsonschema_description:"the host to update the note, include the protocol eg: http://example.com"`
 	Notes []HostNoteAction `json:"notes" jsonschema:"required" jsonschema_description:"the notes to update for the host"`
@@ -1016,6 +1038,68 @@ func (backend *Backend) modifyHostNotesHandler(ctx context.Context, request mcp.
 		"host":    host,
 		"notes":   notes,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// Label tool handlers
+// ---------------------------------------------------------------------------
+
+func (backend *Backend) listLabelsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ListLabelsArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, err := backend.listLabelsLogic(ListLabelsRequest{
+		Search: args.Search,
+		Type:   args.Type,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(result)
+}
+
+func (backend *Backend) getRequestsByLabelHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args GetRequestsByLabelArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, err := backend.labelRequestsLogic(LabelRequestsRequest{
+		Label:  args.Label,
+		Page:   args.Page,
+		Filter: args.Filter,
+		Host:   args.Host,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(result)
+}
+
+func (backend *Backend) attachLabelHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args AttachLabelArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, skipped, err := backend.attachLabelLogic(AttachLabelRequest{
+		RowTargets: RowTargets{IDs: args.IDs},
+		Name:       args.Name,
+		Color:      args.Color,
+		Type:       args.Type,
+	})
+	if err != nil {
+		if len(skipped) > 0 {
+			return mcp.NewToolResultError(fmt.Sprintf("%v: %v", err, skipped)), nil
+		}
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(result)
 }
 
 // ---------------------------------------------------------------------------
