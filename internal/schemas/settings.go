@@ -28,3 +28,21 @@ var ConfigSchema = schema.NewSchema(
 		},
 	},
 )
+
+// SettingsConfigKey is the _configs row holding the global UI settings blob.
+const SettingsConfigKey = "settings"
+
+// DefaultSettings is the seed value for the `settings` row in _configs. The
+// frontend reads this blob on boot and only overrides a field when it is
+// present, so anything missing here falls back to the frontend's own default.
+var DefaultSettings = map[string]any{
+	"aiPanel":           true,
+	"autoRemoveHeaders": false,
+	"autoZoomWide":      true,
+	"flipSidebar":       true,
+	"hideRightSidebar":  false,
+	"minimizedDecoder":  false,
+	"sidebarOnLeft":     true,
+	"zoom":              100,
+	"zoomSlider":        true,
+}
