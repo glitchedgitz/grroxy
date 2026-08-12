@@ -38,3 +38,5 @@ cmd/grroxy/builds*
 # macOS system files
 .DS_Store
 **/.DS_Store
+
+SECURITY_ASSESSMENT.md
