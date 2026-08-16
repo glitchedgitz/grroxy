@@ -44,11 +44,28 @@ type bridgeSpec struct {
 	key     string // URL segment: "claude" | "codex"
 	dirName string // directory name shipped alongside the binary
 	label   string // log prefix
+	cliName string // global CLI binary, looked up on PATH
+	// Path, relative to the bridge directory, of the CLI the bridge vendors in
+	// node_modules. Both providers ship their own, so a user with no global
+	// install still has a working provider.
+	bundledCLI string
 }
 
 var bridgeSpecs = []bridgeSpec{
-	{key: "claude", dirName: "claude-code-bridge", label: "Claude Code"},
-	{key: "codex", dirName: "codex-bridge", label: "Codex"},
+	{
+		key:        "claude",
+		dirName:    "claude-code-bridge",
+		label:      "Claude Code",
+		cliName:    "claude",
+		bundledCLI: filepath.Join("node_modules", "@anthropic-ai", "claude-agent-sdk", "cli.js"),
+	},
+	{
+		key:        "codex",
+		dirName:    "codex-bridge",
+		label:      "Codex",
+		cliName:    "codex",
+		bundledCLI: filepath.Join("node_modules", "@openai", "codex", "bin", "codex.js"),
+	},
 }
 
 type bridgeProc struct {
@@ -376,17 +393,41 @@ func (b *bridgeProc) resume() {
 	b.stopped = false
 }
 
+// installState reports whether the provider's CLI is usable without having to
+// start the bridge first. A never-started bridge is otherwise indistinguishable
+// from a missing CLI: both report running=false with no error.
+//
+// The vendored copy in node_modules is what the bridge actually runs, so it is
+// the authoritative signal; a global install on PATH is reported alongside it
+// (and counts on its own, for a bridge whose deps aren't installed yet).
+func (b *bridgeProc) installState() (bool, string) {
+	cliPath, _ := exec.LookPath(b.spec.cliName)
+
+	if dir, err := b.resolveDir(); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, b.spec.bundledCLI)); err == nil {
+			return true, cliPath
+		}
+	}
+	return cliPath != "", cliPath
+}
+
 func (b *bridgeProc) status() map[string]any {
+	// Resolved before taking the lock: it only stats the filesystem, and holding
+	// b.mu across disk I/O would stall an in-flight start.
+	installed, cliPath := b.installState()
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return map[string]any{
-		"provider": b.spec.key,
-		"label":    b.spec.label,
-		"running":  b.running(),
-		"stopped":  b.stopped,
-		"port":     b.port,
-		"dir":      b.dir,
-		"error":    b.lastErr,
+		"provider":  b.spec.key,
+		"label":     b.spec.label,
+		"running":   b.running(),
+		"stopped":   b.stopped,
+		"port":      b.port,
+		"dir":       b.dir,
+		"error":     b.lastErr,
+		"installed": installed,
+		"cliPath":   cliPath,
 	}
 }
 
