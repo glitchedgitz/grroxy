@@ -310,7 +310,8 @@ type HostNoteAction struct {
 // --- Proxy arg structs ---
 
 type ProxyStartArgs struct {
-	Name string `json:"name,omitempty" jsonschema_description:"Optional label for the proxy instance"`
+	ID   string `json:"id,omitempty" jsonschema_description:"ID of a stopped proxy to restart (keeps its label, browser and address). Leave empty to start a new proxy"`
+	Name string `json:"name,omitempty" jsonschema_description:"Optional label for a new proxy instance"`
 }
 
 type ProxyStopArgs struct {
@@ -1246,6 +1247,21 @@ func (backend *Backend) proxyStartHandler(ctx context.Context, request mcp.CallT
 	var args ProxyStartArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// Restart an existing (stopped) proxy — mirrors the frontend proxyStart {id}.
+	if args.ID != "" {
+		if err := checkProxyOwnership(ctx, args.ID); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		chatID := ChatIDFromContext(ctx)
+		res, status := backend.restartProxyLogic(args.ID, &chatID)
+		if status != http.StatusOK {
+			if msg, ok := res["error"].(string); ok && len(res) == 1 {
+				return mcp.NewToolResultError(msg), nil
+			}
+		}
+		return mcpJSONResult(res)
 	}
 
 	body := &ProxyBody{

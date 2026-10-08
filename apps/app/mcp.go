@@ -262,7 +262,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyStart",
-			mcp.WithDescription("Start a new proxy instance with optional browser attachment (chrome, firefox, or none)"),
+			mcp.WithDescription("Start a new proxy instance with optional browser attachment (chrome, firefox, or none). The result (name, browser, status, listen address) is already shown to the user as a card — do not restate it or add commentary; continue with the task, or if there is nothing else to do, end your turn without a reply."),
 			mcp.WithInputSchema[ProxyStartArgs](),
 		),
 		backend.proxyStartHandler,
