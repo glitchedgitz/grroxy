@@ -22,6 +22,7 @@ import (
 	"net/http/httputil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -157,8 +158,10 @@ func parsePrivateKeyPEM(keyPEM []byte) (any, error) {
 }
 
 // MitmHTTPS terminates TLS with client, sends requests upstream over TLS, captures both sides
-// Supports both HTTP/1.1 and HTTP/2 automatically via ALPN negotiation
-func MitmHTTPS(clientConn net.Conn, connectReq *http.Request, requestID string, config *Config) {
+// Supports both HTTP/1.1 and HTTP/2 automatically via ALPN negotiation.
+// clientBuf is the hijacked connection's buffered reader; it may hold bytes the
+// proxy's HTTP server read ahead past the CONNECT request, and may be nil.
+func MitmHTTPS(clientConn net.Conn, clientBuf *bufio.ReadWriter, connectReq *http.Request, requestID string, config *Config) {
 	// NOTE: Don't defer clientConn.Close() here - the HTTP server will manage the connection
 	host := connectReq.Host
 	if i := strings.IndexByte(host, ':'); i >= 0 {
@@ -209,9 +212,36 @@ func MitmHTTPS(clientConn net.Conn, connectReq *http.Request, requestID string, 
 		log.Printf("[ERROR] requestID=%s Failed to configure HTTP/2: %v", requestID, err)
 	}
 
-	// Serve the connection with TLS - server will handle the TLS handshake
-	server.ServeTLS(&singleConnListener{conn: clientConn}, "", "")
+	// Serve the connection with TLS - server will handle the TLS handshake.
+	// Replay any bytes the proxy's HTTP server buffered past the CONNECT request
+	// first; a client that pipelines its TLS ClientHello into the same segment
+	// would otherwise have it swallowed and the handshake would stall.
+	server.ServeTLS(&singleConnListener{conn: withBufferedPrefix(clientConn, clientBuf)}, "", "")
 }
+
+// withBufferedPrefix returns a conn that yields buf's already-read bytes before
+// reading from the connection itself.
+func withBufferedPrefix(conn net.Conn, buf *bufio.ReadWriter) net.Conn {
+	if buf == nil {
+		return conn
+	}
+	n := buf.Reader.Buffered()
+	if n == 0 {
+		return conn
+	}
+	return &prefixConn{
+		Conn: conn,
+		r:    io.MultiReader(io.LimitReader(buf.Reader, int64(n)), conn),
+	}
+}
+
+// prefixConn is a net.Conn whose reads are served from r first.
+type prefixConn struct {
+	net.Conn
+	r io.Reader
+}
+
+func (c *prefixConn) Read(b []byte) (int, error) { return c.r.Read(b) }
 
 // mitmHandler handles requests in MITM mode
 type mitmHandler struct {
@@ -291,7 +321,38 @@ func (h *mitmHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	upstreamReq.URL.Host = h.connectHost
 	upstreamReq.Host = h.host
 	upstreamReq.RequestURI = ""
-	upstreamReq.Body = io.NopCloser(bytes.NewReader(body))
+
+	// The body we send is exactly the bytes we hold, so describe it that way.
+	// A request rebuilt from raw text (intercept edits) can carry a stale
+	// Content-Length; announcing a length that disagrees with the body desyncs
+	// HTTP/1.1 keep-alive connections and earns a PROTOCOL_ERROR over HTTP/2.
+	//
+	// GetBody is what makes the request retryable, and it is not optional here.
+	// Incoming server requests always have GetBody == nil, and Clone copies that
+	// nil through. Without it, http2's shouldRetryRequest cannot rewind us and
+	// turns a routine graceful-shutdown GOAWAY - which it otherwise classifies
+	// as retryable - into a hard failure. Upstreams recycle h2 connections on a
+	// schedule and http2.Transport has no idle-conn timeout of its own, so this
+	// is a matter of when, not if.
+	if len(body) == 0 {
+		// A bodyless request must present as bodyless. http2 reuses a request
+		// directly only when Body is nil or http.NoBody, so an empty-but-non-nil
+		// body would take the slower path and cost an empty DATA frame.
+		upstreamReq.Body = http.NoBody
+		upstreamReq.GetBody = func() (io.ReadCloser, error) { return http.NoBody, nil }
+	} else {
+		upstreamReq.Body = io.NopCloser(bytes.NewReader(body))
+		upstreamReq.GetBody = func() (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(body)), nil
+		}
+	}
+	upstreamReq.ContentLength = int64(len(body))
+	upstreamReq.TransferEncoding = nil
+
+	// Connection-scoped headers belong to the client's connection, not the
+	// upstream one. http2.Transport refuses any request still carrying
+	// Connection, Upgrade or Transfer-Encoding.
+	stripHopByHopRequest(upstreamReq.Header)
 
 	// Forward to upstream
 	resp, err := h.roundTripper.RoundTrip(upstreamReq)
@@ -349,10 +410,33 @@ func (h *mitmHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	respDump, _ := httputil.DumpResponse(respForDump, true)
 	asyncCapture(reqDump, respDump, req, subRequestID, h.config)
 
-	// Send response to client
+	// Send response to client. Strip only now, after the capture above, so the
+	// recorded traffic still shows exactly what the upstream sent.
+	stripHopByHopResponse(processedResponse.Header)
 	copyHeader(w.Header(), processedResponse.Header)
+
+	// respBody is the body we are about to write, which an onResponse handler
+	// may have resized. Re-state its length rather than forwarding a stale one.
+	if bodyAllowedForStatus(processedResponse.StatusCode) && req.Method != http.MethodHead {
+		w.Header().Set("Content-Length", strconv.Itoa(len(respBody)))
+	} else {
+		w.Header().Del("Content-Length")
+	}
+
 	w.WriteHeader(processedResponse.StatusCode)
 	w.Write(respBody)
+}
+
+// bodyAllowedForStatus mirrors net/http's rule for which status codes may carry
+// a response body.
+func bodyAllowedForStatus(status int) bool {
+	switch {
+	case status >= 100 && status <= 199:
+		return false
+	case status == http.StatusNoContent, status == http.StatusNotModified:
+		return false
+	}
+	return true
 }
 
 func (h *mitmHandler) handleWebSocketUpgrade(w http.ResponseWriter, req *http.Request, reqData *RequestData) {

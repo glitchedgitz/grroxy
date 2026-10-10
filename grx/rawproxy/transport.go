@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,69 @@ func GetTransportForHost(scheme, host string) http.RoundTripper {
 		return GetUTLSRoundTripper(host, FingerprintChrome)
 	}
 	return sharedHTTPTransport
+}
+
+// hopByHopRequestHeaders are the connection-scoped headers we drop on the way
+// upstream. Only Connection, Transfer-Encoding and Upgrade are load-bearing:
+// x/net/http2 rejects a request carrying them outright
+// (internal/httpcommon.checkConnHeaders). Proxy-Connection and Keep-Alive are
+// dropped by http2 during encoding anyway; we drop them here so HTTP/1.1
+// upstreams see the same request.
+//
+// We are an intercepting proxy, so the default is to forward what the client
+// sent and every removal needs a protocol reason. Deliberately NOT stripped:
+//
+//	Proxy-Authorization  in MITM mode we are inside a CONNECT tunnel, so this
+//	                     was never addressed to us - it would have been consumed
+//	                     on the CONNECT line. Deleting it would silently discard
+//	                     data the user set on purpose.
+//	TE, Trailer          no protocol reason; Go forwards them fine, and
+//	                     "TE: trailers" is legal and meaningful over h2.
+var hopByHopRequestHeaders = []string{
+	"Connection",
+	"Proxy-Connection",
+	"Keep-Alive",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+// hopByHopResponseHeaders are dropped on the way back to the client.
+// Transfer-Encoding and Trailer must go because the MITM handler buffers the
+// whole body and re-states Content-Length, so the framing the upstream used no
+// longer describes what we write.
+var hopByHopResponseHeaders = []string{
+	"Connection",
+	"Proxy-Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Trailer",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+// stripHopByHopRequest removes connection-scoped headers from a request bound
+// upstream. Callers must dump/capture before calling this, so recorded traffic
+// still shows exactly what the client sent.
+func stripHopByHopRequest(h http.Header) { stripHopByHop(h, hopByHopRequestHeaders) }
+
+// stripHopByHopResponse removes connection-scoped headers from a response bound
+// for the client. As above: capture first, strip second.
+func stripHopByHopResponse(h http.Header) { stripHopByHop(h, hopByHopResponseHeaders) }
+
+// stripHopByHop deletes names, plus any header named by the Connection header
+// itself (RFC 7230 6.1). Order matters: the Connection-named headers are read
+// and deleted first, while Connection is still present to name them.
+func stripHopByHop(h http.Header, names []string) {
+	for _, value := range h.Values("Connection") {
+		for _, name := range strings.Split(value, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				h.Del(name)
+			}
+		}
+	}
+	for _, name := range names {
+		h.Del(name)
+	}
 }
 
 // copyHeader copies HTTP headers from src to dst

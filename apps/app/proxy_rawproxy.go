@@ -422,6 +422,76 @@ func updateResponseDataFromRaw(responseData map[string]any, responseRaw string) 
 	responseData["length"] = contentLength
 }
 
+// rawEditedBody returns the body exactly as it appears in raw, with no
+// decompression applied. Separator detection mirrors rawhttp.ParseRequest so the
+// body we return is the one the rest of the parsed struct describes.
+func rawEditedBody(raw, lineBreak string) string {
+	if sep := lineBreak + lineBreak; sep != "" {
+		if i := strings.Index(raw, sep); i >= 0 {
+			return raw[i+len(sep):]
+		}
+	}
+	if i := strings.Index(raw, "\n\n"); i >= 0 {
+		return raw[i+2:]
+	}
+	return ""
+}
+
+// parseEditedRequest rebuilds an *http.Request from the raw text the intercept
+// editor returns. http.ReadRequest alone is too strict for it: DumpRequest emits
+// LF-only headers, an h2 request line reads "HTTP/2" rather than "HTTP/2.0", the
+// editor does not always leave a blank line after the headers, and the user may
+// add a body to a request that never carried Content-Length.
+//
+// rawhttp.ParseRequest already handles the tolerant part - separator detection,
+// line-break detection and header splitting - so this only fixes up what
+// http.ReadRequest additionally insists on.
+func parseEditedRequest(raw string) (*http.Request, error) {
+	parsed := rawhttp.ParseRequest([]byte(raw))
+
+	lineBreak := parsed.LineBreak
+	if lineBreak == "" {
+		lineBreak = "\r\n"
+	}
+
+	// ParseRequest runs the body through MagicDecompress, which is right for
+	// display but wrong here: these bytes go on the wire. MagicDecompress sniffs
+	// by trying each codec, and brotli has no magic number - it accepts
+	// arbitrary input, reads the leading bytes as a stream header and returns
+	// the rest as literal data. Measured on random binary bodies, ~6% come back
+	// with their first few bytes silently eaten. Forward exactly what the editor
+	// gave us instead.
+	parsed.Body = rawEditedBody(raw, lineBreak)
+
+	// http.ReadRequest requires a major.minor version.
+	if v := parsed.HTTPVersion; strings.HasPrefix(v, "HTTP/") && !strings.Contains(v, ".") {
+		parsed.HTTPVersion = v + ".0"
+	}
+
+	// ParseRequest reports a bare trailing newline (or nothing at all) when the
+	// editor left no blank line; http.ReadRequest needs a real one to know where
+	// the header block ends.
+	if parsed.BodySeparator != lineBreak+lineBreak {
+		parsed.BodySeparator = lineBreak + lineBreak
+	}
+
+	requestNew, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(rawhttp.UnparseRequest(parsed))))
+	if err != nil {
+		return nil, err
+	}
+
+	// http.ReadRequest sizes the body from Content-Length alone, so an edited
+	// request that gained a body without gaining the header would parse as
+	// bodyless and forward nothing upstream.
+	if parsed.Body != "" && requestNew.ContentLength <= 0 && len(requestNew.TransferEncoding) == 0 {
+		requestNew.Body = io.NopCloser(strings.NewReader(parsed.Body))
+		requestNew.ContentLength = int64(len(parsed.Body))
+		requestNew.Header.Set("Content-Length", strconv.Itoa(len(parsed.Body)))
+	}
+
+	return requestNew, nil
+}
+
 // onRequest handles incoming HTTP requests and saves them to the database
 func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Request) (*http.Request, error) {
 	// Skip our own grroxy requests to avoid loops
@@ -702,20 +772,7 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 			// Convert string back to request
 			req.Body.Close()
 
-			// Detect line break style
-			lineBreak := "\n"
-			if strings.Contains(updatedString, "\r\n") {
-				lineBreak = "\r\n"
-			}
-
-			// Normalize "HTTP/2" to "HTTP/2.0" since http.ReadRequest requires major.minor format
-			normalizedString := strings.Replace(updatedString, " HTTP/2"+lineBreak, " HTTP/2.0"+lineBreak, 1)
-
-			// Ensure request ends with double line break (required by http.ReadRequest)
-			if !strings.HasSuffix(normalizedString, lineBreak+lineBreak) {
-				normalizedString += lineBreak + lineBreak
-			}
-			requestNew, err := http.ReadRequest(bufio.NewReader(strings.NewReader(normalizedString)))
+			requestNew, err := parseEditedRequest(updatedString)
 			if err != nil {
 				log.Printf("[RawProxy][Intercept][%s][ERROR] Failed to parse edited request: %v\n", id, err)
 				return req, fmt.Errorf("failed to parse edited request: %w", err)

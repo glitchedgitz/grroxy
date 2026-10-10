@@ -124,6 +124,13 @@ func (pm *ProxyManager) initializeProxyIndexFromDB(backend *Backend) error {
 	return nil
 }
 
+// errProxyNotRunning is returned when a browser operation targets a proxy that
+// isn't in the manager — usually because the user stopped it from the UI. The
+// wording tells an AI caller how to recover instead of a bare "not found".
+func errProxyNotRunning(proxyID string) error {
+	return fmt.Errorf("proxy %s is not running (it was stopped). Restart it with proxyStart {\"id\": \"%s\"} before using it", proxyID, proxyID)
+}
+
 // GetProxy returns a proxy by ID (listen address)
 func (pm *ProxyManager) GetProxy(id string) *RawProxyWrapper {
 	pm.mu.RLock()
@@ -148,7 +155,7 @@ func (pm *ProxyManager) GetChromeRemote(proxyID string) (*browser.ChromeRemote, 
 
 	inst := pm.instances[proxyID]
 	if inst == nil {
-		return nil, fmt.Errorf("proxy %s not found", proxyID)
+		return nil, errProxyNotRunning(proxyID)
 	}
 
 	if inst.Browser != "chrome" {
@@ -237,7 +244,7 @@ func (pm *ProxyManager) StopProxy(id string) error {
 
 	if inst == nil || inst.Proxy == nil {
 		log.Printf("[ProxyManager] Proxy with ID '%s' not found", id)
-		return fmt.Errorf("proxy %s not found", id)
+		return fmt.Errorf("proxy %s is not running", id)
 	}
 
 	log.Printf("[ProxyManager] Proxy found, calling Stop()...")
@@ -310,7 +317,7 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage
 	inst := pm.instances[proxyID]
 	if inst == nil {
 		pm.mu.Unlock()
-		return nil, "", fmt.Errorf("proxy %s not found", proxyID)
+		return nil, "", errProxyNotRunning(proxyID)
 	}
 
 	if inst.Browser != "chrome" {
@@ -388,7 +395,7 @@ func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string
 	inst := pm.instances[proxyID]
 	if inst == nil {
 		pm.mu.Unlock()
-		return nil, fmt.Errorf("proxy %s not found", proxyID)
+		return nil, errProxyNotRunning(proxyID)
 	}
 
 	if inst.Browser != "chrome" {
@@ -447,7 +454,7 @@ func (pm *ProxyManager) GetElements(proxyID string, url string) ([]browser.Eleme
 	inst := pm.instances[proxyID]
 	if inst == nil {
 		pm.mu.Unlock()
-		return nil, fmt.Errorf("proxy %s not found", proxyID)
+		return nil, errProxyNotRunning(proxyID)
 	}
 
 	if inst.Browser != "chrome" {
@@ -921,151 +928,159 @@ func (backend *Backend) RestartProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
 			}
 
-			proxyID := body.ID
-			log.Printf("[RestartProxy] Restarting proxy: %s", proxyID)
-
-			// Check if proxy is already running
-			if ProxyMgr.GetProxy(proxyID) != nil {
-				return c.JSON(http.StatusConflict, map[string]interface{}{"error": "Proxy is already running"})
-			}
-
-			// Get the proxy record from database
-			dao := backend.App.Dao()
-			proxyRecord, err := dao.FindRecordById("_proxies", proxyID)
-			if err != nil {
-				log.Printf("[RestartProxy] Proxy record not found: %s", proxyID)
-				return c.JSON(http.StatusNotFound, map[string]interface{}{"error": "Proxy record not found"})
-			}
-
-			// Read proxy configuration from record
-			listenAddr := proxyRecord.GetString("addr")
-			browserType := proxyRecord.GetString("browser")
-			label := proxyRecord.GetString("label")
-
-			log.Printf("[RestartProxy] Found proxy config - addr: %s, browser: %s, label: %s", listenAddr, browserType, label)
-
-			// Check if port is available
-			availableHost, err := utils.CheckAndFindAvailablePort(listenAddr)
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-			}
-
-			if availableHost != listenAddr {
-				if browserType == "" {
-					return c.JSON(http.StatusConflict, map[string]interface{}{
-						"error":         "port not available",
-						"availableHost": availableHost,
-					})
-				}
-			}
-
-			// Initialize global index from database if not already initialized
-			if ProxyMgr.index.Load() == 0 {
-				if err := ProxyMgr.initializeIndexFromDB(backend); err != nil {
-					log.Printf("[RestartProxy] Warning: Failed to initialize global index from database: %v", err)
-				}
-			}
-
-			// Create new rawproxy wrapper with existing ID
-			configDir := path.Join(backend.Config.ConfigDirectory)
-			outputDir := "" // Disabled
-
-			listenAddr = availableHost
-
-			newProxy, err := NewRawProxyWrapper(listenAddr, configDir, outputDir, backend, proxyID)
-			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-			}
-
-			// Update proxy record state to running
-			proxyRecord.Set("state", "running")
-			proxyRecord.Set("addr", listenAddr)
-			if err := dao.SaveRecord(proxyRecord); err != nil {
-				log.Printf("[RestartProxy][WARN] Failed to update proxy state: %v", err)
-			}
-
-			// Create proxy instance
-			proxyInstance := &ProxyInstance{
-				Proxy:      newProxy,
-				Browser:    browserType,
-				BrowserCmd: nil,
-				Label:      label,
-			}
-
-			// Add to manager with the same ID
-			ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
-
-			// Update PROXY for backward compatibility
-			updateProxyVar()
-
-			// Load intercept and filter settings from proxy record (also reads ai_chat_id from data JSON)
-			if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
-				log.Printf("[RestartProxy] Warning: Failed to load proxy settings: %v", err)
-			}
-
-			// If the caller passed ai_chat_id explicitly, it overrides whatever was persisted.
-			// Empty string is a deliberate "clear ownership" — what the manual UI restart sends.
-			if body.AIChatID != nil {
-				newProxy.AIChatID = *body.AIChatID
-				dataRaw := proxyRecord.Get("data")
-				dataMap, _ := dataRaw.(map[string]any)
-				if dataMap == nil {
-					dataMap = map[string]any{}
-					if bytes, mErr := json.Marshal(dataRaw); mErr == nil {
-						_ = json.Unmarshal(bytes, &dataMap)
-					}
-				}
-				dataMap["ai_chat_id"] = *body.AIChatID
-				proxyRecord.Set("data", dataMap)
-				if err := dao.SaveRecord(proxyRecord); err != nil {
-					log.Printf("[RestartProxy][WARN] Failed to persist ai_chat_id: %v", err)
-				}
-			}
-
-			// Start the proxy
-			if err := newProxy.RunProxy(); err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
-			}
-
-			// Launch browser if configured
-			if browserType != "" {
-				certPath := newProxy.GetCertPath()
-
-				// Generate browser profile directory: [projectid]+[proxyid]
-				profileID := backend.Config.ProjectID + proxyID
-				profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
-				log.Printf("[RestartProxy] Browser profile directory: %s", profileDir)
-
-				startURL := backend.Config.InterceptedPagePath()
-				go func(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
-					cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
-					if err != nil {
-						log.Println("Error launching browser:", err)
-						return
-					}
-					ProxyMgr.mu.Lock()
-					if inst := ProxyMgr.instances[proxyID]; inst != nil {
-						inst.Browser = browserType
-						inst.BrowserCmd = cmd
-					}
-					ProxyMgr.mu.Unlock()
-				}(proxyID, browserType, listenAddr, certPath, profileDir, startURL)
-			}
-
-			log.Printf("[RestartProxy] Successfully restarted proxy %s", proxyID)
-
-			return c.JSON(http.StatusOK, map[string]any{
-				"id":         proxyID,
-				"listenAddr": listenAddr,
-				"label":      label,
-				"browser":    browserType,
-			})
+			res, status := backend.restartProxyLogic(body.ID, body.AIChatID)
+			return c.JSON(status, res)
 		},
 		Middlewares: []echo.MiddlewareFunc{
 			apis.ActivityLogger(backend.App),
 		},
 	})
 	return nil
+}
+
+// restartProxyLogic brings a stopped proxy back up from its _proxies record,
+// keeping its id, label, browser and address. Shared by /api/proxy/restart and
+// the MCP proxyStart tool (when called with an id). aiChatID nil keeps the
+// persisted owner; a non-nil value (even "") overrides it.
+func (backend *Backend) restartProxyLogic(proxyID string, aiChatID *string) (map[string]any, int) {
+	log.Printf("[RestartProxy] Restarting proxy: %s", proxyID)
+
+	// Check if proxy is already running
+	if ProxyMgr.GetProxy(proxyID) != nil {
+		return map[string]interface{}{"error": "Proxy is already running"}, http.StatusConflict
+	}
+
+	// Get the proxy record from database
+	dao := backend.App.Dao()
+	proxyRecord, err := dao.FindRecordById("_proxies", proxyID)
+	if err != nil {
+		log.Printf("[RestartProxy] Proxy record not found: %s", proxyID)
+		return map[string]interface{}{"error": "Proxy record not found"}, http.StatusNotFound
+	}
+
+	// Read proxy configuration from record
+	listenAddr := proxyRecord.GetString("addr")
+	browserType := proxyRecord.GetString("browser")
+	label := proxyRecord.GetString("label")
+
+	log.Printf("[RestartProxy] Found proxy config - addr: %s, browser: %s, label: %s", listenAddr, browserType, label)
+
+	// Check if port is available
+	availableHost, err := utils.CheckAndFindAvailablePort(listenAddr)
+	if err != nil {
+		return map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError
+	}
+
+	if availableHost != listenAddr {
+		if browserType == "" {
+			return map[string]interface{}{
+				"error":         "port not available",
+				"availableHost": availableHost,
+			}, http.StatusConflict
+		}
+	}
+
+	// Initialize global index from database if not already initialized
+	if ProxyMgr.index.Load() == 0 {
+		if err := ProxyMgr.initializeIndexFromDB(backend); err != nil {
+			log.Printf("[RestartProxy] Warning: Failed to initialize global index from database: %v", err)
+		}
+	}
+
+	// Create new rawproxy wrapper with existing ID
+	configDir := path.Join(backend.Config.ConfigDirectory)
+	outputDir := "" // Disabled
+
+	listenAddr = availableHost
+
+	newProxy, err := NewRawProxyWrapper(listenAddr, configDir, outputDir, backend, proxyID)
+	if err != nil {
+		return map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError
+	}
+
+	// Update proxy record state to running
+	proxyRecord.Set("state", "running")
+	proxyRecord.Set("addr", listenAddr)
+	if err := dao.SaveRecord(proxyRecord); err != nil {
+		log.Printf("[RestartProxy][WARN] Failed to update proxy state: %v", err)
+	}
+
+	// Create proxy instance
+	proxyInstance := &ProxyInstance{
+		Proxy:      newProxy,
+		Browser:    browserType,
+		BrowserCmd: nil,
+		Label:      label,
+	}
+
+	// Add to manager with the same ID
+	ProxyMgr.AddProxyInstance(proxyID, proxyInstance)
+
+	// Update PROXY for backward compatibility
+	updateProxyVar()
+
+	// Load intercept and filter settings from proxy record (also reads ai_chat_id from data JSON)
+	if err := backend.loadProxySettings(newProxy, proxyRecord); err != nil {
+		log.Printf("[RestartProxy] Warning: Failed to load proxy settings: %v", err)
+	}
+
+	// If the caller passed ai_chat_id explicitly, it overrides whatever was persisted.
+	// Empty string is a deliberate "clear ownership" — what the manual UI restart sends.
+	if aiChatID != nil {
+		newProxy.AIChatID = *aiChatID
+		dataRaw := proxyRecord.Get("data")
+		dataMap, _ := dataRaw.(map[string]any)
+		if dataMap == nil {
+			dataMap = map[string]any{}
+			if bytes, mErr := json.Marshal(dataRaw); mErr == nil {
+				_ = json.Unmarshal(bytes, &dataMap)
+			}
+		}
+		dataMap["ai_chat_id"] = *aiChatID
+		proxyRecord.Set("data", dataMap)
+		if err := dao.SaveRecord(proxyRecord); err != nil {
+			log.Printf("[RestartProxy][WARN] Failed to persist ai_chat_id: %v", err)
+		}
+	}
+
+	// Start the proxy
+	if err := newProxy.RunProxy(); err != nil {
+		return map[string]interface{}{"error": err.Error()}, http.StatusInternalServerError
+	}
+
+	// Launch browser if configured
+	if browserType != "" {
+		certPath := newProxy.GetCertPath()
+
+		// Generate browser profile directory: [projectid]+[proxyid]
+		profileID := backend.Config.ProjectID + proxyID
+		profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
+		log.Printf("[RestartProxy] Browser profile directory: %s", profileDir)
+
+		startURL := backend.Config.InterceptedPagePath()
+		go func(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
+			cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
+			if err != nil {
+				log.Println("Error launching browser:", err)
+				return
+			}
+			ProxyMgr.mu.Lock()
+			if inst := ProxyMgr.instances[proxyID]; inst != nil {
+				inst.Browser = browserType
+				inst.BrowserCmd = cmd
+			}
+			ProxyMgr.mu.Unlock()
+		}(proxyID, browserType, listenAddr, certPath, profileDir, startURL)
+	}
+
+	log.Printf("[RestartProxy] Successfully restarted proxy %s", proxyID)
+
+	return map[string]any{
+		"id":         proxyID,
+		"listenAddr": listenAddr,
+		"label":      label,
+		"browser":    browserType,
+	}, http.StatusOK
 }
 
 func (backend *Backend) ListProxies(e *core.ServeEvent) error {

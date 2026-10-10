@@ -214,7 +214,7 @@ func handleConnect(w http.ResponseWriter, r *http.Request, reqDump []byte, reque
 	// Decide whether to MITM or passthrough for HTTPS
 	if config.MITM != nil {
 		// Man-in-the-middle: terminate TLS and proxy HTTP messages
-		MitmHTTPS(clientConn, r, requestID, config)
+		MitmHTTPS(clientConn, clientBuf, r, requestID, config)
 		return
 	}
 

@@ -8,6 +8,94 @@ import (
 	"github.com/glitchedgitz/pocketbase/models"
 )
 
+// syncContentLength re-states the Content-Length header of an edited raw HTTP
+// message so it describes the body the user actually left behind. Returns
+// updatedString unchanged when it has no header/body separator, or when the
+// declared length already matches.
+//
+// contentLength is the length the caller knew about before the edit. It is only
+// consulted when the edited headers carry no Content-Length of their own - if
+// the user deleted the header while adding a body, we must add one back rather
+// than let the body be announced as absent and dropped upstream.
+//
+// rawData is the pre-edit message, used only for logging.
+func syncContentLength(updatedString string, contentLength int64, rawData string) string {
+	// Try \r\n\r\n first, then \n\n
+	updatedParts := strings.SplitN(updatedString, "\r\n\r\n", 2)
+	separator := "\r\n\r\n"
+	if len(updatedParts) != 2 {
+		updatedParts = strings.SplitN(updatedString, "\n\n", 2)
+		separator = "\n\n"
+	}
+	if len(updatedParts) != 2 {
+		return updatedString
+	}
+
+	updatedBodyLength := len(updatedParts[1])
+	headers := updatedParts[0]
+	actualContentLength := int64(-1)
+
+	// Find the Content-Length header in the updated headers (case-insensitive:
+	// an HTTP/2 message dumps its headers lowercased).
+	for _, line := range strings.Split(headers, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToLower(line), "content-length:") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				fmt.Sscanf(strings.TrimSpace(parts[1]), "%d", &actualContentLength)
+				break
+			}
+		}
+	}
+
+	hasContentLength := actualContentLength != -1
+	if !hasContentLength {
+		actualContentLength = contentLength
+	}
+
+	diffLength := updatedBodyLength - int(actualContentLength)
+
+	if diffLength != 0 && actualContentLength >= 0 {
+		lineBreak := "\n"
+		if strings.Contains(separator, "\r\n") {
+			lineBreak = "\r\n"
+		}
+		newContentHeader := "Content-Length: " + fmt.Sprint(int64(updatedBodyLength))
+
+		if hasContentLength {
+			// Rewrite by rebuilding the header block line by line. This used to
+			// be a literal strings.Replace on "Content-Length: <old>", which was
+			// case-sensitive while the detection above is not: a lowercase
+			// "content-length:" was found - so the append branch below was
+			// skipped - but never rewritten. The stale length then survived
+			// downstream and http.ReadRequest silently truncated the body to it.
+			lines := strings.Split(headers, lineBreak)
+			for i, line := range lines {
+				if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "content-length:") {
+					lines[i] = newContentHeader
+					break
+				}
+			}
+			headers = strings.Join(lines, lineBreak)
+		} else {
+			// Append a Content-Length header to the end of the block
+			headers = strings.TrimRight(headers, "\r\n") + lineBreak + newContentHeader
+		}
+
+		// Reconstruct the full request/response using the detected separator
+		updatedString = headers + separator + updatedParts[1]
+	}
+
+	log.Printf("[syncContentLength] passed=%d actual=%d new=%d diff=%d separator=%q\n"+
+		"==============================================\n[originalData] %s\n"+
+		"==============================================\n[editedData] %s\n"+
+		"==============================================",
+		contentLength, actualContentLength, updatedBodyLength, diffLength, separator,
+		rawData, updatedString)
+
+	return updatedString
+}
+
 // InterceptUpdate represents an update to an intercept request
 type InterceptUpdate struct {
 	Action        string
@@ -140,82 +228,7 @@ func (rp *RawProxyWrapper) interceptWait(userdata map[string]any, field string, 
 
 	// Process edited data: update Content-Length if needed
 	if edited && updatedString != "" {
-		// Use the original raw data passed as parameter for comparison
-		originalString := rawData
-
-		// Try different separators for updated string
-		var updatedParts []string
-		var separator string
-
-		// Try \r\n\r\n first
-		updatedParts = strings.SplitN(updatedString, "\r\n\r\n", 2)
-
-		// If not found, try \n\n
-		if len(updatedParts) != 2 {
-			updatedParts = strings.SplitN(updatedString, "\n\n", 2)
-			separator = "\n\n"
-		} else {
-			separator = "\r\n\r\n"
-		}
-
-		if len(updatedParts) == 2 {
-			// Calculate body length
-			updatedBodyLength := len(updatedParts[1])
-
-			// Parse the actual Content-Length from the headers
-			headers := updatedParts[0]
-			actualContentLength := int64(-1)
-
-			// Try to find Content-Length header in the updated headers
-			headerLines := strings.Split(headers, "\n")
-			for _, line := range headerLines {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(strings.ToLower(line), "content-length:") {
-					// Extract the value
-					parts := strings.SplitN(line, ":", 2)
-					if len(parts) == 2 {
-						value := strings.TrimSpace(parts[1])
-						fmt.Sscanf(value, "%d", &actualContentLength)
-						break
-					}
-				}
-			}
-
-			// If we found the Content-Length header, use it; otherwise use the passed parameter
-			if actualContentLength == -1 {
-				actualContentLength = contentLength
-			}
-
-			diffLength := updatedBodyLength - int(actualContentLength)
-
-			if diffLength != 0 && actualContentLength >= 0 {
-				// Update Content-Length header
-				previousContentHeader := "Content-Length: " + fmt.Sprint(actualContentLength)
-				newContentHeader := "Content-Length: " + fmt.Sprint(int64(updatedBodyLength))
-				headers = strings.Replace(headers, previousContentHeader, newContentHeader, 1)
-
-				previousContentHeader = "Content-Length:" + fmt.Sprint(actualContentLength)
-				newContentHeader = "Content-Length:" + fmt.Sprint(int64(updatedBodyLength))
-				headers = strings.Replace(headers, previousContentHeader, newContentHeader, 1)
-
-				// Reconstruct the full request/response using the detected separator
-				updatedString = headers + separator + updatedParts[1]
-			}
-
-			logstatement := ""
-			logstatement += fmt.Sprintf("[passedContentLength] %d\n", contentLength)
-			logstatement += fmt.Sprintf("[actualContentLength] %d\n", actualContentLength)
-			logstatement += fmt.Sprintf("[newContentLength] %d\n", updatedBodyLength)
-			logstatement += fmt.Sprintf("[updatedBodyLength] %d\n", updatedBodyLength)
-			logstatement += fmt.Sprintf("[diffLength] %d\n", diffLength)
-			logstatement += fmt.Sprintf("[separator] %q\n", separator)
-			logstatement += "==============================================\n"
-			logstatement += fmt.Sprintf("[originalData] %s\n", originalString)
-			logstatement += "==============================================\n"
-			logstatement += fmt.Sprintf("[editedData] %s\n", updatedString)
-			logstatement += "==============================================\n"
-			log.Println(logstatement)
-		}
+		updatedString = syncContentLength(updatedString, contentLength, rawData)
 	}
 
 	log.Printf("[InterceptWait][%s] Completed - edited=%v\n", id, edited)
