@@ -40,3 +40,6 @@ cmd/grroxy/builds*
 **/.DS_Store
 
 SECURITY_ASSESSMENT.md
+
+todo.md
+report.md
