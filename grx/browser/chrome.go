@@ -247,6 +247,16 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string,
 // GetChromeDebugURL reads the DevTools WebSocket URL from Chrome's profile directory
 // Chrome writes this information to DevToolsActivePort file when launched with --remote-debugging-port
 func GetChromeDebugURL(profileDir string) (string, error) {
+	debugURL, err := readChromeDebugURL(profileDir)
+	if err != nil {
+		return "", err
+	}
+	log.Printf("[GetChromeDebugURL] Found Chrome debug URL: %s", debugURL)
+	return debugURL, nil
+}
+
+// readChromeDebugURL is GetChromeDebugURL without logging, for callers that retry.
+func readChromeDebugURL(profileDir string) (string, error) {
 	devToolsFile := filepath.Join(profileDir, "DevToolsActivePort")
 
 	// Read the DevToolsActivePort file
@@ -271,10 +281,7 @@ func GetChromeDebugURL(profileDir string) (string, error) {
 	}
 
 	// Construct the full WebSocket URL
-	debugURL := fmt.Sprintf("ws://127.0.0.1:%s%s", port, wsPath)
-	log.Printf("[GetChromeDebugURL] Found Chrome debug URL: %s", debugURL)
-
-	return debugURL, nil
+	return fmt.Sprintf("ws://127.0.0.1:%s%s", port, wsPath), nil
 }
 
 // ChromeRemote manages a connection to a Chrome instance via DevTools Protocol

@@ -251,21 +251,24 @@ func (pm *ProxyManager) StopProxy(id string) error {
 	err := inst.Proxy.Stop()
 	// attempt to close tied browser/terminal if any
 	pm.mu.Lock()
-	if inst.BrowserCmd != nil && inst.BrowserCmd.Process != nil {
+	cmd := inst.BrowserCmd
+	// Detach before killing so watchBrowserExit knows this exit was ours, not the user's.
+	inst.BrowserCmd = nil
+	if cmd != nil && cmd.Process != nil {
 		clientType := "browser"
 		isTerminal := inst.Browser == "terminal"
 		if isTerminal {
 			clientType = "terminal"
 		}
-		log.Printf("[ProxyManager] Attempting to terminate %s for proxy %s (pid=%d)", clientType, id, inst.BrowserCmd.Process.Pid)
+		log.Printf("[ProxyManager] Attempting to terminate %s for proxy %s (pid=%d)", clientType, id, cmd.Process.Pid)
 
 		var killErr error
 		if isTerminal {
 			// Use special terminal cleanup for better window closing
-			killErr = browser.CloseTerminalWindow(inst.BrowserCmd)
+			killErr = browser.CloseTerminalWindow(cmd)
 		} else {
 			// Standard browser process kill
-			killErr = inst.BrowserCmd.Process.Kill()
+			killErr = cmd.Process.Kill()
 		}
 
 		if killErr != nil {
@@ -720,19 +723,7 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 		log.Printf("[startProxyLogic] Browser profile directory: %s", profileDir)
 
 		startURL := backend.Config.InterceptedPagePath()
-		go func(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
-			cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
-			if err != nil {
-				log.Println("Error launching browser:", err)
-				return
-			}
-			ProxyMgr.mu.Lock()
-			if inst := ProxyMgr.instances[proxyID]; inst != nil {
-				inst.Browser = browserType
-				inst.BrowserCmd = cmd
-			}
-			ProxyMgr.mu.Unlock()
-		}(proxyID, body.Browser, body.HTTP, certPath, profileDir, startURL)
+		go backend.launchProxyBrowser(proxyID, body.Browser, body.HTTP, certPath, profileDir, startURL)
 	}
 
 	// Create proxy record in database
@@ -826,6 +817,94 @@ func (backend *Backend) updateProxyState(proxyID string, state string) {
 	} else {
 		log.Printf("[ProxyState] Updated proxy %s state to: %s", proxyID, state)
 	}
+}
+
+// proxyStateClosed is the _proxies state for a proxy stopped because the user
+// closed its browser, as opposed to "" (stopped from grroxy) or "running".
+const proxyStateClosed = "closed"
+
+// browserHandoffWindow: a browser that exits this soon after launch most likely
+// handed its window to an already-running instance on the same profile (e.g. one
+// left open across a grroxy restart) rather than being closed by the user.
+const browserHandoffWindow = 3 * time.Second
+
+// launchProxyBrowser starts the browser/terminal tied to a proxy and attaches it
+// to the proxy instance. For real browsers it then blocks until the process exits,
+// so callers run it in a goroutine.
+func (backend *Backend) launchProxyBrowser(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
+	cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
+	if err != nil {
+		log.Println("Error launching browser:", err)
+		return
+	}
+	launchedAt := time.Now()
+
+	ProxyMgr.mu.Lock()
+	inst := ProxyMgr.instances[proxyID]
+	if inst != nil {
+		inst.Browser = browserType
+		inst.BrowserCmd = cmd
+	}
+	ProxyMgr.mu.Unlock()
+
+	// Terminal and Safari launchers hand off to another process and exit right
+	// away, so only Chrome/Firefox process exit means the user closed the window.
+	if inst == nil || (browserType != "chrome" && browserType != "firefox") {
+		return
+	}
+
+	if browserType == "chrome" {
+		// macOS keeps Chrome running after its last window is closed, so treat
+		// "no windows left" as closed too — killing it lets watchBrowserExit clean up.
+		exited := make(chan struct{})
+		defer close(exited)
+		go func() {
+			if browser.WaitForChromeWindowsClosed(profDir, exited) {
+				log.Printf("[BrowserWatch] All Chrome windows closed for proxy %s; quitting Chrome", proxyID)
+				_ = cmd.Process.Kill()
+			}
+		}()
+	}
+
+	backend.watchBrowserExit(proxyID, cmd, launchedAt)
+}
+
+// watchBrowserExit waits for a proxy's browser to exit and, if the user closed
+// it (rather than grroxy stopping the proxy), stops the proxy and marks it
+// closed so the UI and AI see the change through the _proxies record.
+func (backend *Backend) watchBrowserExit(proxyID string, cmd *exec.Cmd, launchedAt time.Time) {
+	waitErr := cmd.Wait()
+
+	if time.Since(launchedAt) < browserHandoffWindow {
+		log.Printf("[BrowserWatch] Browser for proxy %s exited right after launch (%v); assuming hand-off to an existing instance, leaving proxy running", proxyID, waitErr)
+		return
+	}
+
+	ProxyMgr.mu.Lock()
+	inst := ProxyMgr.instances[proxyID]
+	if inst == nil || inst.BrowserCmd != cmd {
+		// StopProxy/restart already detached this browser — nothing to do.
+		ProxyMgr.mu.Unlock()
+		return
+	}
+	delete(ProxyMgr.instances, proxyID)
+	chrome := inst.Chrome
+	inst.Chrome = nil
+	inst.BrowserCmd = nil
+	ProxyMgr.mu.Unlock()
+
+	log.Printf("[BrowserWatch] %s for proxy %s was closed (%v); stopping proxy", inst.Browser, proxyID, waitErr)
+
+	if chrome != nil {
+		chrome.Close()
+	}
+	if inst.Proxy != nil {
+		if err := inst.Proxy.Stop(); err != nil {
+			log.Printf("[BrowserWatch][WARN] Error stopping proxy %s: %v", proxyID, err)
+		}
+	}
+	backend.updateProxyState(proxyID, proxyStateClosed)
+	updateProxyVar()
 }
 
 func (backend *Backend) StopProxy(e *core.ServeEvent) error {
@@ -1058,19 +1137,7 @@ func (backend *Backend) restartProxyLogic(proxyID string, aiChatID *string) (map
 		log.Printf("[RestartProxy] Browser profile directory: %s", profileDir)
 
 		startURL := backend.Config.InterceptedPagePath()
-		go func(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
-			cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
-			if err != nil {
-				log.Println("Error launching browser:", err)
-				return
-			}
-			ProxyMgr.mu.Lock()
-			if inst := ProxyMgr.instances[proxyID]; inst != nil {
-				inst.Browser = browserType
-				inst.BrowserCmd = cmd
-			}
-			ProxyMgr.mu.Unlock()
-		}(proxyID, browserType, listenAddr, certPath, profileDir, startURL)
+		go backend.launchProxyBrowser(proxyID, browserType, listenAddr, certPath, profileDir, startURL)
 	}
 
 	log.Printf("[RestartProxy] Successfully restarted proxy %s", proxyID)

@@ -1190,6 +1190,9 @@ func listAllProxies(backend *Backend) ([]map[string]any, error) {
 			"state":      "stopped",
 			"running":    false,
 		}
+		if r.GetString("state") == proxyStateClosed {
+			entry["stoppedReason"] = "user closed the browser"
+		}
 
 		// Pull ai_chat_id out of the data JSON column.
 		if dataRaw := r.Get("data"); dataRaw != nil {
