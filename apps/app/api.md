@@ -8,6 +8,7 @@ POST /api/proxy/start
 POST /api/proxy/stop
 POST /api/proxy/restart
 GET  /api/proxy/list
+POST /api/proxy/history
 
 # Intercept
 POST      /api/intercept/action
@@ -202,6 +203,70 @@ _Response:_
   "browser": "chrome"
 }
 ```
+
+---
+
+### Proxy History
+
+Returns the requests a proxy captured — the traffic behind its History tab in
+the UI, across every host it saw. A proxy stamps every row it captures with
+`generated_by: "proxy/<id>"`, or `"ai/<chatID>/proxy/<id>"` when the proxy is
+AI-owned; both forms are read by this endpoint.
+
+`id` is optional — leave it out to read the traffic of every proxy, and tell
+them apart by the `generated_by` on each row. Underscore padding is optional,
+`"1"` and `"______________1"` both reach the same proxy; an id matching no proxy
+is reported back rather than answered with an empty page.
+
+Rows come back 20 at a time with the headers stripped off `req`/`resp` to keep a
+page compact, newest index first unless `order` says `"oldest"` — read oldest
+first to follow a flow through in the order the proxy saw it. `filter` is ANDed
+with the proxy and takes the same fields as a row filter elsewhere.
+
+```http
+POST /api/proxy/history
+```
+
+```json
+{
+  "id": "1",
+  "page": 1,
+  "filter": "resp.status = 500",
+  "host": "example.com",
+  "order": "newest"
+}
+```
+
+```json
+{
+  "success": true,
+  "proxy": { "id": "______________1", "label": "Proxy 1", "addr": "127.0.0.1:8888", "browser": "chrome", "state": "running" },
+  "page": 1,
+  "perPage": 20,
+  "order": "newest",
+  "count": 1,
+  "hasMore": false,
+  "rows": [
+    {
+      "id": "____________476",
+      "index": 476,
+      "index_minor": 0,
+      "created": "2026-10-13 10:30:45.123Z",
+      "host": "https://example.com",
+      "port": "443",
+      "generated_by": "proxy/______________1",
+      "has_params": true,
+      "has_resp": true,
+      "http": "HTTP/1.1",
+      "req": { "method": "GET", "url": "https://example.com/item?id=1" },
+      "resp": { "status": 500 }
+    }
+  ]
+}
+```
+
+The row ids are the ones `/api/extract/values` and `/api/request/download` take.
+MCP and the frontend AI expose the same call as `proxyHistory`.
 
 ---
 

@@ -318,6 +318,14 @@ type ProxyStopArgs struct {
 	ID string `json:"id,omitempty" jsonschema_description:"The proxy ID to stop. If not provided, stops all running proxies"`
 }
 
+type ProxyHistoryArgs struct {
+	ID     string `json:"id,omitempty" jsonschema_description:"the proxy whose traffic to read, as shown by proxyList. Underscore padding is optional, \"1\" and \"______________1\" both work. Empty (default) reads the traffic of every proxy — tell them apart by the generated_by on each row"`
+	Page   int    `json:"page,omitempty" jsonschema_description:"page of rows to read, starts at 1 (default). 20 rows per page"`
+	Filter string `json:"filter,omitempty" jsonschema_description:"extra filter ANDed with the proxy, eg. \"resp.status = 500\" or \"req.url ~ '.js'\". Same fields as hostPrintRowsInDetails. Empty (default) for no extra filter"`
+	Host   string `json:"host,omitempty" jsonschema_description:"only rows of this host. With a scheme (\"https://example.com\") it has to match exactly, without one (\"example.com\") it is matched as a substring. Empty (default) for every host the proxy saw"`
+	Order  string `json:"order,omitempty" jsonschema_description:"\"newest\" (default) for the most recent requests first, or \"oldest\" to read them in the order the proxy saw them — use \"oldest\" to follow a flow through from the start"`
+}
+
 // --- Template arg structs ---
 
 type TemplateListArgs struct{}
@@ -1244,6 +1252,29 @@ func (backend *Backend) proxyListHandler(ctx context.Context, request mcp.CallTo
 		"proxies": proxies,
 		"count":   len(proxies),
 	})
+}
+
+// proxyHistoryHandler reads the traffic a proxy captured. Deliberately without
+// a checkProxyOwnership call: reading what a proxy saw is not driving it, and
+// another chat's capture is still the project's traffic.
+func (backend *Backend) proxyHistoryHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxyHistoryArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, err := backend.proxyHistoryLogic(ProxyHistoryRequest{
+		ID:     args.ID,
+		Page:   args.Page,
+		Filter: args.Filter,
+		Host:   args.Host,
+		Order:  args.Order,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(result)
 }
 
 func (backend *Backend) proxyStartHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

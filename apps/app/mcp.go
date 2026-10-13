@@ -261,6 +261,14 @@ func (backend *Backend) mcpInit() {
 	)
 
 	s.AddTool(
+		mcp.NewTool("proxyHistory",
+			mcp.WithDescription("Read the requests a proxy captured — the traffic behind its History tab, across every host it saw, newest first. This is how you look at what your own browsing produced: drive the browser, then read the requests it made. Returns a page of rows with their id, host, request and response (headers stripped). Narrow with a filter, a host, or read them oldest first to follow a flow from the start. Use the returned ids with getRequestResponseFromID, extractValues or downloadRequest"),
+			mcp.WithInputSchema[ProxyHistoryArgs](),
+		),
+		backend.proxyHistoryHandler,
+	)
+
+	s.AddTool(
 		mcp.NewTool("proxyStart",
 			mcp.WithDescription("Start a new proxy instance with optional browser attachment (chrome, firefox, or none). The result (name, browser, status, listen address) is already shown to the user as a card — do not restate it or add commentary; continue with the task, or if there is nothing else to do, end your turn without a reply."),
 			mcp.WithInputSchema[ProxyStartArgs](),
