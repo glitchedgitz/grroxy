@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -529,6 +530,54 @@ func (pm *ProxyManager) SetValue(proxyID string, selector string, value string, 
 		return err
 	}
 	return chrome.SetValue("", selector, value, timeoutMs)
+}
+
+// SetFileInput satisfies a "select a file from your PC" picker by handing the
+// file input its paths over CDP, so no OS dialog is ever opened.
+//
+// Exactly one of selector / clickSelector is used:
+//   - selector: the <input type="file"> itself. Works on hidden inputs, which
+//     is what most upload UIs have behind a styled label.
+//   - clickSelector: the visible button, for when the input isn't reachable by
+//     a selector (shadow root, cross-origin iframe, created on click).
+func (pm *ProxyManager) SetFileInput(proxyID string, selector string, clickSelector string, files []string, timeoutMs int) error {
+	if selector == "" && clickSelector == "" {
+		return fmt.Errorf("either selector or clickSelector is required")
+	}
+	if selector != "" && clickSelector != "" {
+		return fmt.Errorf("pass either selector or clickSelector, not both")
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("at least one file is required")
+	}
+
+	// Validate before touching CDP. DOM.setFileInputFiles accepts a path that
+	// doesn't exist without complaint and the page then uploads nothing, which
+	// is indistinguishable from success — so a bad path has to fail here.
+	for i, f := range files {
+		if f == "" {
+			return fmt.Errorf("files[%d] is empty", i)
+		}
+		if !filepath.IsAbs(f) {
+			return fmt.Errorf("files[%d] must be an absolute path, got %q", i, f)
+		}
+		info, err := os.Stat(f)
+		if err != nil {
+			return fmt.Errorf("files[%d] is not readable: %v", i, err)
+		}
+		if info.IsDir() {
+			return fmt.Errorf("files[%d] is a directory, not a file: %s", i, f)
+		}
+	}
+
+	chrome, err := pm.GetChromeRemote(proxyID)
+	if err != nil {
+		return err
+	}
+	if clickSelector != "" {
+		return chrome.SetFileViaChooser("", clickSelector, files, timeoutMs)
+	}
+	return chrome.SetFileInput("", selector, files, timeoutMs)
 }
 
 // WaitForSelector waits for a CSS selector to be present on the page.
@@ -1628,6 +1677,68 @@ func (backend *Backend) SetValueProxy(e *core.ServeEvent) error {
 				"success":  true,
 				"message":  "Value set successfully",
 				"selector": body.Selector,
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+// SetFileProxy fills a file input on the page attached to a proxy instance,
+// which is the only way to get past a "select a file from your PC" dialog.
+//
+// POST /api/proxy/setfile
+func (backend *Backend) SetFileProxy(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/setfile",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type SetFileBody struct {
+				ID            string   `json:"id"`
+				Selector      string   `json:"selector"`
+				ClickSelector string   `json:"clickSelector"`
+				Files         []string `json:"files"`
+				TimeoutMs     int      `json:"timeoutMs,omitempty"`
+			}
+
+			var body SetFileBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy ID is required"})
+			}
+			if body.Selector == "" && body.ClickSelector == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Either selector or clickSelector is required"})
+			}
+			if len(body.Files) == 0 {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "At least one file is required"})
+			}
+
+			if err := ProxyMgr.SetFileInput(body.ID, body.Selector, body.ClickSelector, body.Files, body.TimeoutMs); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			used := body.Selector
+			if used == "" {
+				used = body.ClickSelector
+			}
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"success":  true,
+				"message":  fmt.Sprintf("Set %d file(s) on the file input", len(body.Files)),
+				"selector": used,
+				"files":    body.Files,
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{

@@ -325,6 +325,14 @@ func (backend *Backend) mcpInit() {
 	)
 
 	s.AddTool(
+		mcp.NewTool("proxySetFile",
+			mcp.WithDescription("Attach local files to a file input \u2014 the ONLY way to get past a \"select a file from your PC\" picker. The OS file dialog cannot be driven any other way, and proxyEval cannot do this because input.files is read-only from JS. Pass `selector` for the <input type=\"file\"> itself; this works even when the input is hidden behind a styled label, which is the usual case, so prefer it. Pass `clickSelector` (the visible button) only when no input can be matched \u2014 shadow root, iframe, or created on click. Files must be ABSOLUTE paths that exist on the machine running the browser."),
+			mcp.WithInputSchema[ProxySetFileArgs](),
+		),
+		backend.proxySetFileHandler,
+	)
+
+	s.AddTool(
 		mcp.NewTool("proxyEval",
 			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools. ALWAYS include a short `note` explaining what this JS does — it is shown to the user as the action label."),
 			mcp.WithInputSchema[ProxyEvalArgs](),

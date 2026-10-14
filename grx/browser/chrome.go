@@ -13,7 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/page"
+	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/cdproto/target"
 	"github.com/chromedp/chromedp"
 )
@@ -1300,6 +1302,152 @@ func (cr *ChromeRemote) SetValue(targetID string, selector string, value string,
 	if !res.Ok {
 		return fmt.Errorf("[ChromeRemote] failed to set value: %s", res.Error)
 	}
+	return nil
+}
+
+// SetFileInput fills an <input type="file"> with local file paths, which is
+// the only way to satisfy a "select a file from your PC" picker — input.files
+// is read-only from JS and the OS dialog is outside the page.
+//
+// This goes through DOM.setFileInputFiles. Two things make it work where
+// proxyType does not:
+//
+//   - chromedp.SetUploadFiles does NOT append NodeVisible (unlike SendKeys),
+//     so it fills inputs that are display:none / opacity:0 behind a styled
+//     label — which is how nearly every real upload UI is built.
+//   - Chrome only allows the command when the DevTools client may read local
+//     files (DOMHandler's allow_file_access_, fed by MayReadLocalFiles()).
+//     A plain --remote-debugging-port client like ours gets that by default;
+//     a -32000 "Not allowed" here would mean that changed.
+//
+// Paths must be absolute and must exist on this machine; the caller validates
+// that, because CDP accepts a bogus path happily and the page then uploads
+// nothing.
+func (cr *ChromeRemote) SetFileInput(targetID string, selector string, files []string, timeoutMs int) error {
+	log.Printf("[ChromeRemote] SetFileInput selector=%s files=%v (targetID=%s)", selector, files, targetID)
+	if selector == "" {
+		return fmt.Errorf("selector is required")
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("at least one file is required")
+	}
+
+	ctx, err := cr.getContext(targetID)
+	if err != nil {
+		return err
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 15000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	if err := chromedp.Run(tctx, chromedp.SetUploadFiles(selector, files, chromedp.ByQuery)); err != nil {
+		return fmt.Errorf("[ChromeRemote] failed to set file input %s: %v", selector, err)
+	}
+
+	log.Printf("[ChromeRemote] SetFileInput ok: %d file(s) on %s", len(files), selector)
+	return nil
+}
+
+// SetFileViaChooser handles upload UIs where the file input cannot be reached
+// by a selector — it lives in a shadow root or a cross-origin iframe, or the
+// page creates it on the fly when the button is clicked.
+//
+// Flow: turn on Page.setInterceptFileChooserDialog so Chrome reports the
+// chooser over CDP instead of opening the native dialog, click the visible
+// button, catch Page.fileChooserOpened, then fill the input it points at by
+// backendNodeId. This is the same approach Playwright's file-chooser API uses.
+//
+// The click has to be a native mouse click: Chrome requires a user activation
+// to open a file chooser, and Runtime.evaluate does not produce one unless we
+// ask for it — hence the userGesture fallback below for buttons that a native
+// click can't reach (overlays, zero-size hit targets). Interception is turned
+// on before the click, so the native dialog never competes with us.
+func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string, files []string, timeoutMs int) error {
+	log.Printf("[ChromeRemote] SetFileViaChooser clickSelector=%s files=%v (targetID=%s)", clickSelector, files, targetID)
+	if clickSelector == "" {
+		return fmt.Errorf("clickSelector is required")
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("at least one file is required")
+	}
+
+	ctx, err := cr.getContext(targetID)
+	if err != nil {
+		return err
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 15000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	// Register the listener before enabling interception so we cannot miss a
+	// chooser that opens immediately on click.
+	chooser := make(chan *page.EventFileChooserOpened, 1)
+	chromedp.ListenTarget(tctx, func(ev interface{}) {
+		if e, ok := ev.(*page.EventFileChooserOpened); ok {
+			select {
+			case chooser <- e:
+			default:
+			}
+		}
+	})
+
+	if err := chromedp.Run(tctx, page.SetInterceptFileChooserDialog(true)); err != nil {
+		return fmt.Errorf("[ChromeRemote] failed to enable file chooser interception: %v", err)
+	}
+	// Always hand the dialog back to the user. Derived from ctx, not tctx:
+	// tctx may already be expired, and the cleanup still has to go out.
+	defer func() {
+		cctx, ccancel := context.WithTimeout(ctx, 2*time.Second)
+		defer ccancel()
+		if err := chromedp.Run(cctx, page.SetInterceptFileChooserDialog(false)); err != nil {
+			log.Printf("[ChromeRemote] WARNING: failed to disable file chooser interception: %v", err)
+		}
+	}()
+
+	// Native click first — it carries a real user activation.
+	clickCtx, clickCancel := context.WithTimeout(tctx, 5*time.Second)
+	defer clickCancel()
+	if err := chromedp.Run(clickCtx, chromedp.Click(clickSelector, chromedp.ByQuery)); err != nil {
+		log.Printf("[ChromeRemote] native click on %s failed (%v), retrying as JS click with a user gesture", clickSelector, err)
+		expr := fmt.Sprintf(`(function(){var e=document.querySelector(%q); if(!e) return false; e.click(); return true;})()`, clickSelector)
+		var ok bool
+		jctx, jcancel := context.WithTimeout(tctx, 5*time.Second)
+		defer jcancel()
+		jsErr := chromedp.Run(jctx, chromedp.Evaluate(expr, &ok,
+			func(p *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams {
+				return p.WithUserGesture(true)
+			}))
+		if jsErr != nil {
+			return fmt.Errorf("[ChromeRemote] could not click %s: native click failed (%v) and JS click failed (%v)", clickSelector, err, jsErr)
+		}
+		if !ok {
+			return fmt.Errorf("[ChromeRemote] could not click %s: element not found", clickSelector)
+		}
+	}
+
+	var ev *page.EventFileChooserOpened
+	select {
+	case ev = <-chooser:
+	case <-tctx.Done():
+		return fmt.Errorf("[ChromeRemote] clicked %s but no file chooser opened within %dms — is that the element that opens the picker?", clickSelector, timeoutMs)
+	}
+
+	// Only choosers raised by an <input type="file"> carry a node to fill.
+	if ev.BackendNodeID == 0 {
+		return fmt.Errorf("[ChromeRemote] file chooser opened (mode=%s) but reported no input node — this page is not using an <input type=\"file\">, so it cannot be filled this way", ev.Mode)
+	}
+
+	if err := chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
+		return dom.SetFileInputFiles(files).WithBackendNodeID(ev.BackendNodeID).Do(c)
+	})); err != nil {
+		return fmt.Errorf("[ChromeRemote] file chooser opened but setting files failed: %v", err)
+	}
+
+	log.Printf("[ChromeRemote] SetFileViaChooser ok: %d file(s) via %s (mode=%s)", len(files), clickSelector, ev.Mode)
 	return nil
 }
 

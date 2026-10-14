@@ -158,6 +158,7 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.SetValueProxy)
 	API.App.OnBeforeServe().Add(API.WaitForSelectorProxy)
 	API.App.OnBeforeServe().Add(API.EvaluateProxy)
+	API.App.OnBeforeServe().Add(API.SetFileProxy)
 
 	// Other
 	API.App.OnBeforeServe().Add(API.AddRequest)

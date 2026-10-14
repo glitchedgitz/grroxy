@@ -385,6 +385,14 @@ type ProxySetValueArgs struct {
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 5000"`
 }
 
+type ProxySetFileArgs struct {
+	ID            string   `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	Selector      string   `json:"selector,omitempty" jsonschema_description:"CSS selector for the <input type=\"file\"> element. Works even when the input is hidden (display:none/opacity:0), which is how most upload UIs are built. Use this OR clickSelector, not both."`
+	ClickSelector string   `json:"clickSelector,omitempty" jsonschema_description:"CSS selector for the visible button that opens the file picker. Use this instead of selector when no <input type=\"file\"> can be matched \u2014 e.g. it lives in a shadow root or iframe, or the page creates it on click."`
+	Files         []string `json:"files" jsonschema:"required" jsonschema_description:"Absolute local file paths to attach. Must exist on the machine running the browser. Pass several for a multi-file input."`
+	TimeoutMs     int      `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
+}
+
 type ProxyElementsArgs struct {
 	ID  string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	URL string `json:"url,omitempty" jsonschema_description:"URL to navigate to before extracting elements. If empty, analyzes the current active page"`
@@ -1824,6 +1832,42 @@ func (backend *Backend) proxySetValueHandler(ctx context.Context, request mcp.Ca
 		"success":  true,
 		"message":  "Value set successfully",
 		"selector": args.Selector,
+	})
+}
+
+func (backend *Backend) proxySetFileHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxySetFileArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.Selector == "" && args.ClickSelector == "" {
+		return mcp.NewToolResultError("either selector or clickSelector is required"), nil
+	}
+	if args.Selector != "" && args.ClickSelector != "" {
+		return mcp.NewToolResultError("pass either selector or clickSelector, not both"), nil
+	}
+	if len(args.Files) == 0 {
+		return mcp.NewToolResultError("files is required (absolute local paths)"), nil
+	}
+
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := ProxyMgr.SetFileInput(args.ID, args.Selector, args.ClickSelector, args.Files, args.TimeoutMs); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	used := args.Selector
+	if used == "" {
+		used = args.ClickSelector
+	}
+	return mcpJSONResult(map[string]any{
+		"success":  true,
+		"message":  fmt.Sprintf("Set %d file(s) on the file input", len(args.Files)),
+		"selector": used,
+		"files":    args.Files,
 	})
 }
 
