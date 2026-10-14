@@ -185,7 +185,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("getRequestsByLabel",
-			mcp.WithDescription("Get the requests carrying a label, by label name. Returns a page of rows with their id, host, request and response (headers stripped), plus the other labels on the row. Narrow further with an extra filter or a host. Use the returned ids with getRequestResponseFromID, extractValues or downloadRequest"),
+			mcp.WithDescription("Get the requests carrying a label, by label name. Returns a page of rows with their id, host, request and response (headers stripped), plus the other labels on the row. Narrow further with an extra filter or a host. Needs the proxy id from proxyList. Use the returned ids with getRequestResponseFromID, extractValues or downloadRequest"),
 			mcp.WithInputSchema[GetRequestsByLabelArgs](),
 		),
 		backend.getRequestsByLabelHandler,

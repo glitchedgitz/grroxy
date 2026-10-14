@@ -319,7 +319,7 @@ type ProxyStopArgs struct {
 }
 
 type ProxyHistoryArgs struct {
-	ID     string `json:"id,omitempty" jsonschema_description:"the proxy whose traffic to read, as shown by proxyList. Underscore padding is optional, \"1\" and \"______________1\" both work. Empty (default) reads the traffic of every proxy — tell them apart by the generated_by on each row"`
+	ID     string `json:"id" jsonschema:"required" jsonschema_description:"the proxy whose traffic to read, as shown by proxyList. Underscore padding is optional, \"1\" and \"______________1\" both work"`
 	Page   int    `json:"page,omitempty" jsonschema_description:"page of rows to read, starts at 1 (default). 20 rows per page"`
 	Filter string `json:"filter,omitempty" jsonschema_description:"extra filter ANDed with the proxy, eg. \"resp.status = 500\" or \"req.url ~ '.js'\". Same fields as hostPrintRowsInDetails. Empty (default) for no extra filter"`
 	Host   string `json:"host,omitempty" jsonschema_description:"only rows of this host. With a scheme (\"https://example.com\") it has to match exactly, without one (\"example.com\") it is matched as a substring. Empty (default) for every host the proxy saw"`
@@ -1269,6 +1269,10 @@ func (backend *Backend) proxyHistoryHandler(ctx context.Context, request mcp.Cal
 	var args ProxyHistoryArgs
 	if err := request.BindArguments(&args); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.ID == "" {
+		return mcp.NewToolResultError("id is required — call proxyList for the ids that exist"), nil
 	}
 
 	result, err := backend.proxyHistoryLogic(ProxyHistoryRequest{

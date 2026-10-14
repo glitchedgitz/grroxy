@@ -79,6 +79,10 @@ func (backend *Backend) ProxyHistoryEndpoint(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]any{"error": "Invalid request body"})
 			}
 
+			if body.ID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]any{"error": "id is required"})
+			}
+
 			resp, err := backend.proxyHistoryLogic(body)
 			if err != nil {
 				return c.JSON(http.StatusBadRequest, map[string]any{"error": err.Error()})
