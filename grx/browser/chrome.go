@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -606,6 +607,10 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 	log.Printf("[ChromeRemote] Starting click operation (targetID=%s, selector=%s, targetURL=%s, waitNav=%v, waitForSelector=%q, useJS=%v)",
 		targetID, selector, targetURL, waitForNavigation, waitForSelector, useJS)
 
+	sel, err := resolveSelector(selector)
+	if err != nil {
+		return nil, err
+	}
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return nil, err
@@ -668,18 +673,18 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 		return nil
 	}
 
-	if err := runStep("waitVisible", chromedp.WaitVisible(selector, chromedp.ByQuery), 5000); err != nil {
+	if err := runStep("waitVisible", chromedp.WaitVisible(sel.Value, sel.Option), 5000); err != nil {
 		return nil, err
 	}
 	// Best-effort scroll into view so the click coordinates resolve to the
 	// element instead of an off-screen point.
-	_ = runStep("scrollIntoView", chromedp.ScrollIntoView(selector, chromedp.ByQuery), 3000)
+	_ = runStep("scrollIntoView", chromedp.ScrollIntoView(sel.Value, sel.Option), 3000)
 
 	// JS click — runs el.click() via Runtime.evaluate. Fires synthetic
 	// (untrusted) events but reliably bypasses overlays/focus-traps that
 	// intercept native mouse events.
 	jsClick := func() error {
-		expr := fmt.Sprintf(`(function(){var e=document.querySelector(%q); if(!e) return false; e.click(); return true;})()`, selector)
+		expr := fmt.Sprintf(`(function(){var e=%s; if(!e) return false; e.click(); return true;})()`, sel.JS())
 		var ok bool
 		jctx, jcancel := context.WithTimeout(timeoutCtx, 5*time.Second)
 		defer jcancel()
@@ -703,7 +708,7 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 		// Native CDP click first; auto-fall back to JS click on timeout so
 		// callers don't have to retry on overlay-heavy pages.
 		log.Printf("[ChromeRemote] Native click on %s", selector)
-		nativeErr := runStep("click", chromedp.Click(selector, chromedp.ByQuery), 5000)
+		nativeErr := runStep("click", chromedp.Click(sel.Value, sel.Option), 5000)
 		if nativeErr == nil {
 			clickMode = "native"
 		} else {
@@ -1209,6 +1214,10 @@ func (cr *ChromeRemote) Evaluate(targetID string, jsExpr string, dest interface{
 func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, clearFirst bool, timeoutMs int) error {
 	log.Printf("[ChromeRemote] Typing text into %s (targetID=%s, clearFirst=%v)", selector, targetID, clearFirst)
 
+	sel, err := resolveSelector(selector)
+	if err != nil {
+		return err
+	}
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return err
@@ -1228,13 +1237,13 @@ func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, 
 		return nil
 	}
 
-	if err := runStep("waitVisible", chromedp.WaitVisible(selector, chromedp.ByQuery), 5000); err != nil {
+	if err := runStep("waitVisible", chromedp.WaitVisible(sel.Value, sel.Option), 5000); err != nil {
 		return err
 	}
-	if err := runStep("scrollIntoView", chromedp.ScrollIntoView(selector, chromedp.ByQuery), 3000); err != nil {
+	if err := runStep("scrollIntoView", chromedp.ScrollIntoView(sel.Value, sel.Option), 3000); err != nil {
 		return err
 	}
-	if err := runStep("focus", chromedp.Focus(selector, chromedp.ByQuery), 3000); err != nil {
+	if err := runStep("focus", chromedp.Focus(sel.Value, sel.Option), 3000); err != nil {
 		return err
 	}
 	if clearFirst {
@@ -1243,7 +1252,7 @@ func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, 
 			return err
 		}
 	}
-	if err := runStep("sendKeys", chromedp.SendKeys(selector, text, chromedp.ByQuery), 5000); err != nil {
+	if err := runStep("sendKeys", chromedp.SendKeys(sel.Value, text, sel.Option), 5000); err != nil {
 		return err
 	}
 
@@ -1264,6 +1273,10 @@ func (cr *ChromeRemote) SetValue(targetID string, selector string, value string,
 	if selector == "" {
 		return fmt.Errorf("selector is required")
 	}
+	sel, err := resolveSelector(selector)
+	if err != nil {
+		return err
+	}
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return err
@@ -1274,9 +1287,19 @@ func (cr *ChromeRemote) SetValue(targetID string, selector string, value string,
 	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
+	// contenteditable has no .value, so the native-setter path silently does
+	// nothing on the rich-text editors real apps use for captions and comments.
+	// Those need innerText plus an input event instead.
 	js := fmt.Sprintf(`(function(){
-  var el = document.querySelector(%q);
+  var el = %s;
   if (!el) return { ok: false, error: "selector not found" };
+  if (el.isContentEditable) {
+    el.focus();
+    el.innerText = %q;
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, data: %q, inputType: 'insertText' }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { ok: true, tag: el.tagName, mode: "contenteditable" };
+  }
   var proto = el.tagName === 'TEXTAREA'
     ? HTMLTextAreaElement.prototype
     : (el.tagName === 'SELECT' ? HTMLSelectElement.prototype : HTMLInputElement.prototype);
@@ -1288,19 +1311,156 @@ func (cr *ChromeRemote) SetValue(targetID string, selector string, value string,
   }
   el.dispatchEvent(new Event('input',  { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
-  return { ok: true, tag: el.tagName };
-})()`, selector, value, value)
+  return { ok: true, tag: el.tagName, mode: "value" };
+})()`, sel.JS(), value, value, value, value)
 
 	var res struct {
 		Ok    bool   `json:"ok"`
 		Error string `json:"error"`
 		Tag   string `json:"tag"`
+		Mode  string `json:"mode"`
 	}
 	if err := chromedp.Run(tctx, chromedp.Evaluate(js, &res)); err != nil {
 		return fmt.Errorf("[ChromeRemote] failed to set value: %v", err)
 	}
 	if !res.Ok {
 		return fmt.Errorf("[ChromeRemote] failed to set value: %s", res.Error)
+	}
+	return nil
+}
+
+// --- Selector resolution ----------------------------------------------------
+//
+// Everything here took CSS only, which leaves no way to reach a control whose
+// only distinguishing feature is its label — the "Post" and "Sounds" buttons
+// that carry no stable id or data attribute. chromedp's BySearch runs
+// DOM.performSearch, which matches plain text, CSS *and* XPath, so the whole
+// capability was already vendored and simply never used.
+//
+// Three forms are accepted; anything else is CSS exactly as before:
+//
+//	//button[contains(., "Post")]      XPath, passed through
+//	button:has-text("Post")            translated to XPath
+//	text=Post                          plain text search
+//
+// isXPath reports whether a selector is already an XPath expression.
+func isXPath(selector string) bool {
+	s := strings.TrimSpace(selector)
+	return strings.HasPrefix(s, "//") || strings.HasPrefix(s, "(//") || strings.HasPrefix(s, "./")
+}
+
+// hasTextPattern matches tag:has-text("…") with an optional trailing
+// :not([attr]), which covers the shape callers actually write
+// (button:has-text('Post'):not([disabled])).
+var hasTextPattern = regexp.MustCompile(`^([A-Za-z][\w-]*)?:has-text\(\s*["']([^"']*)["']\s*\)(.*)$`)
+
+// notAttrPattern matches the :not([attr]) tail.
+var notAttrPattern = regexp.MustCompile(`^:not\(\s*\[([\w-]+)\]\s*\)$`)
+
+// translateHasText turns a :has-text() selector into the equivalent XPath.
+// Returns ok=false when the selector does not use :has-text at all, and an
+// error when it does but in a shape that cannot be translated — better to say
+// so than to silently match the wrong element.
+func translateHasText(selector string) (string, bool, error) {
+	m := hasTextPattern.FindStringSubmatch(strings.TrimSpace(selector))
+	if m == nil {
+		return "", false, nil
+	}
+
+	tag := m[1]
+	if tag == "" {
+		tag = "*"
+	}
+	text := m[2]
+	rest := strings.TrimSpace(m[3])
+
+	// XPath string literals cannot contain the quote they are wrapped in.
+	quoted := `"` + text + `"`
+	if strings.Contains(text, `"`) {
+		quoted = `'` + text + `'`
+	}
+
+	predicate := fmt.Sprintf("contains(., %s)", quoted)
+	if rest != "" {
+		n := notAttrPattern.FindStringSubmatch(rest)
+		if n == nil {
+			return "", false, fmt.Errorf("cannot translate %q: :has-text() understands an optional :not([attr]) tail only — write it as XPath instead, e.g. //%s[%s]", selector, tag, predicate)
+		}
+		predicate += fmt.Sprintf(" and not(@%s)", n[1])
+	}
+
+	return fmt.Sprintf("//%s[%s]", tag, predicate), true, nil
+}
+
+// resolvedSelector is what the query paths actually use: the expression to
+// send, the chromedp option that matches it, and whether it ended up as a
+// search (XPath/text) rather than CSS.
+type resolvedSelector struct {
+	Value  string
+	Option chromedp.QueryOption
+	Search bool
+}
+
+// resolveSelector decides how a selector should be matched. CSS keeps using
+// ByQuery, so existing behaviour is untouched.
+func resolveSelector(selector string) (resolvedSelector, error) {
+	s := strings.TrimSpace(selector)
+
+	search := func(v string) (resolvedSelector, error) {
+		return resolvedSelector{Value: v, Option: chromedp.BySearch, Search: true}, nil
+	}
+
+	if strings.HasPrefix(s, "xpath=") {
+		return search(strings.TrimPrefix(s, "xpath="))
+	}
+	if strings.HasPrefix(s, "text=") {
+		return search(strings.TrimPrefix(s, "text="))
+	}
+	if isXPath(s) {
+		return search(s)
+	}
+	if xpath, ok, err := translateHasText(s); err != nil {
+		return resolvedSelector{}, err
+	} else if ok {
+		log.Printf("[ChromeRemote] selector %q -> xpath %q", selector, xpath)
+		return search(xpath)
+	}
+
+	return resolvedSelector{Value: s, Option: chromedp.ByQuery}, nil
+}
+
+// JS returns an expression evaluating to the first matching element, for the
+// paths that work through Runtime.evaluate rather than a node query.
+func (r resolvedSelector) JS() string {
+	if r.Search {
+		return fmt.Sprintf(`document.evaluate(%q, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue`, r.Value)
+	}
+	return fmt.Sprintf(`document.querySelector(%q)`, r.Value)
+}
+
+// ScrollIntoView brings an element into view, which some pages require before
+// they will accept a click or reveal lazily-rendered content.
+func (cr *ChromeRemote) ScrollIntoView(targetID string, selector string, timeoutMs int) error {
+	log.Printf("[ChromeRemote] ScrollIntoView selector=%s (targetID=%s)", selector, targetID)
+	if selector == "" {
+		return fmt.Errorf("selector is required")
+	}
+	sel, err := resolveSelector(selector)
+	if err != nil {
+		return err
+	}
+	ctx, err := cr.getContext(targetID)
+	if err != nil {
+		return err
+	}
+	if timeoutMs <= 0 {
+		timeoutMs = 5000
+	}
+	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
+	defer cancel()
+
+	if err := chromedp.Run(tctx, chromedp.ScrollIntoView(sel.Value, sel.Option)); err != nil {
+		return fmt.Errorf("[ChromeRemote] failed to scroll %s into view: %v", selector, err)
 	}
 	return nil
 }
@@ -1332,6 +1492,10 @@ func (cr *ChromeRemote) SetFileInput(targetID string, selector string, files []s
 		return fmt.Errorf("at least one file is required")
 	}
 
+	sel, err := resolveSelector(selector)
+	if err != nil {
+		return err
+	}
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return err
@@ -1342,7 +1506,7 @@ func (cr *ChromeRemote) SetFileInput(targetID string, selector string, files []s
 	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	if err := chromedp.Run(tctx, chromedp.SetUploadFiles(selector, files, chromedp.ByQuery)); err != nil {
+	if err := chromedp.Run(tctx, chromedp.SetUploadFiles(sel.Value, files, sel.Option)); err != nil {
 		return fmt.Errorf("[ChromeRemote] failed to set file input %s: %v", selector, err)
 	}
 
@@ -1468,6 +1632,10 @@ func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string,
 func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeoutMs int, state string) error {
 	log.Printf("[ChromeRemote] Waiting for selector %s (targetID=%s, timeout=%dms, state=%q)", selector, targetID, timeoutMs, state)
 
+	sel, err := resolveSelector(selector)
+	if err != nil {
+		return err
+	}
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return err
@@ -1481,9 +1649,9 @@ func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeou
 	var action chromedp.Action
 	switch state {
 	case "", "attached":
-		action = chromedp.WaitReady(selector, chromedp.ByQuery)
+		action = chromedp.WaitReady(sel.Value, sel.Option)
 	case "visible":
-		action = chromedp.WaitVisible(selector, chromedp.ByQuery)
+		action = chromedp.WaitVisible(sel.Value, sel.Option)
 	default:
 		return fmt.Errorf("[ChromeRemote] invalid state %q for waitForSelector (must be \"attached\" or \"visible\")", state)
 	}
