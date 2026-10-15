@@ -325,6 +325,14 @@ func (backend *Backend) mcpInit() {
 	)
 
 	s.AddTool(
+		mcp.NewTool("proxyBatchActions",
+			mcp.WithDescription("Run a list of browser actions in order, optionally once per input \u2014 the way to do a repetitive flow (upload 100 videos, fill a form per row) without a tool call per step. Every $input in an action is replaced with the current input value. Each verb behaves exactly like the proxy tool of the same name. Selectors accept CSS, XPath, text= and tag:has-text(...), so a button with only a visible label needs no eval. By default the batch stops at the first failing input and comes back as an error naming the input, the step and the reason, with the full per-step detail attached — set continueOnError to true to run every input regardless and collect the failures instead."),
+			mcp.WithInputSchema[ProxyBatchActionsArgs](),
+		),
+		backend.proxyBatchActionsHandler,
+	)
+
+	s.AddTool(
 		mcp.NewTool("proxySetFile",
 			mcp.WithDescription("Attach local files to a file input \u2014 the ONLY way to get past a \"select a file from your PC\" picker. The OS file dialog cannot be driven any other way, and proxyEval cannot do this because input.files is read-only from JS. Pass `selector` for the <input type=\"file\"> itself; this works even when the input is hidden behind a styled label, which is the usual case, so prefer it. Pass `clickSelector` (the visible button) only when no input can be matched \u2014 shadow root, iframe, or created on click. Files must be ABSOLUTE paths that exist on the machine running the browser."),
 			mcp.WithInputSchema[ProxySetFileArgs](),

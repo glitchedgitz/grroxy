@@ -532,6 +532,17 @@ func (pm *ProxyManager) SetValue(proxyID string, selector string, value string, 
 	return chrome.SetValue("", selector, value, timeoutMs)
 }
 
+// ScrollIntoView brings an element into view. Pages that lazily render on
+// scroll, or that put the control below the fold, need this before a click
+// will land.
+func (pm *ProxyManager) ScrollIntoView(proxyID string, selector string, timeoutMs int) error {
+	chrome, err := pm.GetChromeRemote(proxyID)
+	if err != nil {
+		return err
+	}
+	return chrome.ScrollIntoView("", selector, timeoutMs)
+}
+
 // SetFileInput satisfies a "select a file from your PC" picker by handing the
 // file input its paths over CDP, so no OS dialog is ever opened.
 //

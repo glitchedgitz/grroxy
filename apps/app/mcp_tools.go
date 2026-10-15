@@ -372,15 +372,15 @@ type ProxyScreenshotArgs struct {
 type ProxyClickArgs struct {
 	ID                string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	URL               string `json:"url,omitempty" jsonschema_description:"URL to navigate to before clicking. If empty, operates on the current active page"`
-	Selector          string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector for the element to click"`
+	Selector          string `json:"selector" jsonschema:"required" jsonschema_description:"Selector for the element to click. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval."`
 	WaitForNavigation bool   `json:"waitForNavigation,omitempty" jsonschema_description:"If true, waits for page navigation after click (default: false)"`
-	WaitForSelector   string `json:"waitForSelector,omitempty" jsonschema_description:"Optional CSS selector to wait for after the click. Useful for SPA transitions where waitForNavigation never fires."`
+	WaitForSelector   string `json:"waitForSelector,omitempty" jsonschema_description:"Optional selector to wait for after the click, same forms as selector. Useful for SPA transitions where waitForNavigation never fires."`
 	UseJS             bool   `json:"useJS,omitempty" jsonschema_description:"Force a JS .click() instead of native CDP dispatchMouseEvent. Use when overlays / autocomplete dropdowns / focus traps intercept native mouse events on complex pages. Default false: native click is tried first and auto-falls back to JS .click() on timeout. Result.clickMode reports which path fired (native|js|js-fallback)."`
 }
 
 type ProxySetValueArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector for the input/textarea/select element to set"`
+	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"Selector for the element to set. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval. Works on contenteditable too, not just <input>/<textarea>."`
 	Value     string `json:"value" jsonschema:"required" jsonschema_description:"The value to write into the element"`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 5000"`
 }
@@ -472,7 +472,7 @@ type InterceptGetRawArgs struct {
 
 type ProxyTypeArgs struct {
 	ID         string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	Selector   string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector for the input element to type into"`
+	Selector   string `json:"selector" jsonschema:"required" jsonschema_description:"Selector for the input to type into. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval."`
 	Text       string `json:"text" jsonschema:"required" jsonschema_description:"The text to type into the element"`
 	ClearFirst bool   `json:"clearFirst,omitempty" jsonschema_description:"If true, clears the existing value before typing (default: false)"`
 	TimeoutMs  int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
@@ -487,7 +487,7 @@ type ProxyEvalArgs struct {
 
 type ProxyWaitForSelectorArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"CSS selector to wait for (evaluated through document.querySelector)"`
+	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"Selector to wait for. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval."`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 30000"`
 	State     string `json:"state,omitempty" jsonschema_description:"What to wait for: \"attached\" (default — element exists in the DOM) or \"visible\" (element exists AND is visible: non-zero size, not display:none/opacity:0). Use \"attached\" by default — many real elements exist on the page but fail the strict visibility check (collapsed sections, off-screen sticky bars, transitioning UI)."`
 }
@@ -1837,6 +1837,50 @@ func (backend *Backend) proxySetValueHandler(ctx context.Context, request mcp.Ca
 		"message":  "Value set successfully",
 		"selector": args.Selector,
 	})
+}
+
+type ProxyBatchActionsArgs struct {
+	ID              string             `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	Inputs          []string           `json:"inputs,omitempty" jsonschema_description:"Values to loop over, one full pass of actions each. Every $input in an action is replaced with the current value. Omit to run the actions once."`
+	Actions         []ProxyBatchAction `json:"actions" jsonschema:"required" jsonschema_description:"Steps to run in order, each {\"action\": verb, ...args}. Verbs: click, waitFor, setFile, type, setValue, scroll, eval, navigate, sleep, reload, goBack, goForward \u2014 each behaves exactly like the proxy tool of the same name. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval."`
+	ContinueOnError *bool              `json:"continueOnError,omitempty" jsonschema_description:"false (default) stops the batch at the first failing input and returns an error. Set true to run every input regardless and collect the failures."`
+	TimeoutMs       int                `json:"timeoutMs,omitempty" jsonschema_description:"Default per-action timeout in milliseconds (default 15000). An action can override it with its own timeoutMs."`
+}
+
+func (backend *Backend) proxyBatchActionsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxyBatchActionsArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if err := checkProxyOwnership(ctx, args.ID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	result, err := backend.proxyBatchActionsLogic(ctx, ProxyBatchRequest{
+		ID:              args.ID,
+		Inputs:          args.Inputs,
+		Actions:         args.Actions,
+		ContinueOnError: args.ContinueOnError,
+		TimeoutMs:       args.TimeoutMs,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	// A batch that failed anywhere comes back as an error, so a partial run
+	// cannot read as a clean one. The payload stays pure JSON with
+	// failureSummary inside it: the per-tool UI parses this text, and a leading
+	// prose line would make it unparseable exactly when the detail matters most.
+	if !result.Success {
+		detail, mErr := json.Marshal(result)
+		if mErr != nil {
+			return mcp.NewToolResultError(result.FailureSummary), nil
+		}
+		return mcp.NewToolResultError(string(detail)), nil
+	}
+
+	return mcpJSONResult(result)
 }
 
 func (backend *Backend) proxySetFileHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
