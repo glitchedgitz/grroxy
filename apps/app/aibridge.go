@@ -498,7 +498,10 @@ func (backend *Backend) AIBridgeEndpoint(e *core.ServeEvent) error {
 		return nil
 	}
 
-	for _, path := range []string{"chat", "title", "summary"} {
+	// "abort" stops the run in flight for a chat. It is a separate message
+	// rather than a reliance on the client's disconnect, which does not survive
+	// the trip through this proxy.
+	for _, path := range []string{"chat", "title", "summary", "abort"} {
 		target := "/" + path
 		e.Router.POST("/api/aibridge/:provider/"+path, func(c echo.Context) error {
 			return forward(c, target)
