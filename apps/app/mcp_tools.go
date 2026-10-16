@@ -1196,6 +1196,23 @@ func listAllProxies(backend *Backend) ([]map[string]any, error) {
 	for _, r := range records {
 		id := r.GetId()
 
+		// Read the data JSON column once: it carries both the archived flag and
+		// the owning AI chat.
+		dataMap := map[string]any{}
+		if dataRaw := r.Get("data"); dataRaw != nil {
+			if m, ok := dataRaw.(map[string]any); ok {
+				dataMap = m
+			} else if b, err := json.Marshal(dataRaw); err == nil {
+				_ = json.Unmarshal(b, &dataMap)
+			}
+		}
+
+		// Archived proxies are the ones deleted from the UI. Skip them so MCP
+		// callers see the same set of proxies as the frontend.
+		if archived, _ := dataMap["archived"].(bool); archived {
+			continue
+		}
+
 		entry := map[string]any{
 			"id":         id,
 			"listenAddr": r.GetString("addr"),
@@ -1210,18 +1227,8 @@ func listAllProxies(backend *Backend) ([]map[string]any, error) {
 			entry["stoppedReason"] = "user closed the browser"
 		}
 
-		// Pull ai_chat_id out of the data JSON column.
-		if dataRaw := r.Get("data"); dataRaw != nil {
-			dataMap, ok := dataRaw.(map[string]any)
-			if !ok {
-				dataMap = map[string]any{}
-				if b, err := json.Marshal(dataRaw); err == nil {
-					_ = json.Unmarshal(b, &dataMap)
-				}
-			}
-			if cid, ok := dataMap["ai_chat_id"].(string); ok && cid != "" {
-				entry["aiChatID"] = cid
-			}
+		if cid, ok := dataMap["ai_chat_id"].(string); ok && cid != "" {
+			entry["aiChatID"] = cid
 		}
 
 		// Layer live state on top — running is determined by presence in
