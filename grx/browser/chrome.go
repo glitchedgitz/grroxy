@@ -137,7 +137,14 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string,
 		args = append(args, "--ignore-certificate-errors")
 	}
 
-	// Add other standard arguments
+	// Add other standard arguments.
+	//
+	// Deliberately absent: --disable-extensions-except=, --test-type and
+	// --disable-component-extensions-with-background-pages. They leave the user
+	// unable to install extensions in the proxied browser, and testers need their
+	// own extensions running through the proxy. Dropping --test-type means Chrome
+	// may show its "unsupported command-line flag" infobar again, which is the
+	// lesser annoyance.
 	args = append(args,
 		"--remote-debugging-port=0", // Auto-assign debug port for CDP access
 		"--allow-insecure-localhost",
@@ -149,14 +156,11 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string,
 		"--disable-translate",
 		"--disable-infobars",
 		"--enable-features=SuppressDifferentOriginSubframeDialogs",
-		"--disable-extensions-except=",
-		"--disable-component-extensions-with-background-pages",
 		"--start-maximized",
 		"--disable-default-apps",
 		"--disable-sync",
 		"--enable-fixed-layout",
 		"--noerrdialogs",
-		"--test-type",
 		startURL,
 	)
 
