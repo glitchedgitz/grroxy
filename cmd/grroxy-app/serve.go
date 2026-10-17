@@ -257,6 +257,13 @@ func serve(projectPath string) {
 			return err
 		}
 
+		// Setup proxy name uniqueness hook
+		err = API.SetupProxyLabelHooks()
+		if err != nil {
+			log.Printf("[Startup] Error setting up proxy label hooks: %v", err)
+			return err
+		}
+
 		// Setup filters hook
 		err = API.SetupFiltersHook()
 		if err != nil {

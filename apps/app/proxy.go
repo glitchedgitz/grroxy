@@ -736,23 +736,13 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 	if browserType == "" {
 		label = body.HTTP
 	} else if label == "" {
-		// Generate label in format: {browser} {instance_number}
-		ProxyMgr.mu.RLock()
-		count := 0
-		for _, inst := range ProxyMgr.instances {
-			if inst != nil && (inst.Browser == browserType || (browserType == "proxy" && inst.Browser == "")) {
-				count++
-			}
-		}
-		ProxyMgr.mu.RUnlock()
-		count++
-
-		if count > 1 {
-			label = fmt.Sprintf("%s %d", browserType, count)
-		} else {
-			label = browserType
-		}
+		label = browserType
 	}
+
+	// Proxy names are unique, so take the first free "{browser} {n}". Counting
+	// running instances used to hand out the same name again once the earlier
+	// proxies had been stopped.
+	label = uniqueProxyLabel(backend.App.Dao(), label, "")
 
 	// Create complete proxy instance with all fields
 	proxyInstance := &ProxyInstance{
