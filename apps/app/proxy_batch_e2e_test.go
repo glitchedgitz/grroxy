@@ -411,6 +411,86 @@ func TestBatchTextSelectorsAndContenteditable(t *testing.T) {
 	}
 }
 
+// containerFixtureHTML is a sound picker: rows with no stable ids, each with
+// the same "Use" button, inside wrappers that also contain every row's text.
+// The only way to name a row is by the texts it must contain.
+const containerFixtureHTML = `<!doctype html>
+<html><head><meta charset="utf-8"></head><body>
+<div id="page"><div id="list">
+  <div class="row"><span>Signal Bloom</span><span>Other Artist</span><button>Use</button></div>
+  <div class="row"><span>Signal Bloom</span><span>Vaido Night</span><button>Use</button></div>
+</div></div>
+<input placeholder="Caption" value="old caption">
+<label for="file">Select a video from your PC</label>
+<input id="file" type="file" style="display:none">
+<pre id="out">idle</pre>
+<script>
+document.querySelectorAll('.row button').forEach(function (b, i) {
+  b.addEventListener('click', function () { document.getElementById('out').textContent = 'row' + i; });
+});
+document.getElementById('file').addEventListener('change', function (e) {
+  document.getElementById('out').textContent = 'file:' + e.target.files[0].name;
+});
+</script>
+</body></html>`
+
+// The selector shapes the tool description recommends for controls with no
+// stable id, and the two paths that used to treat every selector as CSS.
+func TestBatchContainerTextSelectors(t *testing.T) {
+	proxyID, _ := startBatchFixture(t)
+
+	fixture := filepath.Join(t.TempDir(), "container.html")
+	if err := os.WriteFile(fixture, []byte(containerFixtureHTML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	clip := writeClip(t, "clip.mp4", "x")
+	out := "document.getElementById('out').textContent"
+
+	resp, err := (&Backend{}).proxyBatchActionsLogic(context.Background(), ProxyBatchRequest{
+		ID: proxyID,
+		Actions: []ProxyBatchAction{
+			{Action: "navigate", URL: "file://" + fixture},
+			// [last()] is the innermost element holding both texts: the
+			// second row, not #page or #list, which hold them too.
+			{Action: "click", Selector: `(//*[contains(., "Signal Bloom") and contains(., "Vaido Night")])[last()]//button`},
+			{Action: "eval", JS: out},
+			// clearFirst used to clear through document.querySelector, which
+			// finds nothing for XPath, so the old text stayed in front.
+			{Action: "type", Selector: `//input[@placeholder="Caption"]`, Text: "new caption", ClearFirst: true},
+			{Action: "eval", JS: `document.querySelector('input[placeholder="Caption"]').value`},
+			// the chooser path used to click by CSS only.
+			{Action: "setFile", ClickSelector: `label:has-text("Select a video")`, File: clip},
+			{Action: "eval", JS: out},
+		},
+		MaxDurationMs: 60000,
+	})
+	if err != nil {
+		t.Fatalf("batch error: %v", err)
+	}
+	if !resp.Success {
+		t.Fatalf("batch failed: %s\n%+v", resp.FailureSummary, resp.Results)
+	}
+
+	steps := resp.Results[0].Steps
+	for i, want := range map[int]string{2: "row1", 4: "new caption", 6: "file:clip.mp4"} {
+		if got, _ := steps[i].Result.(string); got != want {
+			t.Errorf("step %d (%s): got %q, want %q", i, steps[i].Action, got, want)
+		}
+	}
+
+	// Pin why [last()] is in the recommended form: without it the first match
+	// is the outermost wrapper, and its first button is the wrong row's.
+	v, err := ProxyMgr.Evaluate(proxyID,
+		`document.evaluate('//div[contains(., "Signal Bloom") and contains(., "Vaido Night")]', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.id`,
+		5000)
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+	if v != "page" {
+		t.Errorf("naive container XPath matched %v; expected the outer wrapper #page", v)
+	}
+}
+
 // Pressing Stop has to stand the batch down. Without this the HTTP request is
 // abandoned client-side while the server keeps clicking through the rest of
 // the flow — which, for an upload batch, means posting things nobody asked for.

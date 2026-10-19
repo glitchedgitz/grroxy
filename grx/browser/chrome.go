@@ -1251,7 +1251,7 @@ func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, 
 		return err
 	}
 	if clearFirst {
-		clearJS := fmt.Sprintf(`(function(){var e=document.querySelector(%q); if(e){e.value=''; e.dispatchEvent(new Event('input',{bubbles:true}));}})()`, selector)
+		clearJS := fmt.Sprintf(`(function(){var e=%s; if(e){e.value=''; e.dispatchEvent(new Event('input',{bubbles:true}));}})()`, sel.JS())
 		if err := runStep("clear", chromedp.Evaluate(clearJS, nil), 2000); err != nil {
 			return err
 		}
@@ -1540,6 +1540,10 @@ func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string,
 	if len(files) == 0 {
 		return fmt.Errorf("at least one file is required")
 	}
+	sel, err := resolveSelector(clickSelector)
+	if err != nil {
+		return err
+	}
 
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
@@ -1579,9 +1583,9 @@ func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string,
 	// Native click first — it carries a real user activation.
 	clickCtx, clickCancel := context.WithTimeout(tctx, 5*time.Second)
 	defer clickCancel()
-	if err := chromedp.Run(clickCtx, chromedp.Click(clickSelector, chromedp.ByQuery)); err != nil {
+	if err := chromedp.Run(clickCtx, chromedp.Click(sel.Value, sel.Option)); err != nil {
 		log.Printf("[ChromeRemote] native click on %s failed (%v), retrying as JS click with a user gesture", clickSelector, err)
-		expr := fmt.Sprintf(`(function(){var e=document.querySelector(%q); if(!e) return false; e.click(); return true;})()`, clickSelector)
+		expr := fmt.Sprintf(`(function(){var e=%s; if(!e) return false; e.click(); return true;})()`, sel.JS())
 		var ok bool
 		jctx, jcancel := context.WithTimeout(tctx, 5*time.Second)
 		defer jcancel()
