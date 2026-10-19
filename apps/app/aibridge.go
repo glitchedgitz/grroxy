@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -501,12 +504,32 @@ func (backend *Backend) AIBridgeEndpoint(e *core.ServeEvent) error {
 	// "abort" stops the run in flight for a chat. It is a separate message
 	// rather than a reliance on the client's disconnect, which does not survive
 	// the trip through this proxy.
-	for _, path := range []string{"chat", "title", "summary", "abort"} {
+	for _, path := range []string{"chat", "title", "summary"} {
 		target := "/" + path
 		e.Router.POST("/api/aibridge/:provider/"+path, func(c echo.Context) error {
 			return forward(c, target)
 		})
 	}
+
+	// Killing the CLI is not enough on its own: a tool call it already made
+	// keeps running here, so cancel those too before passing the abort on.
+	e.Router.POST("/api/aibridge/:provider/abort", func(c echo.Context) error {
+		body, err := io.ReadAll(c.Request().Body)
+		if err != nil {
+			return apis.NewBadRequestError("Could not read abort body", err)
+		}
+		c.Request().Body = io.NopCloser(bytes.NewReader(body))
+
+		var payload struct {
+			ChatID string `json:"chatId"`
+		}
+		if json.Unmarshal(body, &payload) == nil {
+			if n := CancelChatToolCalls(payload.ChatID); n > 0 {
+				log.Printf("[AIBridge] Abort for chat %s cancelled %d running tool call(s)", payload.ChatID, n)
+			}
+		}
+		return forward(c, "/abort")
+	})
 
 	e.Router.GET("/api/aibridge/status", func(c echo.Context) error {
 		statuses := make(map[string]any, len(bridge.procs))

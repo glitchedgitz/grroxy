@@ -34,8 +34,7 @@ import (
 type chatIDCtxKey struct{}
 
 // sessionID -> chatID. Populated when SSE establishes; read on each /mcp/message.
-// Bounded by the number of concurrent SSE sessions; not actively swept since
-// session lifetimes are short and entries don't accumulate without traffic.
+// Removed when the session unregisters.
 var mcpSessionChatIDs sync.Map
 
 // ChatIDFromContext returns the chat ID associated with an MCP request, or "".
@@ -51,6 +50,72 @@ func mcpContextWithChatID(ctx context.Context, r *http.Request) context.Context 
 		return context.WithValue(ctx, chatIDCtxKey{}, chatID)
 	}
 	return ctx
+}
+
+// ---------------------------------------------------------------------------
+// In-flight tool calls
+//
+// mcp-go runs every SSE tool call on a context detached from the session
+// (context.WithoutCancel), so nothing stops a call when the agent behind it
+// goes away. Stopping a chat kills the CLI, but a 10-minute browser batch it
+// had started kept driving the tab with nobody listening. Every call is
+// registered here with its own cancel, which fires when its session closes or
+// when its chat is aborted.
+// ---------------------------------------------------------------------------
+
+type mcpInflightCall struct {
+	sessionID string
+	chatID    string
+	cancel    context.CancelFunc
+}
+
+var (
+	mcpInflightMu    sync.Mutex
+	mcpInflightCalls = map[*mcpInflightCall]struct{}{}
+)
+
+func mcpCancelInflightMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		call := &mcpInflightCall{chatID: ChatIDFromContext(ctx), cancel: cancel}
+		if session := mcpserver.ClientSessionFromContext(ctx); session != nil {
+			call.sessionID = session.SessionID()
+		}
+
+		mcpInflightMu.Lock()
+		mcpInflightCalls[call] = struct{}{}
+		mcpInflightMu.Unlock()
+		defer func() {
+			mcpInflightMu.Lock()
+			delete(mcpInflightCalls, call)
+			mcpInflightMu.Unlock()
+		}()
+
+		return next(ctx, req)
+	}
+}
+
+func mcpCancelInflight(match func(*mcpInflightCall) bool) int {
+	mcpInflightMu.Lock()
+	defer mcpInflightMu.Unlock()
+	n := 0
+	for call := range mcpInflightCalls {
+		if match(call) {
+			call.cancel()
+			n++
+		}
+	}
+	return n
+}
+
+// CancelChatToolCalls cancels every MCP tool call still running for a chat.
+func CancelChatToolCalls(chatID string) int {
+	if chatID == "" {
+		return 0
+	}
+	return mcpCancelInflight(func(c *mcpInflightCall) bool { return c.chatID == chatID })
 }
 
 func mcpGenerateSessionID() (string, error) {
@@ -78,10 +143,21 @@ type MCP struct {
 // ---------------------------------------------------------------------------
 
 func (backend *Backend) mcpInit() {
+	hooks := &mcpserver.Hooks{}
+	hooks.AddOnUnregisterSession(func(ctx context.Context, session mcpserver.ClientSession) {
+		sid := session.SessionID()
+		mcpSessionChatIDs.Delete(sid)
+		if n := mcpCancelInflight(func(c *mcpInflightCall) bool { return c.sessionID == sid }); n > 0 {
+			log.Printf("[MCP] Session %s closed, cancelled %d running tool call(s)", sid, n)
+		}
+	})
+
 	s := mcpserver.NewMCPServer(
 		"grroxy",
 		version.CURRENT_BACKEND_VERSION,
 		mcpserver.WithToolCapabilities(true),
+		mcpserver.WithHooks(hooks),
+		mcpserver.WithToolHandlerMiddleware(mcpCancelInflightMiddleware),
 	)
 
 	// --- Utility tools ---
