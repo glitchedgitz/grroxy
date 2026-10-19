@@ -302,7 +302,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyElements",
-			mcp.WithDescription("Extract information about all interactive elements on the page (buttons, links, inputs, textareas, selects). Returns unique CSS selectors for each element using nth-of-type paths"),
+			mcp.WithDescription("Extract information about all interactive elements on the page (buttons, links, inputs, textareas, selects). Each comes with a selector to pass to the other proxy tools: a stable id, a test attribute, aria-label, name or placeholder (CSS), or its visible text (XPath, e.g. //button[normalize-space(.)=\"Post\"]), scoped under the nearest stable ancestor when it is not unique on its own. Only when none of these is unique does it fall back to an nth-of-type position path — treat those as fragile, since they break when the page layout shifts."),
 			mcp.WithInputSchema[ProxyElementsArgs](),
 		),
 		backend.proxyElementsHandler,

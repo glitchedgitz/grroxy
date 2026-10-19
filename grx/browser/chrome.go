@@ -783,7 +783,7 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 
 // ElementInfo represents information about a clickable element on the page
 type ElementInfo struct {
-	Selector    string `json:"selector"`    // CSS selector to use for clicking
+	Selector    string `json:"selector"`    // Selector to use for clicking (CSS or XPath)
 	TagName     string `json:"tagName"`     // HTML tag name (e.g., "button", "a", "input")
 	ID          string `json:"id"`          // Element ID attribute (if present)
 	Class       string `json:"class"`       // Element class attribute (if present)
@@ -828,23 +828,114 @@ func (cr *ChromeRemote) GetElements(targetID string, targetURL string) ([]Elemen
 			'input:not([type])'
 		];
 
-		// Build a unique CSS selector path using nth-of-type from the element to the root
-		function uniqueSelector(el) {
-			if (el.id) return '#' + CSS.escape(el.id);
+		// --- selector generation ---------------------------------------
+		// Name each element the way a person would — a stable id, a test
+		// attribute, its label or its visible text — and fall back to a
+		// position path only when nothing else is unique. Positions and
+		// framework-generated ids change between renders, so a selector built
+		// on them breaks the next time the page loads.
+		const testAttrs = ['data-testid', 'data-test', 'data-e2e', 'data-cy', 'data-qa'];
+
+		// React useId (:r1a:), and ids carrying counters or hashes.
+		function stableId(id) {
+			if (!id) return false;
+			if (id.includes(':')) return false;
+			if (/\d{3,}/.test(id)) return false;
+			if (/^[a-z0-9]{12,}$/i.test(id) && /\d/.test(id)) return false;
+			return true;
+		}
+
+		function cssValue(v) {
+			return '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+		}
+		// XPath 1.0 has no escapes: pick the quote the value does not use.
+		function xpathValue(v) {
+			if (!v.includes('"')) return '"' + v + '"';
+			if (!v.includes("'")) return "'" + v + "'";
+			return null;
+		}
+		// The whitespace rule of XPath normalize-space(), so the text read
+		// here is the text the XPath compares against.
+		function normText(s) {
+			return (s || '').replace(/[ \t\n\r]+/g, ' ').trim();
+		}
+		function usable(v) {
+			return !!v && v.length <= 80 && !/[\n\r]/.test(v);
+		}
+
+		function onlyCss(sel, el) {
+			try {
+				const all = document.querySelectorAll(sel);
+				return all.length === 1 && all[0] === el;
+			} catch (e) {
+				return false;
+			}
+		}
+		function onlyXPath(xp, el) {
+			try {
+				const r = document.evaluate(xp, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+				return r.snapshotLength === 1 && r.snapshotItem(0) === el;
+			} catch (e) {
+				return false;
+			}
+		}
+
+		// Attribute candidates, most deliberate first: test hooks are put there
+		// for automation, labels are what users read.
+		function attrCandidates(el) {
+			const tag = el.tagName.toLowerCase();
+			const out = [];
+			for (const a of [...testAttrs, 'aria-label', 'name', 'placeholder', 'title']) {
+				const v = el.getAttribute(a);
+				if (usable(v)) out.push(tag + '[' + a + '=' + cssValue(v) + ']');
+			}
+			if (tag === 'input' && (el.type === 'submit' || el.type === 'button') && usable(el.value)) {
+				out.push('input[value=' + cssValue(el.value) + ']');
+			}
+			return out;
+		}
+
+		// tag[normalize-space(.)="text"], without the leading // so it can be
+		// scoped under an anchor.
+		function textStep(el) {
+			const t = normText(el.textContent);
+			if (!usable(t)) return null;
+			const lit = xpathValue(t);
+			return lit ? el.tagName.toLowerCase() + '[normalize-space(.)=' + lit + ']' : null;
+		}
+
+		// Nearest ancestor with a stable handle, to scope a candidate that is
+		// not unique on its own (an "Edit" button in each of two panels).
+		function anchorOf(el) {
+			for (let cur = el.parentElement; cur && cur !== document.body; cur = cur.parentElement) {
+				if (stableId(cur.id)) {
+					const lit = xpathValue(cur.id);
+					if (lit) return { css: '#' + CSS.escape(cur.id), xpath: '//*[@id=' + lit + ']' };
+				}
+				for (const a of testAttrs) {
+					const v = cur.getAttribute(a);
+					const lit = usable(v) && xpathValue(v);
+					if (lit) return { css: '[' + a + '=' + cssValue(v) + ']', xpath: '//*[@' + a + '=' + lit + ']' };
+				}
+			}
+			return null;
+		}
+
+		// Last resort: nth-of-type path up to the nearest stable id.
+		function pathSelector(el) {
 			const parts = [];
 			let cur = el;
 			while (cur && cur !== document.body && cur !== document.documentElement) {
-				let seg = cur.tagName.toLowerCase();
-				if (cur.id) {
+				if (stableId(cur.id)) {
 					parts.unshift('#' + CSS.escape(cur.id));
 					break;
 				}
+				let seg = cur.tagName.toLowerCase();
 				const parent = cur.parentElement;
 				if (parent) {
 					const siblings = Array.from(parent.children).filter(c => c.tagName === cur.tagName);
 					if (siblings.length > 1) {
-						const idx = siblings.indexOf(cur) + 1;
-						seg += ':nth-of-type(' + idx + ')';
+						seg += ':nth-of-type(' + (siblings.indexOf(cur) + 1) + ')';
 					}
 				}
 				parts.unshift(seg);
@@ -852,6 +943,30 @@ func (cr *ChromeRemote) GetElements(targetID string, targetURL string) ([]Elemen
 			}
 			if (parts.length === 0) return el.tagName.toLowerCase();
 			return parts.join(' > ');
+		}
+
+		function bestSelector(el) {
+			if (stableId(el.id)) {
+				const s = '#' + CSS.escape(el.id);
+				if (onlyCss(s, el)) return s;
+			}
+			const attrs = attrCandidates(el);
+			for (const c of attrs) if (onlyCss(c, el)) return c;
+			const text = textStep(el);
+			if (text && onlyXPath('//' + text, el)) return '//' + text;
+
+			const anchor = anchorOf(el);
+			if (anchor) {
+				for (const c of attrs) {
+					const s = anchor.css + ' ' + c;
+					if (onlyCss(s, el)) return s;
+				}
+				if (text) {
+					const s = anchor.xpath + '//' + text;
+					if (onlyXPath(s, el)) return s;
+				}
+			}
+			return pathSelector(el);
 		}
 
 		const seen = new Set();
@@ -872,7 +987,7 @@ func (cr *ChromeRemote) GetElements(targetID string, targetURL string) ([]Elemen
 					aria: el.getAttribute('aria-label') || '',
 					placeholder: el.placeholder || ''
 				};
-				info.selector = uniqueSelector(el);
+				info.selector = bestSelector(el);
 				elements.push(info);
 			});
 		});
