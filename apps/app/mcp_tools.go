@@ -1852,6 +1852,7 @@ type ProxyBatchActionsArgs struct {
 	Actions         []ProxyBatchAction `json:"actions" jsonschema:"required" jsonschema_description:"Steps to run in order, each {\"action\": verb, ...args}. Verbs: click, waitFor, setFile, type, setValue, scroll, eval, navigate, sleep, reload, goBack, goForward \u2014 each behaves exactly like the proxy tool of the same name. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval."`
 	ContinueOnError *bool              `json:"continueOnError,omitempty" jsonschema_description:"false (default) stops the batch at the first failing input and returns an error. Set true to run every input regardless and collect the failures."`
 	TimeoutMs       int                `json:"timeoutMs,omitempty" jsonschema_description:"Default per-action timeout in milliseconds (default 15000). An action can override it with its own timeoutMs."`
+	MaxDurationMs   int                `json:"maxDurationMs,omitempty" jsonschema_description:"Deadline for the whole batch in milliseconds (default 60000, max 600000). When it hits, the batch stops between steps and returns what ran plus the remaining inputs. Raise it for long flows such as one upload per input, rather than splitting them into one call per input."`
 }
 
 func (backend *Backend) proxyBatchActionsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1870,6 +1871,7 @@ func (backend *Backend) proxyBatchActionsHandler(ctx context.Context, request mc
 		Actions:         args.Actions,
 		ContinueOnError: args.ContinueOnError,
 		TimeoutMs:       args.TimeoutMs,
+		MaxDurationMs:   args.MaxDurationMs,
 	})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil

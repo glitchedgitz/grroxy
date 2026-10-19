@@ -33,6 +33,11 @@ const batchDefaultTimeoutMs = 15000
 // partial result actually arrives instead of the call being killed.
 const batchDefaultMaxDurationMs = 60000
 
+// batchMaxDurationCapMs is the most a caller can raise the deadline to. Long
+// flows (one upload per input) need minutes, and progress streams over the
+// batch websocket meanwhile, but a single blocked call still needs an end.
+const batchMaxDurationCapMs = 600000
+
 // ProxyBatchAction is one step of a batch. Action names the verb, and the rest
 // of the fields are its arguments — each verb forwards to the same code the
 // matching proxy tool uses, so behaviour is identical to running the tools by
@@ -385,6 +390,9 @@ func (backend *Backend) proxyBatchActionsLogic(ctx context.Context, req ProxyBat
 	maxDuration := req.MaxDurationMs
 	if maxDuration <= 0 {
 		maxDuration = batchDefaultMaxDurationMs
+	}
+	if maxDuration > batchMaxDurationCapMs {
+		maxDuration = batchMaxDurationCapMs
 	}
 	deadline := time.Now().Add(time.Duration(maxDuration) * time.Millisecond)
 
