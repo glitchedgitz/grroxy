@@ -57,29 +57,15 @@ func (backend *Backend) ActivateTab(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy does not have Chrome browser attached"})
 			}
 
-			// Get profile directory
-			var profileDir string
-			if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
-				for _, arg := range inst.BrowserCmd.Args {
-					if strings.HasPrefix(arg, "--user-data-dir=") {
-						profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
-						break
-					}
-				}
-			}
-
-			if profileDir == "" {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": "Could not determine Chrome profile directory"})
-			}
-
-			// Get debug URL
-			debugURL, err := browser.GetChromeDebugURL(profileDir)
+			// The proxy's shared connection: a one-shot connection here would
+			// open a blank tab of its own, close the tabs it touched on the way
+			// out, and leave the AI tools unaware of the tab change.
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to get Chrome debug URL: %v", err)})
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			// Activate tab
-			if err := browser.ActivateTab(debugURL, body.TargetID); err != nil {
+			if err := chrome.ActivateTab(body.TargetID); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to activate tab: %v", err)})
 			}
 
@@ -219,29 +205,15 @@ func (backend *Backend) CloseTab(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy does not have Chrome browser attached"})
 			}
 
-			// Get profile directory
-			var profileDir string
-			if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
-				for _, arg := range inst.BrowserCmd.Args {
-					if strings.HasPrefix(arg, "--user-data-dir=") {
-						profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
-						break
-					}
-				}
-			}
-
-			if profileDir == "" {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": "Could not determine Chrome profile directory"})
-			}
-
-			// Get debug URL
-			debugURL, err := browser.GetChromeDebugURL(profileDir)
+			// The proxy's shared connection: a one-shot connection here would
+			// open a blank tab of its own, close the tabs it touched on the way
+			// out, and leave the AI tools unaware of the tab change.
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to get Chrome debug URL: %v", err)})
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			// Close tab
-			if err := browser.CloseTab(debugURL, body.TargetID); err != nil {
+			if err := chrome.CloseTab(body.TargetID); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to close tab: %v", err)})
 			}
 
@@ -297,29 +269,19 @@ func (backend *Backend) ReloadTab(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy does not have Chrome browser attached"})
 			}
 
-			// Get profile directory
-			var profileDir string
-			if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
-				for _, arg := range inst.BrowserCmd.Args {
-					if strings.HasPrefix(arg, "--user-data-dir=") {
-						profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
-						break
-					}
-				}
-			}
-
-			if profileDir == "" {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": "Could not determine Chrome profile directory"})
-			}
-
-			// Get debug URL
-			debugURL, err := browser.GetChromeDebugURL(profileDir)
+			// The proxy's shared connection: a one-shot connection here would
+			// open a blank tab of its own, close the tabs it touched on the way
+			// out, and leave the AI tools unaware of the tab change.
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to get Chrome debug URL: %v", err)})
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			// Reload tab
-			if err := browser.ReloadTab(debugURL, body.TargetID, body.BypassCache); err != nil {
+			if body.TargetID, err = resolveTab(chrome, body.TargetID); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			if err := chrome.ReloadTab(body.TargetID, body.BypassCache, 0); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to reload tab: %v", err)})
 			}
 
@@ -374,29 +336,19 @@ func (backend *Backend) GoBack(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy does not have Chrome browser attached"})
 			}
 
-			// Get profile directory
-			var profileDir string
-			if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
-				for _, arg := range inst.BrowserCmd.Args {
-					if strings.HasPrefix(arg, "--user-data-dir=") {
-						profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
-						break
-					}
-				}
-			}
-
-			if profileDir == "" {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": "Could not determine Chrome profile directory"})
-			}
-
-			// Get debug URL
-			debugURL, err := browser.GetChromeDebugURL(profileDir)
+			// The proxy's shared connection: a one-shot connection here would
+			// open a blank tab of its own, close the tabs it touched on the way
+			// out, and leave the AI tools unaware of the tab change.
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to get Chrome debug URL: %v", err)})
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			// Go back
-			if err := browser.GoBack(debugURL, body.TargetID); err != nil {
+			if body.TargetID, err = resolveTab(chrome, body.TargetID); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			if err := chrome.GoBack(body.TargetID, 0); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to go back: %v", err)})
 			}
 
@@ -451,29 +403,19 @@ func (backend *Backend) GoForward(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Proxy does not have Chrome browser attached"})
 			}
 
-			// Get profile directory
-			var profileDir string
-			if inst.BrowserCmd != nil && len(inst.BrowserCmd.Args) > 0 {
-				for _, arg := range inst.BrowserCmd.Args {
-					if strings.HasPrefix(arg, "--user-data-dir=") {
-						profileDir = strings.TrimPrefix(arg, "--user-data-dir=")
-						break
-					}
-				}
-			}
-
-			if profileDir == "" {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": "Could not determine Chrome profile directory"})
-			}
-
-			// Get debug URL
-			debugURL, err := browser.GetChromeDebugURL(profileDir)
+			// The proxy's shared connection: a one-shot connection here would
+			// open a blank tab of its own, close the tabs it touched on the way
+			// out, and leave the AI tools unaware of the tab change.
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to get Chrome debug URL: %v", err)})
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
-			// Go forward
-			if err := browser.GoForward(debugURL, body.TargetID); err != nil {
+			if body.TargetID, err = resolveTab(chrome, body.TargetID); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			if err := chrome.GoForward(body.TargetID, 0); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to go forward: %v", err)})
 			}
 

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/page"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
@@ -55,7 +56,7 @@ end tell
 	go func() { _ = exec.Command("osascript", "-e", script).Run() }()
 }
 
-func launchChrome(proxyAddress string, customCertPath string, profileDir string, startURL string) (*exec.Cmd, error) {
+func launchChrome(proxyAddress string, customCertPath string, profileDir string) (*exec.Cmd, error) {
 	log.Println("[launchChrome] Starting Chrome launch process")
 
 	// Use provided profile directory
@@ -161,7 +162,6 @@ func launchChrome(proxyAddress string, customCertPath string, profileDir string,
 		"--disable-sync",
 		"--enable-fixed-layout",
 		"--noerrdialogs",
-		startURL,
 	)
 
 	log.Printf("[launchChrome] Chrome arguments: %v", args)
@@ -318,10 +318,11 @@ func NewChromeRemote(debugURL string) (*ChromeRemote, error) {
 	// Create the first context (this establishes the connection)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 
-	// Trigger the browser to start by running an empty action to ensure connection
-	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		return nil
-	})); err != nil {
+	// Connect at the browser level only. chromedp.Run would also attach
+	// browserCtx to a tab, and with a remote allocator it creates an
+	// about:blank tab for that — left behind in the user's browser for as
+	// long as the connection lives. Targets needs just the connection.
+	if _, err := chromedp.Targets(browserCtx); err != nil {
 		browserCancel()
 		allocCancel()
 		return nil, fmt.Errorf("failed to connect to Chrome: %v", err)
@@ -359,26 +360,68 @@ func (cr *ChromeRemote) Close() {
 	}
 }
 
+// browserExec sends CDP commands to the browser itself rather than to a tab.
+// Tab management (list, open, activate, close) goes through it: run through
+// chromedp.Run on browserCtx, those would first create a tab to run in.
+func (cr *ChromeRemote) browserExec() context.Context {
+	return cdp.WithExecutor(cr.browserCtx, chromedp.FromContext(cr.browserCtx).Browser)
+}
+
+// CurrentTarget resolves "no tab given" to a tab. It sticks to the tab last
+// activated, opened or navigated, so a run of tool calls lands on one page.
+// When there is none yet, or that tab has since been closed, it picks the
+// first real page — skipping blank, chrome://, extension and devtools tabs —
+// and remembers it: Chrome's tab order is not stable, so re-picking on every
+// call would wander between tabs.
+func (cr *ChromeRemote) CurrentTarget() (string, error) {
+	tabs, err := cr.ListTabs()
+	if err != nil {
+		return "", err
+	}
+
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if cr.lastActiveTargetID != "" {
+		for _, t := range tabs {
+			if t.ID == cr.lastActiveTargetID {
+				return t.ID, nil
+			}
+		}
+	}
+	if len(tabs) == 0 {
+		return "", fmt.Errorf("[ChromeRemote] no open tab in the browser")
+	}
+
+	chosen := tabs[0].ID
+	for _, t := range tabs {
+		u := strings.TrimSpace(t.URL)
+		if u == "" || u == "about:blank" ||
+			strings.HasPrefix(u, "chrome://") ||
+			strings.HasPrefix(u, "chrome-extension://") ||
+			strings.HasPrefix(u, "devtools://") {
+			continue
+		}
+		chosen = t.ID
+		break
+	}
+	log.Printf("[ChromeRemote] Current tab: %s", chosen)
+	cr.lastActiveTargetID = chosen
+	return chosen, nil
+}
+
 // getContext returns a context for the specific target ID.
 // It caches contexts to avoid frequent opening/closing of sessions, which helps prevent tab closure.
 //
-// When targetID is empty we prefer the most-recently activated/opened/
-// navigated tab (lastActiveTargetID) so that proxyActivateTab actually
-// steers downstream tools (proxyType / proxyClick / proxyEval / etc.) to
-// the activated tab instead of always landing on tabs[0]. Falls back to
-// the first listed tab if no last-active is recorded yet.
+// An empty targetID means the current tab (CurrentTarget), so that
+// proxyActivateTab steers downstream tools (proxyType / proxyClick /
+// proxyEval / etc.) to the activated tab.
 func (cr *ChromeRemote) getContext(targetID string) (context.Context, error) {
 	if targetID == "" {
-		cr.mu.Lock()
-		targetID = cr.lastActiveTargetID
-		cr.mu.Unlock()
-	}
-	if targetID == "" {
-		tabs, err := cr.ListTabs()
-		if err != nil || len(tabs) == 0 {
-			return cr.browserCtx, nil
+		var err error
+		if targetID, err = cr.CurrentTarget(); err != nil {
+			return nil, err
 		}
-		targetID = tabs[0].ID
 	}
 
 	cr.mu.Lock()
@@ -441,78 +484,10 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs
 		timeoutMs = 30000
 	}
 
-	// Fall back to the most recently activated/opened/navigated tab when no
-	// explicit targetID is given. This makes activate-then-screenshot work as
-	// callers expect, instead of always grabbing the first non-blank tab.
-	if targetID == "" {
-		cr.mu.Lock()
-		targetID = cr.lastActiveTargetID
-		cr.mu.Unlock()
-		if targetID != "" {
-			log.Printf("[ChromeRemote] Using last-active target: %s", targetID)
-		}
-	}
-
+	// An empty targetID resolves to the current tab (see CurrentTarget).
 	ctx, err := cr.getContext(targetID)
 	if err != nil {
 		return nil, err
-	}
-
-	if targetID == "" {
-		// Pick a "best" existing page tab if no targetID provided
-		var picked target.ID
-		err := chromedp.Run(ctx,
-			chromedp.ActionFunc(func(c context.Context) error {
-				infos, err := chromedp.Targets(c)
-				if err != nil {
-					return err
-				}
-
-				var fallbackTab target.ID
-
-				for _, info := range infos {
-					if info.Type != "page" {
-						continue
-					}
-
-					// Remember first page tab as fallback
-					if fallbackTab == "" {
-						fallbackTab = info.TargetID
-					}
-
-					// Try to find a "good" tab (not blank/chrome/extension)
-					u := strings.TrimSpace(info.URL)
-					if u == "" || u == "about:blank" ||
-						strings.HasPrefix(u, "chrome://") ||
-						strings.HasPrefix(u, "chrome-extension://") ||
-						strings.HasPrefix(u, "devtools://") {
-						continue
-					}
-					picked = info.TargetID
-					break
-				}
-
-				if picked == "" && fallbackTab != "" {
-					picked = fallbackTab
-				}
-
-				if picked == "" {
-					return fmt.Errorf("no page tabs found in Chrome")
-				}
-
-				log.Printf("[ChromeRemote] Selected tab ID: %s", picked.String())
-				return nil
-			}),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("[ChromeRemote] failed selecting tab: %v", err)
-		}
-
-		// Create a specific context for the picked tab (this will cache it)
-		ctx, err = cr.getContext(string(picked))
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	// Timeout for the screenshot operation (caller-configurable).
@@ -1016,33 +991,23 @@ type TabInfo struct {
 
 // ListTabs lists all open tabs in Chrome
 func (cr *ChromeRemote) ListTabs() ([]TabInfo, error) {
-	log.Printf("[ChromeRemote] Listing all Chrome tabs")
-
-	var tabs []TabInfo
-	if err := chromedp.Run(cr.browserCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			infos, err := chromedp.Targets(ctx)
-			if err != nil {
-				return err
-			}
-			for _, info := range infos {
-				if info.Type == "page" {
-					tabs = append(tabs, TabInfo{
-						ID:          info.TargetID.String(),
-						Title:       info.Title,
-						URL:         info.URL,
-						Type:        info.Type,
-						Description: "",
-					})
-				}
-			}
-			return nil
-		}),
-	); err != nil {
+	infos, err := chromedp.Targets(cr.browserCtx)
+	if err != nil {
 		return nil, fmt.Errorf("[ChromeRemote] failed to list tabs: %v", err)
 	}
 
-	log.Printf("[ChromeRemote] Found %d tabs", len(tabs))
+	var tabs []TabInfo
+	for _, info := range infos {
+		if info.Type == "page" {
+			tabs = append(tabs, TabInfo{
+				ID:          info.TargetID.String(),
+				Title:       info.Title,
+				URL:         info.URL,
+				Type:        info.Type,
+				Description: "",
+			})
+		}
+	}
 	return tabs, nil
 }
 
@@ -1054,16 +1019,11 @@ func (cr *ChromeRemote) OpenTab(url string) (string, error) {
 	}
 	log.Printf("[ChromeRemote] Opening new tab with URL: %s", url)
 
-	var targetID target.ID
 	// Background:true creates the tab as a non-active tab in its window;
 	// reclaimFocusWhenChromeSteals() handles the rare case where new-tab
 	// creation also raises the Chrome window on macOS.
 	reclaimFocusWhenChromeSteals()
-	err := chromedp.Run(cr.browserCtx, chromedp.ActionFunc(func(ctx context.Context) error {
-		var err error
-		targetID, err = target.CreateTarget(url).WithBackground(true).Do(ctx)
-		return err
-	}))
+	targetID, err := target.CreateTarget(url).WithBackground(true).Do(cr.browserExec())
 	if err != nil {
 		return "", fmt.Errorf("failed to create target: %v", err)
 	}
@@ -1150,7 +1110,7 @@ func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, 
 // ActivateTab switches focus to a specific tab
 func (cr *ChromeRemote) ActivateTab(targetID string) error {
 	log.Printf("[ChromeRemote] Activating tab: %s", targetID)
-	if err := chromedp.Run(cr.browserCtx, target.ActivateTarget(target.ID(targetID))); err != nil {
+	if err := target.ActivateTarget(target.ID(targetID)).Do(cr.browserExec()); err != nil {
 		return err
 	}
 	cr.mu.Lock()
@@ -1183,25 +1143,22 @@ func (cr *ChromeRemote) CloseTab(targetID string) error {
 	}
 	cr.mu.Unlock()
 
-	var closeCtx context.Context
-	var closeCancel context.CancelFunc
 	if hasCtx {
-		closeCtx, closeCancel = ctx, cancel
-	} else {
-		// No cached chromedp context — attach a temporary one bound to this
-		// target so chromedp.Cancel has a target-scoped context to operate on.
-		closeCtx, closeCancel = chromedp.NewContext(cr.browserCtx, chromedp.WithTargetID(target.ID(targetID)))
-		if err := chromedp.Run(closeCtx); err != nil {
-			closeCancel()
-			return fmt.Errorf("failed to attach to target %s: %v", targetID, err)
+		// Cancelling a tab context makes chromedp close that tab.
+		if err := chromedp.Cancel(ctx); err != nil {
+			cancel()
+			return fmt.Errorf("failed to close target %s: %v", targetID, err)
 		}
-	}
-
-	if err := chromedp.Cancel(closeCtx); err != nil {
-		closeCancel()
+		cancel()
+	} else if err := target.CloseTarget(target.ID(targetID)).Do(cr.browserExec()); err != nil {
 		return fmt.Errorf("failed to close target %s: %v", targetID, err)
 	}
-	closeCancel()
+
+	cr.mu.Lock()
+	if cr.lastActiveTargetID == targetID {
+		cr.lastActiveTargetID = ""
+	}
+	cr.mu.Unlock()
 	return nil
 }
 
@@ -1772,106 +1729,4 @@ func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeou
 
 	log.Printf("[ChromeRemote] Selector %s found", selector)
 	return nil
-}
-
-// --- Legacy Wrappers (Deprecated) ---
-
-func TakeChromeScreenshot(debugURL string, targetID string, fullPage bool) (*ScreenshotResult, error) {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return nil, err
-	}
-	defer cr.Close()
-	return cr.TakeScreenshot(targetID, fullPage, 0)
-}
-
-func ClickChromeElement(debugURL string, targetURL string, selector string, waitForNavigation bool) error {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return err
-	}
-	defer cr.Close()
-	_, err = cr.ClickElement("", targetURL, selector, waitForNavigation, false)
-	return err
-}
-
-func GetChromeElements(debugURL string, targetURL string) ([]ElementInfo, error) {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return nil, err
-	}
-	defer cr.Close()
-	return cr.GetElements("", targetURL)
-}
-
-func ListChromeTabs(debugURL string) ([]TabInfo, error) {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return nil, err
-	}
-	defer cr.Close()
-	return cr.ListTabs()
-}
-
-func OpenChromeTab(debugURL string, url string) (string, error) {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return "", err
-	}
-	defer cr.Close()
-	return cr.OpenTab(url)
-}
-
-func NavigateToUrl(debugURL string, targetID string, url string, waitUntil string, timeoutMs int) (*NavigationResult, error) {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return nil, err
-	}
-	defer cr.Close()
-	return cr.Navigate(targetID, url, waitUntil, timeoutMs)
-}
-
-func ActivateTab(debugURL string, targetID string) error {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return err
-	}
-	defer cr.Close()
-	return cr.ActivateTab(targetID)
-}
-
-func CloseTab(debugURL string, targetID string) error {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return err
-	}
-	defer cr.Close()
-	return cr.CloseTab(targetID)
-}
-
-func ReloadTab(debugURL string, targetID string, bypassCache bool) error {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return err
-	}
-	defer cr.Close()
-	return cr.ReloadTab(targetID, bypassCache, 0)
-}
-
-func GoBack(debugURL string, targetID string) error {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return err
-	}
-	defer cr.Close()
-	return cr.GoBack(targetID, 0)
-}
-
-func GoForward(debugURL string, targetID string) error {
-	cr, err := NewChromeRemote(debugURL)
-	if err != nil {
-		return err
-	}
-	defer cr.Close()
-	return cr.GoForward(targetID, 0)
 }

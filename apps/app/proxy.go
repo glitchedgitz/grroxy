@@ -149,6 +149,15 @@ func (pm *ProxyManager) GetInstance(id string) *ProxyInstance {
 	return pm.instances[id]
 }
 
+// resolveTab turns an empty targetId into the tab the browser tools act on,
+// so a response names the tab that was actually used rather than echoing "".
+func resolveTab(chrome *browser.ChromeRemote, targetID string) (string, error) {
+	if targetID != "" {
+		return targetID, nil
+	}
+	return chrome.CurrentTarget()
+}
+
 // GetChromeRemote returns a ChromeRemote instance for a proxy, initializing it if necessary
 func (pm *ProxyManager) GetChromeRemote(proxyID string) (*browser.ChromeRemote, error) {
 	pm.mu.Lock()
@@ -771,8 +780,7 @@ func (backend *Backend) startProxyLogic(body *ProxyBody) (map[string]any, error)
 		profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
 		log.Printf("[startProxyLogic] Browser profile directory: %s", profileDir)
 
-		startURL := backend.Config.InterceptedPagePath()
-		go backend.launchProxyBrowser(proxyID, body.Browser, body.HTTP, certPath, profileDir, startURL)
+		go backend.launchProxyBrowser(proxyID, body.Browser, body.HTTP, certPath, profileDir)
 	}
 
 	// Create proxy record in database
@@ -880,8 +888,8 @@ const browserHandoffWindow = 3 * time.Second
 // launchProxyBrowser starts the browser/terminal tied to a proxy and attaches it
 // to the proxy instance. For real browsers it then blocks until the process exits,
 // so callers run it in a goroutine.
-func (backend *Backend) launchProxyBrowser(proxyID, browserType, listenAddr, cert, profDir, startURL string) {
-	cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir, startURL)
+func (backend *Backend) launchProxyBrowser(proxyID, browserType, listenAddr, cert, profDir string) {
+	cmd, err := browser.LaunchBrowser(browserType, listenAddr, cert, profDir)
 	if err != nil {
 		log.Println("Error launching browser:", err)
 		return
@@ -1185,8 +1193,7 @@ func (backend *Backend) restartProxyLogic(proxyID string, aiChatID *string) (map
 		profileDir := path.Join(backend.Config.ConfigDirectory, "profiles", profileID)
 		log.Printf("[RestartProxy] Browser profile directory: %s", profileDir)
 
-		startURL := backend.Config.InterceptedPagePath()
-		go backend.launchProxyBrowser(proxyID, browserType, listenAddr, certPath, profileDir, startURL)
+		go backend.launchProxyBrowser(proxyID, browserType, listenAddr, certPath, profileDir)
 	}
 
 	log.Printf("[RestartProxy] Successfully restarted proxy %s", proxyID)
@@ -1563,6 +1570,10 @@ func (backend *Backend) NavigateChromeTab(e *core.ServeEvent) error {
 			// Get Chrome remote
 			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
 			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			if body.TargetID, err = resolveTab(chrome, body.TargetID); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 

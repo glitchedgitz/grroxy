@@ -41,21 +41,12 @@ func (c *Config) Initiate() {
 
 	c.ConfigDirectory = path.Join(c.HomeDirectory, ".config", "grroxy")
 	os.MkdirAll(c.ConfigDirectory, 0755)
-
-	// Write intercepted.html to ProjectsDirectory on every start
-	interceptedPath := path.Join(c.ProjectsDirectory, "intercepted.html")
-	go os.WriteFile(interceptedPath, []byte(defaultInterceptedHTML), 0644)
 }
 
 // CWD is the active project's working directory, the one the frontend file
 // explorer browses. Note this is not the process working directory.
 func (c *Config) CWD() string {
 	return path.Join(c.ProjectsDirectory, c.ProjectID)
-}
-
-// InterceptedPagePath returns the file:// URL for the intercepted landing page.
-func (c *Config) InterceptedPagePath() string {
-	return "file://" + path.Join(c.ProjectsDirectory, "intercepted.html")
 }
 
 func (c *Config) ShowConfig() {

@@ -1510,6 +1510,10 @@ func (backend *Backend) proxyNavigateTabHandler(ctx context.Context, request mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	if args.TargetID, err = resolveTab(chrome, args.TargetID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	result, err := chrome.Navigate(args.TargetID, args.URL, args.WaitUntil, args.TimeoutMs)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to navigate tab: %v", err)), nil
@@ -1585,6 +1589,10 @@ func (backend *Backend) proxyReloadTabHandler(ctx context.Context, request mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	if args.TargetID, err = resolveTab(chrome, args.TargetID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if err := chrome.ReloadTab(args.TargetID, args.BypassCache, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to reload tab: %v", err)), nil
 	}
@@ -1609,6 +1617,10 @@ func (backend *Backend) proxyGoBackHandler(ctx context.Context, request mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	if args.TargetID, err = resolveTab(chrome, args.TargetID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	if err := chrome.GoBack(args.TargetID, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to go back: %v", err)), nil
 	}
@@ -1630,6 +1642,10 @@ func (backend *Backend) proxyGoForwardHandler(ctx context.Context, request mcp.C
 
 	chrome, err := ProxyMgr.GetChromeRemote(args.ProxyID)
 	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	if args.TargetID, err = resolveTab(chrome, args.TargetID); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 

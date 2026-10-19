@@ -1241,39 +1241,3 @@ func TestIntegration_MultiTabWorkflow(t *testing.T) {
 
 	fmt.Println("✅ Multi-tab workflow completed — screenshots saved to grx/browser/screenshots/")
 }
-
-// ============================================================================
-// Integration Tests — Legacy Wrappers
-// ============================================================================
-
-func TestIntegration_LegacyListChromeTabs(t *testing.T) {
-	debugURL := os.Getenv("CHROME_DEBUG_URL")
-	if debugURL == "" {
-		t.Skip("CHROME_DEBUG_URL not set — skipping integration test")
-	}
-
-	tabs, err := ListChromeTabs(debugURL)
-	if err != nil {
-		t.Fatalf("ListChromeTabs failed: %v", err)
-	}
-	if len(tabs) == 0 {
-		t.Error("expected at least one tab")
-	}
-}
-
-func TestIntegration_LegacyOpenChromeTab(t *testing.T) {
-	debugURL := os.Getenv("CHROME_DEBUG_URL")
-	if debugURL == "" {
-		t.Skip("CHROME_DEBUG_URL not set — skipping integration test")
-	}
-
-	tabID, err := OpenChromeTab(debugURL, "about:blank")
-	if err != nil {
-		t.Fatalf("OpenChromeTab failed: %v", err)
-	}
-	if tabID == "" {
-		t.Error("expected non-empty tab ID")
-	}
-	// Cleanup
-	_ = CloseTab(debugURL, tabID)
-}

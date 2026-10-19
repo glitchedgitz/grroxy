@@ -320,8 +320,8 @@ func BatchIsRunning(proxyID string) bool {
 }
 
 // pinBatchTarget activates one tab so every action in the batch addresses the
-// same one. It prefers a real page over a blank tab, since a browser that was
-// just started has an about:blank sitting alongside whatever is being driven.
+// same one: the current tab (the one last activated, or else the first real
+// page), brought to the front.
 func pinBatchTarget(proxyID string) {
 	chrome, err := ProxyMgr.GetChromeRemote(proxyID)
 	if err != nil {
@@ -329,18 +329,10 @@ func pinBatchTarget(proxyID string) {
 		return
 	}
 
-	tabs, err := chrome.ListTabs()
-	if err != nil || len(tabs) == 0 {
-		log.Printf("[proxyBatchActions] could not list tabs for %s: %v", proxyID, err)
+	chosen, err := chrome.CurrentTarget()
+	if err != nil {
+		log.Printf("[proxyBatchActions] no tab to pin for %s: %v", proxyID, err)
 		return
-	}
-
-	chosen := tabs[0].ID
-	for _, tab := range tabs {
-		if tab.URL != "" && tab.URL != "about:blank" {
-			chosen = tab.ID
-			break
-		}
 	}
 
 	if err := chrome.ActivateTab(chosen); err != nil {
