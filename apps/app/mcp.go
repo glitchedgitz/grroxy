@@ -350,7 +350,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyWaitForSelector",
-			mcp.WithDescription("Wait for a CSS selector to become visible on the page. Useful for SPA transitions where waitForNavigation doesn't work"),
+			mcp.WithDescription("Wait for an element to appear on the page (CSS, XPath, text= or tag:has-text(...)). Useful for SPA transitions where waitForNavigation does not work. Default state=\"attached\" waits for DOM presence only — most \"wait for X to appear\" cases want this. Use state=\"visible\" only when you specifically need the element to be rendered with non-zero size and not display:none."),
 			mcp.WithInputSchema[ProxyWaitForSelectorArgs](),
 		),
 		backend.proxyWaitForSelectorHandler,

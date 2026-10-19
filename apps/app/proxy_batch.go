@@ -191,7 +191,7 @@ func runBatchAction(ctx context.Context, proxyID string, a ProxyBatchAction, def
 
 	switch a.Action {
 	case "click":
-		res, err := ProxyMgr.ClickElement(proxyID, "", a.Selector, a.WaitForNavigation, "", a.UseJS)
+		res, err := ProxyMgr.ClickElement(proxyID, "", a.Selector, a.WaitForNavigation, a.UseJS)
 		if err != nil {
 			return nil, err
 		}

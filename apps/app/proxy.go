@@ -390,11 +390,10 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage
 
 // ClickElement clicks an element on the page using the Chrome browser attached to a proxy instance.
 // Returns any newly-spawned tab IDs (when the click opens a new tab instead of navigating in place).
-// waitForSelector is optional — when set, the click waits until that selector is visible (useful for SPAs).
 // useJS forces a JS .click() instead of CDP dispatchMouseEvent (useful when overlays / focus traps
 // intercept native mouse events). When false, native click is tried first with auto-fallback to JS
 // on timeout.
-func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string, waitForNavigation bool, waitForSelector string, useJS bool) (*browser.ClickResult, error) {
+func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string, waitForNavigation bool, useJS bool) (*browser.ClickResult, error) {
 	pm.mu.Lock()
 	inst := pm.instances[proxyID]
 	if inst == nil {
@@ -444,7 +443,7 @@ func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string
 	pm.mu.Unlock()
 
 	// Click the element
-	result, err := chrome.ClickElement("", url, selector, waitForNavigation, waitForSelector, useJS)
+	result, err := chrome.ClickElement("", url, selector, waitForNavigation, useJS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to click element: %v", err)
 	}
@@ -591,7 +590,7 @@ func (pm *ProxyManager) SetFileInput(proxyID string, selector string, clickSelec
 	return chrome.SetFileInput("", selector, files, timeoutMs)
 }
 
-// WaitForSelector waits for a CSS selector to be present on the page.
+// WaitForSelector waits for an element to be present on the page (any selector form resolveSelector accepts).
 // state is "attached" (default — DOM presence) or "visible" (strict).
 func (pm *ProxyManager) WaitForSelector(proxyID string, selector string, timeoutMs int, state string) error {
 	chrome, err := pm.GetChromeRemote(proxyID)
@@ -1323,7 +1322,6 @@ func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
 				URL               string `json:"url,omitempty"`               // URL to navigate to (optional, empty = current page)
 				Selector          string `json:"selector"`                    // CSS selector for element to click (required)
 				WaitForNavigation bool   `json:"waitForNavigation,omitempty"` // Wait for navigation after click (default: false)
-				WaitForSelector   string `json:"waitForSelector,omitempty"`   // Optional CSS selector to wait for after click
 				UseJS             bool   `json:"useJS,omitempty"`             // Force JS .click() instead of native CDP click
 			}
 
@@ -1344,7 +1342,7 @@ func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
 				body.ID, body.URL, body.Selector, body.WaitForNavigation)
 
 			// Click the element using ProxyManager.
-			result, err := ProxyMgr.ClickElement(body.ID, body.URL, body.Selector, body.WaitForNavigation, body.WaitForSelector, body.UseJS)
+			result, err := ProxyMgr.ClickElement(body.ID, body.URL, body.Selector, body.WaitForNavigation, body.UseJS)
 			if err != nil {
 				log.Printf("[ClickProxy] Error clicking element: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})

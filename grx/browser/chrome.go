@@ -574,21 +574,18 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs
 // ClickResult is what ClickElement returns. NewTabs lists any page-type
 // targets that appeared between the start and end of the click — useful for
 // callers because clicking links like Bing's "Images" can silently spawn a
-// new tab instead of navigating the current one. WaitedFor reports whether
-// the optional waitForSelector matched. ClickMode is "native" (CDP
+// new tab instead of navigating the current one. ClickMode is "native" (CDP
 // dispatchMouseEvent), "js" (caller asked for JS click directly), or
 // "js-fallback" (native click timed out so we fell back to el.click()).
 type ClickResult struct {
 	NewTabs   []string `json:"newTabs"`
-	WaitedFor string   `json:"waitedFor,omitempty"`
 	NavWaited bool     `json:"navWaited,omitempty"`
 	ClickMode string   `json:"clickMode,omitempty"`
 }
 
 // ClickElement clicks an element on the page using CDP and reports any new
-// tabs that opened as a side effect. If waitForSelector is non-empty, after
-// the click it waits until that selector becomes visible — useful for SPAs
-// where waitForNavigation never fires because the route swap is client-side.
+// tabs that opened as a side effect. To wait for something the click
+// reveals, callers run a separate wait for it afterwards.
 //
 // useJS forces a JS .click() instead of CDP dispatchMouseEvent (skips the
 // native path entirely). Useful when overlays/focus-traps intercept native
@@ -597,19 +594,18 @@ type ClickResult struct {
 // back to JS .click() so the AI agent doesn't have to retry. The result's
 // ClickMode reports which path actually fired.
 //
-// Implementation notes (re: the "waitForNavigation/waitForSelector never
-// resolve" bugs):
+// Implementation notes (re: the "waitForNavigation never resolves" bugs):
 //   - Phases are split into separate chromedp.Run calls so that the click
 //     completing doesn't poison the post-click waits.
 //   - waitForNavigation listens for page.EventFrameNavigated registered
 //     BEFORE the click. WaitReady("body") on its own can return on the
 //     pre-navigation document and look like a false positive.
-//   - When the click spawns a new tab, the post-click waits are routed to
-//     the new tab's context — otherwise WaitVisible would poll the old tab
-//     forever for a selector that only appears in the new one.
-func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector string, waitForNavigation bool, waitForSelector string, useJS bool) (*ClickResult, error) {
-	log.Printf("[ChromeRemote] Starting click operation (targetID=%s, selector=%s, targetURL=%s, waitNav=%v, waitForSelector=%q, useJS=%v)",
-		targetID, selector, targetURL, waitForNavigation, waitForSelector, useJS)
+//   - When the click spawns a new tab, the navigation wait is routed to
+//     the new tab's context — otherwise it would watch the old tab for a
+//     load that only happens in the new one.
+func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector string, waitForNavigation bool, useJS bool) (*ClickResult, error) {
+	log.Printf("[ChromeRemote] Starting click operation (targetID=%s, selector=%s, targetURL=%s, waitNav=%v, useJS=%v)",
+		targetID, selector, targetURL, waitForNavigation, useJS)
 
 	sel, err := resolveSelector(selector)
 	if err != nil {
@@ -738,7 +734,7 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 		return nil
 	}))
 
-	result := &ClickResult{NavWaited: waitForNavigation, WaitedFor: waitForSelector, ClickMode: clickMode}
+	result := &ClickResult{NavWaited: waitForNavigation, ClickMode: clickMode}
 	for _, info := range after {
 		if info.Type != "page" {
 			continue
@@ -748,7 +744,7 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 		}
 	}
 
-	// Route post-click waits: if a new tab spawned, run them in the new
+	// Route the navigation wait: if a new tab spawned, run it in the new
 	// tab's chromedp context; otherwise stay in the original tab.
 	waitCtx := ctx
 	if len(result.NewTabs) > 0 {
@@ -774,21 +770,10 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 			case <-navWait.Done():
 				// No frameNavigated within the budget — either an SPA route
 				// change (no real navigation) or a click that didn't
-				// navigate. Don't error: caller can use waitForSelector.
+				// navigate. Don't error: caller can wait for a selector next.
 				log.Printf("[ChromeRemote] waitForNavigation: no frameNavigated in 10s (likely SPA or no-op click)")
 			}
 			navCancel()
-		}
-	}
-
-	// waitForSelector: poll on the routed context with its own short timeout
-	// so a missing selector doesn't eat the global click budget.
-	if waitForSelector != "" {
-		ws, wsCancel := context.WithTimeout(waitCtx, 10*time.Second)
-		err := chromedp.Run(ws, chromedp.WaitVisible(waitForSelector, chromedp.ByQuery))
-		wsCancel()
-		if err != nil {
-			return result, fmt.Errorf("[ChromeRemote] waitForSelector %q timed out: %v", waitForSelector, err)
 		}
 	}
 
@@ -1633,10 +1618,8 @@ func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string,
 //     elements (collapsed <details>, off-screen sticky bars, nodes with
 //     opacity:0) fail this even when they exist on the page.
 //
-// The selector is always evaluated through chromedp.ByQuery (i.e.
-// document.querySelector), so it accepts any standard CSS selector and
-// produces consistent results — instead of chromedp's default
-// DOM.performSearch path which has different matching semantics.
+// The selector goes through resolveSelector like every other tool: CSS uses
+// ByQuery (document.querySelector), XPath and text forms use BySearch.
 func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeoutMs int, state string) error {
 	log.Printf("[ChromeRemote] Waiting for selector %s (targetID=%s, timeout=%dms, state=%q)", selector, targetID, timeoutMs, state)
 
@@ -1693,7 +1676,7 @@ func ClickChromeElement(debugURL string, targetURL string, selector string, wait
 		return err
 	}
 	defer cr.Close()
-	_, err = cr.ClickElement("", targetURL, selector, waitForNavigation, "", false)
+	_, err = cr.ClickElement("", targetURL, selector, waitForNavigation, false)
 	return err
 }
 

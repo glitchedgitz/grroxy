@@ -374,7 +374,6 @@ type ProxyClickArgs struct {
 	URL               string `json:"url,omitempty" jsonschema_description:"URL to navigate to before clicking. If empty, operates on the current active page"`
 	Selector          string `json:"selector" jsonschema:"required" jsonschema_description:"Selector for the element to click. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval. To pick one of several identical controls, scope it by the texts its row must contain: (//*[contains(., \"Signal Bloom\") and contains(., \"Vaido Night\")])[last()]//button — [last()] is the innermost element holding both texts; without it the outer page wrapper matches first. Prefer this over nth-of-type or generated ids like #:r1a:, which change between renders."`
 	WaitForNavigation bool   `json:"waitForNavigation,omitempty" jsonschema_description:"If true, waits for page navigation after click (default: false)"`
-	WaitForSelector   string `json:"waitForSelector,omitempty" jsonschema_description:"Optional selector to wait for after the click, same forms as selector. Useful for SPA transitions where waitForNavigation never fires."`
 	UseJS             bool   `json:"useJS,omitempty" jsonschema_description:"Force a JS .click() instead of native CDP dispatchMouseEvent. Use when overlays / autocomplete dropdowns / focus traps intercept native mouse events on complex pages. Default false: native click is tried first and auto-falls back to JS .click() on timeout. Result.clickMode reports which path fired (native|js|js-fallback)."`
 }
 
@@ -387,7 +386,7 @@ type ProxySetValueArgs struct {
 
 type ProxySetFileArgs struct {
 	ID            string   `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	Selector      string   `json:"selector,omitempty" jsonschema_description:"CSS selector for the <input type=\"file\"> element. Works even when the input is hidden (display:none/opacity:0), which is how most upload UIs are built. Use this OR clickSelector, not both."`
+	Selector      string   `json:"selector,omitempty" jsonschema_description:"Selector for the <input type=\"file\"> element (CSS, XPath, text= or tag:has-text(...)). Works even when the input is hidden (display:none/opacity:0), which is how most upload UIs are built. Use this OR clickSelector, not both."`
 	ClickSelector string   `json:"clickSelector,omitempty" jsonschema_description:"Selector for the visible button that opens the file picker (CSS, XPath, text= or tag:has-text(...)). Use this instead of selector when no <input type=\"file\"> can be matched \u2014 e.g. it lives in a shadow root or iframe, or the page creates it on click."`
 	Files         []string `json:"files" jsonschema:"required" jsonschema_description:"Absolute local file paths to attach. Must exist on the machine running the browser. Pass several for a multi-file input."`
 	TimeoutMs     int      `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
@@ -1400,7 +1399,7 @@ func (backend *Backend) proxyClickHandler(ctx context.Context, request mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	result, err := ProxyMgr.ClickElement(args.ID, args.URL, args.Selector, args.WaitForNavigation, args.WaitForSelector, args.UseJS)
+	result, err := ProxyMgr.ClickElement(args.ID, args.URL, args.Selector, args.WaitForNavigation, args.UseJS)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
