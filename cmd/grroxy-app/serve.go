@@ -147,6 +147,7 @@ func serve(projectPath string) {
 	API.App.OnBeforeServe().Add(API.GetElementsProxy)
 	API.App.OnBeforeServe().Add(API.ListChromeTabs)
 	API.App.OnBeforeServe().Add(API.OpenChromeTab)
+	API.App.OnBeforeServe().Add(API.HandleChromeDialog)
 	API.App.OnBeforeServe().Add(API.NavigateChromeTab)
 	API.App.OnBeforeServe().Add(API.ActivateTab)
 	API.App.OnBeforeServe().Add(API.FocusWindow)

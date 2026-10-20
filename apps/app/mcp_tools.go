@@ -418,6 +418,13 @@ type ProxyNavigateTabArgs struct {
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 30000"`
 }
 
+type ProxyHandleDialogArgs struct {
+	ProxyID    string  `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	TargetID   string  `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab showing the dialog. If empty, uses the current tab (currentTabId in proxyListTabs)."`
+	Accept     bool    `json:"accept" jsonschema:"required" jsonschema_description:"true presses OK (accepts a confirm, submits a prompt, leaves the page on a Leave site? dialog); false presses Cancel"`
+	PromptText *string `json:"promptText,omitempty" jsonschema_description:"Text to answer a prompt() with, when accepting it. Omit to keep the prompt's default text, as pressing OK in the browser would."`
+}
+
 type ProxyActivateTabArgs struct {
 	ProxyID  string `json:"proxyId" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	TargetID string `json:"targetId" jsonschema:"required" jsonschema_description:"Chrome target ID of the tab to activate"`
@@ -1425,6 +1432,10 @@ func (backend *Backend) proxyClickHandler(ctx context.Context, request mcp.CallT
 			resp["newTabs"] = result.NewTabs
 			resp["message"] = fmt.Sprintf("Element clicked; %d new tab(s) opened", len(result.NewTabs))
 		}
+		if result.Dialog != nil {
+			resp["dialog"] = result.Dialog
+			resp["message"] = clickDialogMessage(result.Dialog)
+		}
 	}
 	return mcpJSONResult(resp)
 }
@@ -1537,6 +1548,33 @@ func (backend *Backend) proxyNavigateTabHandler(ctx context.Context, request mcp
 		"url":          result.FinalURL,
 		"status":       result.Status,
 		"navigationId": result.NavigationID,
+	})
+}
+
+func (backend *Backend) proxyHandleDialogHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var args ProxyHandleDialogArgs
+	if err := request.BindArguments(&args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := checkProxyOwnership(ctx, args.ProxyID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	chrome, err := ProxyMgr.GetChromeRemote(args.ProxyID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	tab, dialog, err := chrome.HandleDialog(args.TargetID, args.Accept, args.PromptText)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcpJSONResult(map[string]any{
+		"ok":       true,
+		"targetId": tab,
+		"accepted": args.Accept,
+		"dialog":   dialog,
 	})
 }
 

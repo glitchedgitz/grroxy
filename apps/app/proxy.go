@@ -1368,6 +1368,10 @@ func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
 				resp["newTabs"] = result.NewTabs
 				resp["newTabOpened"] = true
 			}
+			if result.Dialog != nil {
+				resp["dialog"] = result.Dialog
+				resp["message"] = clickDialogMessage(result.Dialog)
+			}
 			return c.JSON(http.StatusOK, resp)
 		},
 		Middlewares: []echo.MiddlewareFunc{
@@ -1530,6 +1534,66 @@ func (backend *Backend) OpenChromeTab(e *core.ServeEvent) error {
 			return c.JSON(http.StatusOK, map[string]interface{}{
 				"targetId":  targetID,
 				"url":       body.URL,
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		},
+		Middlewares: []echo.MiddlewareFunc{
+			apis.ActivityLogger(backend.App),
+		},
+	})
+	return nil
+}
+
+// clickDialogMessage says what a click's dialog means for the next call.
+func clickDialogMessage(d *browser.DialogInfo) string {
+	return fmt.Sprintf("Element clicked; the page opened a %s dialog (%q). It blocks the tab until proxyHandleDialog closes it.", d.Type, d.Message)
+}
+
+// HandleChromeDialog endpoint - closes the JavaScript dialog open in a tab
+func (backend *Backend) HandleChromeDialog(e *core.ServeEvent) error {
+	e.Router.AddRoute(echo.Route{
+		Method: http.MethodPost,
+		Path:   "/api/proxy/chrome/tab/dialog",
+		Handler: func(c echo.Context) error {
+			admin, _ := c.Get(apis.ContextAdminKey).(*models.Admin)
+			recordd, _ := c.Get(apis.ContextAuthRecordKey).(*models.Record)
+
+			isGuest := admin == nil && recordd == nil
+			if isGuest {
+				return c.String(http.StatusForbidden, "")
+			}
+
+			type HandleDialogBody struct {
+				ProxyID    string  `json:"proxyId"`
+				TargetID   string  `json:"targetId,omitempty"` // Optional, empty = current tab
+				Accept     bool    `json:"accept"`
+				PromptText *string `json:"promptText,omitempty"` // Omitted = keep the prompt's default
+			}
+
+			var body HandleDialogBody
+			if err := c.Bind(&body); err != nil {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Invalid request body"})
+			}
+
+			if body.ProxyID == "" {
+				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "proxyId is required"})
+			}
+
+			chrome, err := ProxyMgr.GetChromeRemote(body.ProxyID)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			tab, dialog, err := chrome.HandleDialog(body.TargetID, body.Accept, body.PromptText)
+			if err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
+			}
+
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"ok":        true,
+				"targetId":  tab,
+				"accepted":  body.Accept,
+				"dialog":    dialog,
 				"timestamp": time.Now().Format(time.RFC3339),
 			})
 		},

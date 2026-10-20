@@ -259,3 +259,53 @@ func TestTabsLeaveBrowserAlone(t *testing.T) {
 		t.Errorf("after closing the current tab, current is %s but Chrome shows %s", cur, shown)
 	}
 }
+
+// Back and forward return before their navigation finishes, so a call right
+// after one lands while Chrome swaps the page. It must ride out the swap
+// instead of failing with "Not attached to an active page". (Each round then
+// waits for the page to settle: a reload or back issued before forward has
+// committed would cancel it, which is expected, not this bug.)
+func TestHistoryRightAfterNavigation(t *testing.T) {
+	pageA := dialogPage(t, "a", "a")
+	pageB := dialogPage(t, "b", "b")
+	debugURL := launchDialogChrome(t, pageA)
+	time.Sleep(time.Second)
+
+	cr, err := NewChromeRemote(debugURL)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer cr.Close()
+	tabs, _ := cr.ListTabs()
+	tab := tabs[0].ID
+
+	if _, err := cr.Navigate(tab, pageB, "load", 10000); err != nil {
+		t.Fatalf("Navigate: %v", err)
+	}
+	for i := 0; i < 20; i++ {
+		if err := cr.GoBack(tab, 5000); err != nil {
+			t.Fatalf("round %d GoBack: %v", i, err)
+		}
+		if err := cr.GoForward(tab, 5000); err != nil {
+			t.Fatalf("round %d GoForward: %v", i, err)
+		}
+		settled := false
+		for j := 0; j < 50 && !settled; j++ {
+			var title string
+			if err := cr.Evaluate(tab, "document.readyState === 'complete' ? document.title : ''", &title, 1000); err == nil && title == "b" {
+				settled = true
+			} else {
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+		if !settled {
+			t.Fatalf("round %d: tab never settled back on page b", i)
+		}
+	}
+	if err := cr.ReloadTab(tab, false, 5000); err != nil {
+		t.Fatalf("ReloadTab: %v", err)
+	}
+	if err := cr.GoBack(tab, 5000); err != nil {
+		t.Fatalf("GoBack right after ReloadTab: %v", err)
+	}
+}

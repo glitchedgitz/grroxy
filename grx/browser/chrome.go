@@ -307,6 +307,13 @@ type ChromeRemote struct {
 	// caller expects.
 	lastActiveTargetID string
 	mu                 sync.Mutex
+
+	// Tabs being attached to, and the JavaScript dialogs tabs have open
+	// (see dialogs.go). dialogMu guards dialogs and guards.
+	attaching map[string]*attachState
+	dialogMu  sync.Mutex
+	dialogs   map[string]*DialogInfo
+	guards    map[string]map[*dialogGuard]struct{}
 }
 
 // NewChromeRemote creates a new ChromeRemote instance connected to the given debug URL
@@ -328,7 +335,7 @@ func NewChromeRemote(debugURL string) (*ChromeRemote, error) {
 		return nil, fmt.Errorf("failed to connect to Chrome: %v", err)
 	}
 
-	return &ChromeRemote{
+	cr := &ChromeRemote{
 		debugURL:      debugURL,
 		allocCtx:      allocCtx,
 		allocCancel:   allocCancel,
@@ -336,7 +343,12 @@ func NewChromeRemote(debugURL string) (*ChromeRemote, error) {
 		browserCancel: browserCancel,
 		targetCtxs:    make(map[string]context.Context),
 		targetCancel:  make(map[string]context.CancelFunc),
-	}, nil
+		attaching:     make(map[string]*attachState),
+		dialogs:       make(map[string]*DialogInfo),
+		guards:        make(map[string]map[*dialogGuard]struct{}),
+	}
+	cr.watchTabs()
+	return cr, nil
 }
 
 // Close closes the connection to Chrome and all sub-contexts
@@ -457,36 +469,7 @@ func (cr *ChromeRemote) getContext(targetID string) (context.Context, error) {
 			return nil, err
 		}
 	}
-
-	cr.mu.Lock()
-	defer cr.mu.Unlock()
-
-	// Check cache
-	if ctx, ok := cr.targetCtxs[targetID]; ok {
-		select {
-		case <-ctx.Done():
-			// Context expired, remove from cache
-			delete(cr.targetCtxs, targetID)
-			delete(cr.targetCancel, targetID)
-		default:
-			return ctx, nil
-		}
-	}
-
-	// Create new target context
-	log.Printf("[ChromeRemote] Creating new persistent context for target %s", targetID)
-	ctx, cancel := chromedp.NewContext(cr.browserCtx, chromedp.WithTargetID(target.ID(targetID)))
-
-	// Initialize it
-	if err := chromedp.Run(ctx); err != nil {
-		cancel()
-		return nil, fmt.Errorf("failed to initialize target context: %v", err)
-	}
-
-	cr.targetCtxs[targetID] = ctx
-	cr.targetCancel[targetID] = cancel
-
-	return ctx, nil
+	return cr.attach(targetID, attachWait)
 }
 
 // CloseTargetContext manually closes and removes a context from the cache
@@ -512,17 +495,18 @@ type ScreenshotResult struct {
 
 // TakeScreenshot captures a screenshot of a specific tab (targetID).
 // If targetID == "", it will try to pick a "best" tab (heuristic).
-func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs int) (*ScreenshotResult, error) {
+func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs int) (_ *ScreenshotResult, err error) {
 	log.Printf("[ChromeRemote] Starting screenshot (targetID=%s, fullPage=%v, timeoutMs=%d)", targetID, fullPage, timeoutMs)
 	if timeoutMs <= 0 {
 		timeoutMs = 30000
 	}
 
 	// An empty targetID resolves to the current tab (see CurrentTarget).
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return nil, err
 	}
+	defer done(&err)
 
 	// Timeout for the screenshot operation (caller-configurable).
 	ctx, timeoutCancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
@@ -556,14 +540,14 @@ func (cr *ChromeRemote) TakeScreenshot(targetID string, fullPage bool, timeoutMs
 	}
 
 	buf, err := capture()
-	if err != nil {
+	if err != nil && ctx.Err() == nil {
 		// One short retry — the most common cause of a transient timeout
 		// is the page momentarily blocked on a heavy frame/CAPTCHA load.
 		log.Printf("[ChromeRemote] Screenshot retry after error: %v", err)
 		buf, err = capture()
-		if err != nil {
-			return nil, fmt.Errorf("[ChromeRemote] failed to capture screenshot: %v", err)
-		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("[ChromeRemote] failed to capture screenshot: %v", err)
 	}
 
 	// Best-effort title + URL fetch on the same tab. Failures here shouldn't
@@ -590,6 +574,9 @@ type ClickResult struct {
 	NewTabs   []string `json:"newTabs"`
 	NavWaited bool     `json:"navWaited,omitempty"`
 	ClickMode string   `json:"clickMode,omitempty"`
+	// Dialog is set when the click made the page open a JavaScript dialog,
+	// which now blocks the tab until proxyHandleDialog closes it.
+	Dialog *DialogInfo `json:"dialog,omitempty"`
 }
 
 // ClickElement clicks an element on the page using CDP and reports any new
@@ -612,7 +599,20 @@ type ClickResult struct {
 //   - When the click spawns a new tab, the navigation wait is routed to
 //     the new tab's context — otherwise it would watch the old tab for a
 //     load that only happens in the new one.
-func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector string, waitForNavigation bool, useJS bool) (*ClickResult, error) {
+func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector string, waitForNavigation bool, useJS bool) (result *ClickResult, err error) {
+	// A click that opens a dialog did its job: report the dialog on the
+	// result rather than as an error. Deferred first so it runs after the
+	// tabContext done below has turned the dialog into a DialogError.
+	defer func() {
+		var de *DialogError
+		if errors.As(err, &de) && de.Opened {
+			if result == nil {
+				result = &ClickResult{NewTabs: []string{}, ClickMode: "native"}
+			}
+			result.Dialog = &de.Dialog
+			err = nil
+		}
+	}()
 	log.Printf("[ChromeRemote] Starting click operation (targetID=%s, selector=%s, targetURL=%s, waitNav=%v, useJS=%v)",
 		targetID, selector, targetURL, waitForNavigation, useJS)
 
@@ -620,10 +620,11 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 	if err != nil {
 		return nil, err
 	}
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, attachWait)
 	if err != nil {
 		return nil, err
 	}
+	defer done(&err)
 
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer timeoutCancel()
@@ -720,6 +721,11 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 		nativeErr := runStep("click", chromedp.Click(sel.Value, sel.Option), 5000)
 		if nativeErr == nil {
 			clickMode = "native"
+		} else if ctx.Err() != nil {
+			// The call was cut short, typically because the click opened a
+			// dialog. The click went through: clicking again via JS would fire
+			// it a second time once the dialog is closed.
+			return nil, nativeErr
 		} else {
 			log.Printf("[ChromeRemote] native click failed, falling back to JS: %v", nativeErr)
 			if err := jsClick(); err != nil {
@@ -743,7 +749,7 @@ func (cr *ChromeRemote) ClickElement(targetID string, targetURL string, selector
 		return nil
 	}))
 
-	result := &ClickResult{NavWaited: waitForNavigation, ClickMode: clickMode}
+	result = &ClickResult{NavWaited: waitForNavigation, ClickMode: clickMode}
 	for _, info := range after {
 		if info.Type != "page" {
 			continue
@@ -806,13 +812,14 @@ type ElementInfo struct {
 
 // GetElements extracts information about clickable elements on the page.
 // targetID can be empty to pick the best tab.
-func (cr *ChromeRemote) GetElements(targetID string, targetURL string) ([]ElementInfo, error) {
+func (cr *ChromeRemote) GetElements(targetID string, targetURL string) (_ []ElementInfo, err error) {
 	log.Printf("[ChromeRemote] Starting element extraction (targetID=%s, targetURL=%s)", targetID, targetURL)
 
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, attachWait)
 	if err != nil {
 		return nil, err
 	}
+	defer done(&err)
 
 	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer timeoutCancel()
@@ -1024,6 +1031,11 @@ type TabInfo struct {
 	// Visible is whether Chrome is showing the tab: the selected tab of a
 	// window that is not minimized. Nil when not probed, or the probe failed.
 	Visible *bool `json:"visible,omitempty"`
+	// Dialog is the JavaScript dialog the tab has open, if any.
+	Dialog *DialogInfo `json:"dialog,omitempty"`
+	// Blocked is set when grroxy cannot attach to the tab, most likely because
+	// of a dialog that opened before grroxy did (see dialogs.go).
+	Blocked bool `json:"blocked,omitempty"`
 }
 
 // ListTabs lists all open tabs in Chrome
@@ -1045,6 +1057,7 @@ func (cr *ChromeRemote) ListTabs() ([]TabInfo, error) {
 			})
 		}
 	}
+	cr.noteDialogs(tabs)
 	return tabs, nil
 }
 
@@ -1103,7 +1116,7 @@ type NavigationResult struct {
 }
 
 // Navigate navigates a specific tab to a URL
-func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, timeoutMs int) (*NavigationResult, error) {
+func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, timeoutMs int) (_ *NavigationResult, err error) {
 	log.Printf("[ChromeRemote] Navigating tab %s to URL: %s (waitUntil=%s, timeout=%dms)", targetID, url, waitUntil, timeoutMs)
 
 	if waitUntil == "" {
@@ -1113,10 +1126,11 @@ func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, 
 		timeoutMs = 30000
 	}
 
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return nil, err
 	}
+	defer done(&err)
 
 	timeout := time.Duration(timeoutMs) * time.Millisecond
 	ctx, timeoutCancel := context.WithTimeout(ctx, timeout)
@@ -1171,7 +1185,7 @@ func (cr *ChromeRemote) Navigate(targetID string, url string, waitUntil string, 
 func (cr *ChromeRemote) ActivateTab(targetID string) error {
 	log.Printf("[ChromeRemote] Activating tab: %s", targetID)
 	if err := target.ActivateTarget(target.ID(targetID)).Do(cr.browserExec()); err != nil {
-		return err
+		return cr.unknownTab(targetID, err)
 	}
 	cr.mu.Lock()
 	cr.lastActiveTargetID = targetID
@@ -1207,11 +1221,11 @@ func (cr *ChromeRemote) CloseTab(targetID string) error {
 		// Cancelling a tab context makes chromedp close that tab.
 		if err := chromedp.Cancel(ctx); err != nil {
 			cancel()
-			return fmt.Errorf("failed to close target %s: %v", targetID, err)
+			return cr.unknownTab(targetID, fmt.Errorf("failed to close target %s: %v", targetID, err))
 		}
 		cancel()
 	} else if err := target.CloseTarget(target.ID(targetID)).Do(cr.browserExec()); err != nil {
-		return fmt.Errorf("failed to close target %s: %v", targetID, err)
+		return cr.unknownTab(targetID, fmt.Errorf("failed to close target %s: %v", targetID, err))
 	}
 
 	cr.mu.Lock()
@@ -1219,6 +1233,7 @@ func (cr *ChromeRemote) CloseTab(targetID string) error {
 		cr.lastActiveTargetID = ""
 	}
 	cr.mu.Unlock()
+	cr.forgetTab(targetID)
 	return nil
 }
 
@@ -1229,20 +1244,42 @@ func (cr *ChromeRemote) CloseTab(targetID string) error {
 // which on ad/analytics-heavy sites can take 10+ seconds. timeoutMs
 // caps the ACK round-trip; the actual reload continues in the browser
 // after we return. Default 5s.
-func (cr *ChromeRemote) ReloadTab(targetID string, bypassCache bool, timeoutMs int) error {
+func (cr *ChromeRemote) ReloadTab(targetID string, bypassCache bool, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] Reloading tab %s (bypassCache=%v, timeoutMs=%d)", targetID, bypassCache, timeoutMs)
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 5000
 	}
 	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
-	return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
-		return page.Reload().WithIgnoreCache(bypassCache).Do(c)
-	}))
+	return whileSwapping(tctx, func() error {
+		return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
+			return page.Reload().WithIgnoreCache(bypassCache).Do(c)
+		}))
+	})
+}
+
+// whileSwapping retries fn while the tab is between documents. Reload, back
+// and forward return before the navigation finishes, so a following call can
+// land while Chrome swaps the page, when it briefly answers Page commands with
+// "Not attached to an active page". A command refused that way never ran, so
+// running it again is safe. Gives up when ctx ends.
+func whileSwapping(ctx context.Context, fn func() error) error {
+	for {
+		err := fn()
+		if err == nil || !strings.Contains(err.Error(), "Not attached to an active page") {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 // GoBack navigates back in browser history.
@@ -1252,55 +1289,61 @@ func (cr *ChromeRemote) ReloadTab(targetID string, bypassCache bool, timeoutMs i
 // frameStoppedLoading. The previous chromedp.NavigateBack() helper waited
 // for full load completion, which was unbearably slow on heavy pages.
 // Callers that need to wait can chain proxyWaitForSelector.
-func (cr *ChromeRemote) GoBack(targetID string, timeoutMs int) error {
+func (cr *ChromeRemote) GoBack(targetID string, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] Going back in tab: %s (timeoutMs=%d)", targetID, timeoutMs)
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 5000
 	}
 	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
-	return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
-		current, entries, err := page.GetNavigationHistory().Do(c)
-		if err != nil {
-			return err
-		}
-		idx := int(current) - 1
-		if idx < 0 || idx >= len(entries) {
-			return fmt.Errorf("no history entry to go back to")
-		}
-		return page.NavigateToHistoryEntry(entries[idx].ID).Do(c)
-	}))
+	return whileSwapping(tctx, func() error {
+		return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
+			current, entries, err := page.GetNavigationHistory().Do(c)
+			if err != nil {
+				return err
+			}
+			idx := int(current) - 1
+			if idx < 0 || idx >= len(entries) {
+				return fmt.Errorf("no history entry to go back to")
+			}
+			return page.NavigateToHistoryEntry(entries[idx].ID).Do(c)
+		}))
+	})
 }
 
 // GoForward navigates forward in browser history. Same fast-path semantics
 // as GoBack — fires Page.navigateToHistoryEntry and returns without waiting
 // for frameStoppedLoading.
-func (cr *ChromeRemote) GoForward(targetID string, timeoutMs int) error {
+func (cr *ChromeRemote) GoForward(targetID string, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] Going forward in tab: %s (timeoutMs=%d)", targetID, timeoutMs)
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 5000
 	}
 	tctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
-	return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
-		current, entries, err := page.GetNavigationHistory().Do(c)
-		if err != nil {
-			return err
-		}
-		idx := int(current) + 1
-		if idx < 0 || idx >= len(entries) {
-			return fmt.Errorf("no history entry to go forward to")
-		}
-		return page.NavigateToHistoryEntry(entries[idx].ID).Do(c)
-	}))
+	return whileSwapping(tctx, func() error {
+		return chromedp.Run(tctx, chromedp.ActionFunc(func(c context.Context) error {
+			current, entries, err := page.GetNavigationHistory().Do(c)
+			if err != nil {
+				return err
+			}
+			idx := int(current) + 1
+			if idx < 0 || idx >= len(entries) {
+				return fmt.Errorf("no history entry to go forward to")
+			}
+			return page.NavigateToHistoryEntry(entries[idx].ID).Do(c)
+		}))
+	})
 }
 
 // DebugURL returns the Chrome remote debugging WebSocket URL.
@@ -1311,11 +1354,12 @@ func (cr *ChromeRemote) DebugURL() string {
 // Evaluate runs a JavaScript expression in the context of the given tab
 // and unmarshals the result into dest (same semantics as chromedp.Evaluate).
 // timeoutMs controls the per-call timeout; 0 uses a 15 s default.
-func (cr *ChromeRemote) Evaluate(targetID string, jsExpr string, dest interface{}, timeoutMs int) error {
-	ctx, err := cr.getContext(targetID)
+func (cr *ChromeRemote) Evaluate(targetID string, jsExpr string, dest interface{}, timeoutMs int) (err error) {
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 15000
 	}
@@ -1332,17 +1376,18 @@ func (cr *ChromeRemote) Evaluate(targetID string, jsExpr string, dest interface{
 // steps each with its own short timeout so the caller learns *which* step
 // failed (visible / scroll / focus / clear / sendKeys) instead of getting a
 // generic timeout. The total wall-clock budget is still capped by timeoutMs.
-func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, clearFirst bool, timeoutMs int) error {
+func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, clearFirst bool, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] Typing text into %s (targetID=%s, clearFirst=%v)", selector, targetID, clearFirst)
 
 	sel, err := resolveSelector(selector)
 	if err != nil {
 		return err
 	}
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 15000
 	}
@@ -1389,7 +1434,7 @@ func (cr *ChromeRemote) TypeText(targetID string, selector string, text string, 
 // This is the workaround for sites where SendKeys-based proxyType wedges
 // (Bug 2 on Bing) and where naive `el.value = ...` via proxyEval doesn't
 // notify the framework.
-func (cr *ChromeRemote) SetValue(targetID string, selector string, value string, timeoutMs int) error {
+func (cr *ChromeRemote) SetValue(targetID string, selector string, value string, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] SetValue selector=%s (targetID=%s)", selector, targetID)
 	if selector == "" {
 		return fmt.Errorf("selector is required")
@@ -1398,10 +1443,11 @@ func (cr *ChromeRemote) SetValue(targetID string, selector string, value string,
 	if err != nil {
 		return err
 	}
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 5000
 	}
@@ -1561,7 +1607,7 @@ func (r resolvedSelector) JS() string {
 
 // ScrollIntoView brings an element into view, which some pages require before
 // they will accept a click or reveal lazily-rendered content.
-func (cr *ChromeRemote) ScrollIntoView(targetID string, selector string, timeoutMs int) error {
+func (cr *ChromeRemote) ScrollIntoView(targetID string, selector string, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] ScrollIntoView selector=%s (targetID=%s)", selector, targetID)
 	if selector == "" {
 		return fmt.Errorf("selector is required")
@@ -1570,10 +1616,11 @@ func (cr *ChromeRemote) ScrollIntoView(targetID string, selector string, timeout
 	if err != nil {
 		return err
 	}
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 5000
 	}
@@ -1604,7 +1651,7 @@ func (cr *ChromeRemote) ScrollIntoView(targetID string, selector string, timeout
 // Paths must be absolute and must exist on this machine; the caller validates
 // that, because CDP accepts a bogus path happily and the page then uploads
 // nothing.
-func (cr *ChromeRemote) SetFileInput(targetID string, selector string, files []string, timeoutMs int) error {
+func (cr *ChromeRemote) SetFileInput(targetID string, selector string, files []string, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] SetFileInput selector=%s files=%v (targetID=%s)", selector, files, targetID)
 	if selector == "" {
 		return fmt.Errorf("selector is required")
@@ -1617,10 +1664,11 @@ func (cr *ChromeRemote) SetFileInput(targetID string, selector string, files []s
 	if err != nil {
 		return err
 	}
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 15000
 	}
@@ -1649,7 +1697,7 @@ func (cr *ChromeRemote) SetFileInput(targetID string, selector string, files []s
 // ask for it — hence the userGesture fallback below for buttons that a native
 // click can't reach (overlays, zero-size hit targets). Interception is turned
 // on before the click, so the native dialog never competes with us.
-func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string, files []string, timeoutMs int) error {
+func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string, files []string, timeoutMs int) (err error) {
 	log.Printf("[ChromeRemote] SetFileViaChooser clickSelector=%s files=%v (targetID=%s)", clickSelector, files, targetID)
 	if clickSelector == "" {
 		return fmt.Errorf("clickSelector is required")
@@ -1662,10 +1710,11 @@ func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string,
 		return err
 	}
 
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 15000
 	}
@@ -1701,6 +1750,11 @@ func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string,
 	clickCtx, clickCancel := context.WithTimeout(tctx, 5*time.Second)
 	defer clickCancel()
 	if err := chromedp.Run(clickCtx, chromedp.Click(sel.Value, sel.Option)); err != nil {
+		if tctx.Err() != nil {
+			// Cut short (e.g. the click opened a dialog): the click went
+			// through, so a JS retry would fire it twice.
+			return err
+		}
 		log.Printf("[ChromeRemote] native click on %s failed (%v), retrying as JS click with a user gesture", clickSelector, err)
 		expr := fmt.Sprintf(`(function(){var e=%s; if(!e) return false; e.click(); return true;})()`, sel.JS())
 		var ok bool
@@ -1752,17 +1806,18 @@ func (cr *ChromeRemote) SetFileViaChooser(targetID string, clickSelector string,
 //
 // The selector goes through resolveSelector like every other tool: CSS uses
 // ByQuery (document.querySelector), XPath and text forms use BySearch.
-func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeoutMs int, state string) error {
+func (cr *ChromeRemote) WaitForSelector(targetID string, selector string, timeoutMs int, state string) (err error) {
 	log.Printf("[ChromeRemote] Waiting for selector %s (targetID=%s, timeout=%dms, state=%q)", selector, targetID, timeoutMs, state)
 
 	sel, err := resolveSelector(selector)
 	if err != nil {
 		return err
 	}
-	ctx, err := cr.getContext(targetID)
+	ctx, done, err := cr.tabContext(targetID, withinWait(timeoutMs))
 	if err != nil {
 		return err
 	}
+	defer done(&err)
 	if timeoutMs <= 0 {
 		timeoutMs = 30000
 	}

@@ -128,6 +128,9 @@ func newTestChromeRemote() *ChromeRemote {
 		browserCancel: cancel,
 		targetCtxs:    make(map[string]context.Context),
 		targetCancel:  make(map[string]context.CancelFunc),
+		attaching:     make(map[string]*attachState),
+		dialogs:       make(map[string]*DialogInfo),
+		guards:        make(map[string]map[*dialogGuard]struct{}),
 	}
 }
 

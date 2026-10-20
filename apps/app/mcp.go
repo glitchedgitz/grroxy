@@ -418,7 +418,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyEval",
-			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools. ALWAYS include a short `note` explaining what this JS does — it is shown to the user as the action label."),
+			mcp.WithDescription("Execute arbitrary JavaScript in the page context and return the result. Useful for setting values, reading DOM state, triggering events, or any operation not covered by other tools. ALWAYS include a short `note` explaining what this JS does — it is shown to the user as the action label. If the page opens an alert, confirm or prompt — including from this JS — the tab is frozen until proxyHandleDialog closes it, and the call returns an error naming the dialog."),
 			mcp.WithInputSchema[ProxyEvalArgs](),
 		),
 		backend.proxyEvalHandler,
@@ -476,7 +476,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyListTabs",
-			mcp.WithDescription("Lists all open tabs in the Chrome browser attached to a proxy instance. currentTabId is the tab that tools act on when targetId is omitted. Each tab has visible: true when Chrome is showing it (the selected tab of a window that is not minimized). The current tab can be a hidden one, e.g. after proxyOpenTab, which opens tabs in the background"),
+			mcp.WithDescription("Lists all open tabs in the Chrome browser attached to a proxy instance. currentTabId is the tab that tools act on when targetId is omitted. Each tab has visible: true when Chrome is showing it (the selected tab of a window that is not minimized). The current tab can be a hidden one, e.g. after proxyOpenTab, which opens tabs in the background. A tab with an open JavaScript dialog has dialog: {type, message}; close it with proxyHandleDialog. blocked: true means the tab stopped responding, most likely because of a dialog that opened before grroxy attached to it, which only the user or proxyCloseTab can clear"),
 			mcp.WithInputSchema[ProxyListTabsArgs](),
 		),
 		backend.proxyListTabsHandler,
@@ -496,6 +496,14 @@ func (backend *Backend) mcpInit() {
 			mcp.WithInputSchema[ProxyNavigateTabArgs](),
 		),
 		backend.proxyNavigateTabHandler,
+	)
+
+	s.AddTool(
+		mcp.NewTool("proxyHandleDialog",
+			mcp.WithDescription("Closes the JavaScript dialog (alert, confirm, prompt or \"Leave site?\") open in a Chrome tab. While a dialog is open the page is frozen: other proxy tools on that tab fail with an error naming the dialog, and proxyListTabs shows it under the tab's dialog field. accept: true presses OK, false presses Cancel; promptText answers a prompt(). Returns the dialog that was closed."),
+			mcp.WithInputSchema[ProxyHandleDialogArgs](),
+		),
+		backend.proxyHandleDialogHandler,
 	)
 
 	s.AddTool(
