@@ -44,7 +44,7 @@ func TestProxyElementsStableSelectors(t *testing.T) {
 		t.Fatalf("navigate: %v %+v", err, resp)
 	}
 
-	elements, err := ProxyMgr.GetElements(proxyID, "")
+	elements, err := ProxyMgr.GetElements(proxyID, "", "")
 	if err != nil {
 		t.Fatalf("GetElements: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestProxyElementsStableSelectors(t *testing.T) {
 	// Every generated selector has to work in the real tools, not just in the
 	// page script that produced it.
 	for _, sel := range want {
-		if _, err := ProxyMgr.ClickElement(proxyID, "", sel, false, false); err != nil {
+		if _, err := ProxyMgr.ClickElement(proxyID, "", "", sel, false, false); err != nil {
 			t.Errorf("click %s: %v", sel, err)
 		}
 	}

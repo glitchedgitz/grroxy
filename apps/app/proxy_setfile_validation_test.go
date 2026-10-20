@@ -38,7 +38,7 @@ func TestSetFileInputValidatesBeforeCDP(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := ProxyMgr.SetFileInput("no-such-proxy", tc.selector, tc.clickSelector, tc.files, 0)
+			err := ProxyMgr.SetFileInput("no-such-proxy", "", tc.selector, tc.clickSelector, tc.files, 0)
 			if err == nil {
 				t.Fatalf("expected an error, got nil")
 			}
@@ -50,7 +50,7 @@ func TestSetFileInputValidatesBeforeCDP(t *testing.T) {
 
 	// A fully valid request must get past validation and fail only on the
 	// proxy lookup — proving validation isn't rejecting good input.
-	err := ProxyMgr.SetFileInput("no-such-proxy", "#a", "", []string{real}, 0)
+	err := ProxyMgr.SetFileInput("no-such-proxy", "", "#a", "", []string{real}, 0)
 	if err == nil {
 		t.Fatal("expected a proxy lookup error")
 	}

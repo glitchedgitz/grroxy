@@ -191,33 +191,33 @@ func runBatchAction(ctx context.Context, proxyID string, a ProxyBatchAction, def
 
 	switch a.Action {
 	case "click":
-		res, err := ProxyMgr.ClickElement(proxyID, "", a.Selector, a.WaitForNavigation, a.UseJS)
+		res, err := ProxyMgr.ClickElement(proxyID, "", "", a.Selector, a.WaitForNavigation, a.UseJS)
 		if err != nil {
 			return nil, err
 		}
 		return map[string]any{"clickMode": res.ClickMode}, nil
 
 	case "waitFor":
-		return nil, ProxyMgr.WaitForSelector(proxyID, a.Selector, timeout, a.State)
+		return nil, ProxyMgr.WaitForSelector(proxyID, "", a.Selector, timeout, a.State)
 
 	case "setFile":
 		files := a.Files
 		if len(files) == 0 {
 			files = []string{a.File}
 		}
-		return nil, ProxyMgr.SetFileInput(proxyID, a.Selector, a.ClickSelector, files, timeout)
+		return nil, ProxyMgr.SetFileInput(proxyID, "", a.Selector, a.ClickSelector, files, timeout)
 
 	case "type":
-		return nil, ProxyMgr.TypeText(proxyID, a.Selector, a.Text, a.ClearFirst, timeout)
+		return nil, ProxyMgr.TypeText(proxyID, "", a.Selector, a.Text, a.ClearFirst, timeout)
 
 	case "setValue":
-		return nil, ProxyMgr.SetValue(proxyID, a.Selector, a.Value, timeout)
+		return nil, ProxyMgr.SetValue(proxyID, "", a.Selector, a.Value, timeout)
 
 	case "scroll":
 		return nil, ProxyMgr.ScrollIntoView(proxyID, a.Selector, timeout)
 
 	case "eval":
-		return ProxyMgr.Evaluate(proxyID, a.JS, timeout)
+		return ProxyMgr.Evaluate(proxyID, "", a.JS, timeout)
 
 	case "sleep":
 		// Interruptible: a 30s sleep must not keep a cancelled batch alive.

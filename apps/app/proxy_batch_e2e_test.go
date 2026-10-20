@@ -352,7 +352,7 @@ func TestBatchTextSelectorsAndContenteditable(t *testing.T) {
 	}
 
 	read := func() string {
-		v, err := ProxyMgr.Evaluate(proxyID, "document.getElementById('out').textContent", 5000)
+		v, err := ProxyMgr.Evaluate(proxyID, "", "document.getElementById('out').textContent", 5000)
 		if err != nil {
 			t.Fatalf("eval: %v", err)
 		}
@@ -398,7 +398,7 @@ func TestBatchTextSelectorsAndContenteditable(t *testing.T) {
 
 	// contains() is a substring match, as in Playwright: has-text("Post") also
 	// matches "Post now". Pinned so the semantics are not changed by accident.
-	if v, err := ProxyMgr.Evaluate(proxyID,
+	if v, err := ProxyMgr.Evaluate(proxyID, "",
 		`document.evaluate('count(//button[contains(., "Post")])', document, null, XPathResult.NUMBER_TYPE, null).numberValue`,
 		5000); err == nil {
 		if n, ok := v.(float64); ok && n != 1 {
@@ -480,7 +480,7 @@ func TestBatchContainerTextSelectors(t *testing.T) {
 
 	// Pin why [last()] is in the recommended form: without it the first match
 	// is the outermost wrapper, and its first button is the wrong row's.
-	v, err := ProxyMgr.Evaluate(proxyID,
+	v, err := ProxyMgr.Evaluate(proxyID, "",
 		`document.evaluate('//div[contains(., "Signal Bloom") and contains(., "Vaido Night")]', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.id`,
 		5000)
 	if err != nil {
@@ -568,7 +568,7 @@ func TestBatchCancelStopsDrivingTheBrowser(t *testing.T) {
 	}
 
 	count := func() int {
-		v, err := ProxyMgr.Evaluate(proxyID, "Number(document.getElementById('count').textContent)", 5000)
+		v, err := ProxyMgr.Evaluate(proxyID, "", "Number(document.getElementById('count').textContent)", 5000)
 		if err != nil {
 			t.Fatalf("read count: %v", err)
 		}

@@ -374,6 +374,7 @@ type ProxyClickArgs struct {
 	URL               string `json:"url,omitempty" jsonschema_description:"URL to navigate to before clicking. If empty, operates on the current active page"`
 	Selector          string `json:"selector" jsonschema:"required" jsonschema_description:"Selector for the element to click. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval. To pick one of several identical controls, scope it by the texts its row must contain: (//*[contains(., \"Signal Bloom\") and contains(., \"Vaido Night\")])[last()]//button — [last()] is the innermost element holding both texts; without it the outer page wrapper matches first. Prefer this over nth-of-type or generated ids like #:r1a:, which change between renders."`
 	WaitForNavigation bool   `json:"waitForNavigation,omitempty" jsonschema_description:"If true, waits for page navigation after click (default: false)"`
+	TargetID          string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to act on (from proxyListTabs / proxyOpenTab). Acts on that tab without activating it or changing the current tab. If empty, uses the current tab (currentTabId in proxyListTabs)."`
 	UseJS             bool   `json:"useJS,omitempty" jsonschema_description:"Force a JS .click() instead of native CDP dispatchMouseEvent. Use when overlays / autocomplete dropdowns / focus traps intercept native mouse events on complex pages. Default false: native click is tried first and auto-falls back to JS .click() on timeout. Result.clickMode reports which path fired (native|js|js-fallback)."`
 }
 
@@ -381,6 +382,7 @@ type ProxySetValueArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"Selector for the element to set. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval. To pick one of several identical controls, scope it by the texts its row must contain: (//*[contains(., \"Signal Bloom\") and contains(., \"Vaido Night\")])[last()]//button — [last()] is the innermost element holding both texts; without it the outer page wrapper matches first. Prefer this over nth-of-type or generated ids like #:r1a:, which change between renders. Works on contenteditable too, not just <input>/<textarea>."`
 	Value     string `json:"value" jsonschema:"required" jsonschema_description:"The value to write into the element"`
+	TargetID  string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to act on (from proxyListTabs / proxyOpenTab). Acts on that tab without activating it or changing the current tab. If empty, uses the current tab (currentTabId in proxyListTabs)."`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 5000"`
 }
 
@@ -388,13 +390,15 @@ type ProxySetFileArgs struct {
 	ID            string   `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	Selector      string   `json:"selector,omitempty" jsonschema_description:"Selector for the <input type=\"file\"> element (CSS, XPath, text= or tag:has-text(...)). Works even when the input is hidden (display:none/opacity:0), which is how most upload UIs are built. Use this OR clickSelector, not both."`
 	ClickSelector string   `json:"clickSelector,omitempty" jsonschema_description:"Selector for the visible button that opens the file picker (CSS, XPath, text= or tag:has-text(...)). Use this instead of selector when no <input type=\"file\"> can be matched \u2014 e.g. it lives in a shadow root or iframe, or the page creates it on click."`
+	TargetID      string   `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to act on (from proxyListTabs / proxyOpenTab). Acts on that tab without activating it or changing the current tab. If empty, uses the current tab (currentTabId in proxyListTabs)."`
 	Files         []string `json:"files" jsonschema:"required" jsonschema_description:"Absolute local file paths to attach. Must exist on the machine running the browser. Pass several for a multi-file input."`
 	TimeoutMs     int      `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
 }
 
 type ProxyElementsArgs struct {
-	ID  string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
-	URL string `json:"url,omitempty" jsonschema_description:"URL to navigate to before extracting elements. If empty, analyzes the current active page"`
+	ID       string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
+	URL      string `json:"url,omitempty" jsonschema_description:"URL to navigate to before extracting elements. If empty, analyzes the current active page"`
+	TargetID string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to act on (from proxyListTabs / proxyOpenTab). Acts on that tab without activating it or changing the current tab. If empty, uses the current tab (currentTabId in proxyListTabs)."`
 }
 
 type ProxyListTabsArgs struct {
@@ -474,6 +478,7 @@ type ProxyTypeArgs struct {
 	Selector   string `json:"selector" jsonschema:"required" jsonschema_description:"Selector for the input to type into. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval. To pick one of several identical controls, scope it by the texts its row must contain: (//*[contains(., \"Signal Bloom\") and contains(., \"Vaido Night\")])[last()]//button — [last()] is the innermost element holding both texts; without it the outer page wrapper matches first. Prefer this over nth-of-type or generated ids like #:r1a:, which change between renders."`
 	Text       string `json:"text" jsonschema:"required" jsonschema_description:"The text to type into the element"`
 	ClearFirst bool   `json:"clearFirst,omitempty" jsonschema_description:"If true, clears the existing value before typing (default: false)"`
+	TargetID   string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to act on (from proxyListTabs / proxyOpenTab). Acts on that tab without activating it or changing the current tab. If empty, uses the current tab (currentTabId in proxyListTabs)."`
 	TimeoutMs  int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
 }
 
@@ -481,6 +486,7 @@ type ProxyEvalArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	Js        string `json:"js" jsonschema:"required" jsonschema_description:"JavaScript expression to evaluate in the page context. The result is returned as JSON."`
 	Note      string `json:"note" jsonschema:"required" jsonschema_description:"REQUIRED: a short human-readable note (5-12 words) describing what this JS is doing and why. Shown to the user as the action label. Always include this."`
+	TargetID  string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to act on (from proxyListTabs / proxyOpenTab). Acts on that tab without activating it or changing the current tab. If empty, uses the current tab (currentTabId in proxyListTabs)."`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 15000"`
 }
 
@@ -488,6 +494,7 @@ type ProxyWaitForSelectorArgs struct {
 	ID        string `json:"id" jsonschema:"required" jsonschema_description:"The proxy ID with Chrome browser attached"`
 	Selector  string `json:"selector" jsonschema:"required" jsonschema_description:"Selector to wait for. Accepts CSS, XPath (//button[contains(., \"Post\")] or xpath=...), plain text (text=Post), or tag:has-text(\"Post\") with an optional :not([attr]) tail \u2014 use a text form for controls that only have a visible label, instead of falling back to eval. To pick one of several identical controls, scope it by the texts its row must contain: (//*[contains(., \"Signal Bloom\") and contains(., \"Vaido Night\")])[last()]//button — [last()] is the innermost element holding both texts; without it the outer page wrapper matches first. Prefer this over nth-of-type or generated ids like #:r1a:, which change between renders."`
 	TimeoutMs int    `json:"timeoutMs,omitempty" jsonschema_description:"Timeout in milliseconds. Default: 30000"`
+	TargetID  string `json:"targetId,omitempty" jsonschema_description:"Chrome target ID of the tab to act on (from proxyListTabs / proxyOpenTab). Acts on that tab without activating it or changing the current tab. If empty, uses the current tab (currentTabId in proxyListTabs)."`
 	State     string `json:"state,omitempty" jsonschema_description:"What to wait for: \"attached\" (default — element exists in the DOM) or \"visible\" (element exists AND is visible: non-zero size, not display:none/opacity:0). Use \"attached\" by default — many real elements exist on the page but fail the strict visibility check (collapsed sections, off-screen sticky bars, transitioning UI)."`
 }
 
@@ -1399,7 +1406,7 @@ func (backend *Backend) proxyClickHandler(ctx context.Context, request mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	result, err := ProxyMgr.ClickElement(args.ID, args.URL, args.Selector, args.WaitForNavigation, args.UseJS)
+	result, err := ProxyMgr.ClickElement(args.ID, args.TargetID, args.URL, args.Selector, args.WaitForNavigation, args.UseJS)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1431,7 +1438,7 @@ func (backend *Backend) proxyElementsHandler(ctx context.Context, request mcp.Ca
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	elements, err := ProxyMgr.GetElements(args.ID, args.URL)
+	elements, err := ProxyMgr.GetElements(args.ID, args.TargetID, args.URL)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1461,9 +1468,15 @@ func (backend *Backend) proxyListTabsHandler(ctx context.Context, request mcp.Ca
 		return mcp.NewToolResultError(fmt.Sprintf("failed to list tabs: %v", err)), nil
 	}
 
+	// The tab actions land on when targetId is omitted. Best effort: an empty
+	// browser has none, and that should not fail the listing.
+	current, _ := chrome.CurrentTarget()
+	chrome.ProbeTabVisibility(tabs)
+
 	return mcpJSONResult(map[string]any{
-		"tabs":  tabs,
-		"count": len(tabs),
+		"tabs":         tabs,
+		"count":        len(tabs),
+		"currentTabId": current,
 	})
 }
 
@@ -1825,7 +1838,7 @@ func (backend *Backend) proxyTypeHandler(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := ProxyMgr.TypeText(args.ID, args.Selector, args.Text, args.ClearFirst, args.TimeoutMs); err != nil {
+	if err := ProxyMgr.TypeText(args.ID, args.TargetID, args.Selector, args.Text, args.ClearFirst, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -1850,7 +1863,7 @@ func (backend *Backend) proxySetValueHandler(ctx context.Context, request mcp.Ca
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := ProxyMgr.SetValue(args.ID, args.Selector, args.Value, args.TimeoutMs); err != nil {
+	if err := ProxyMgr.SetValue(args.ID, args.TargetID, args.Selector, args.Value, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -1928,7 +1941,7 @@ func (backend *Backend) proxySetFileHandler(ctx context.Context, request mcp.Cal
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := ProxyMgr.SetFileInput(args.ID, args.Selector, args.ClickSelector, args.Files, args.TimeoutMs); err != nil {
+	if err := ProxyMgr.SetFileInput(args.ID, args.TargetID, args.Selector, args.ClickSelector, args.Files, args.TimeoutMs); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -1958,7 +1971,7 @@ func (backend *Backend) proxyEvalHandler(ctx context.Context, request mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	result, err := ProxyMgr.Evaluate(args.ID, args.Js, args.TimeoutMs)
+	result, err := ProxyMgr.Evaluate(args.ID, args.TargetID, args.Js, args.TimeoutMs)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -1983,7 +1996,7 @@ func (backend *Backend) proxyWaitForSelectorHandler(ctx context.Context, request
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := ProxyMgr.WaitForSelector(args.ID, args.Selector, args.TimeoutMs, args.State); err != nil {
+	if err := ProxyMgr.WaitForSelector(args.ID, args.TargetID, args.Selector, args.TimeoutMs, args.State); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 

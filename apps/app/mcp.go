@@ -476,7 +476,7 @@ func (backend *Backend) mcpInit() {
 
 	s.AddTool(
 		mcp.NewTool("proxyListTabs",
-			mcp.WithDescription("Lists all open tabs in the Chrome browser attached to a proxy instance"),
+			mcp.WithDescription("Lists all open tabs in the Chrome browser attached to a proxy instance. currentTabId is the tab that tools act on when targetId is omitted. Each tab has visible: true when Chrome is showing it (the selected tab of a window that is not minimized). The current tab can be a hidden one, e.g. after proxyOpenTab, which opens tabs in the background"),
 			mcp.WithInputSchema[ProxyListTabsArgs](),
 		),
 		backend.proxyListTabsHandler,

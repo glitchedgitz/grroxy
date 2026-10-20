@@ -402,7 +402,7 @@ func (pm *ProxyManager) TakeScreenshot(proxyID string, targetID string, fullPage
 // useJS forces a JS .click() instead of CDP dispatchMouseEvent (useful when overlays / focus traps
 // intercept native mouse events). When false, native click is tried first with auto-fallback to JS
 // on timeout.
-func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string, waitForNavigation bool, useJS bool) (*browser.ClickResult, error) {
+func (pm *ProxyManager) ClickElement(proxyID string, targetID string, url string, selector string, waitForNavigation bool, useJS bool) (*browser.ClickResult, error) {
 	pm.mu.Lock()
 	inst := pm.instances[proxyID]
 	if inst == nil {
@@ -452,7 +452,7 @@ func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string
 	pm.mu.Unlock()
 
 	// Click the element
-	result, err := chrome.ClickElement("", url, selector, waitForNavigation, useJS)
+	result, err := chrome.ClickElement(targetID, url, selector, waitForNavigation, useJS)
 	if err != nil {
 		return nil, fmt.Errorf("failed to click element: %v", err)
 	}
@@ -461,7 +461,7 @@ func (pm *ProxyManager) ClickElement(proxyID string, url string, selector string
 }
 
 // GetElements retrieves information about clickable elements on the page
-func (pm *ProxyManager) GetElements(proxyID string, url string) ([]browser.ElementInfo, error) {
+func (pm *ProxyManager) GetElements(proxyID string, targetID string, url string) ([]browser.ElementInfo, error) {
 	pm.mu.Lock()
 	inst := pm.instances[proxyID]
 	if inst == nil {
@@ -511,7 +511,7 @@ func (pm *ProxyManager) GetElements(proxyID string, url string) ([]browser.Eleme
 	pm.mu.Unlock()
 
 	// Get elements from the page
-	elements, err := chrome.GetElements("", url)
+	elements, err := chrome.GetElements(targetID, url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get elements: %v", err)
 	}
@@ -520,24 +520,24 @@ func (pm *ProxyManager) GetElements(proxyID string, url string) ([]browser.Eleme
 }
 
 // TypeText types text into an element on the page using the Chrome browser attached to a proxy instance
-func (pm *ProxyManager) TypeText(proxyID string, selector string, text string, clearFirst bool, timeoutMs int) error {
+func (pm *ProxyManager) TypeText(proxyID string, targetID string, selector string, text string, clearFirst bool, timeoutMs int) error {
 	chrome, err := pm.GetChromeRemote(proxyID)
 	if err != nil {
 		return err
 	}
-	return chrome.TypeText("", selector, text, clearFirst, timeoutMs)
+	return chrome.TypeText(targetID, selector, text, clearFirst, timeoutMs)
 }
 
 // SetValue sets a form element's value via the framework-aware path
 // (native value setter + input/change events). Used as a fallback when
 // proxyType is wedged by overlays / focus traps and as a way to make
 // React/Vue/Angular state notice the change.
-func (pm *ProxyManager) SetValue(proxyID string, selector string, value string, timeoutMs int) error {
+func (pm *ProxyManager) SetValue(proxyID string, targetID string, selector string, value string, timeoutMs int) error {
 	chrome, err := pm.GetChromeRemote(proxyID)
 	if err != nil {
 		return err
 	}
-	return chrome.SetValue("", selector, value, timeoutMs)
+	return chrome.SetValue(targetID, selector, value, timeoutMs)
 }
 
 // ScrollIntoView brings an element into view. Pages that lazily render on
@@ -559,7 +559,7 @@ func (pm *ProxyManager) ScrollIntoView(proxyID string, selector string, timeoutM
 //     is what most upload UIs have behind a styled label.
 //   - clickSelector: the visible button, for when the input isn't reachable by
 //     a selector (shadow root, cross-origin iframe, created on click).
-func (pm *ProxyManager) SetFileInput(proxyID string, selector string, clickSelector string, files []string, timeoutMs int) error {
+func (pm *ProxyManager) SetFileInput(proxyID string, targetID string, selector string, clickSelector string, files []string, timeoutMs int) error {
 	if selector == "" && clickSelector == "" {
 		return fmt.Errorf("either selector or clickSelector is required")
 	}
@@ -594,29 +594,29 @@ func (pm *ProxyManager) SetFileInput(proxyID string, selector string, clickSelec
 		return err
 	}
 	if clickSelector != "" {
-		return chrome.SetFileViaChooser("", clickSelector, files, timeoutMs)
+		return chrome.SetFileViaChooser(targetID, clickSelector, files, timeoutMs)
 	}
-	return chrome.SetFileInput("", selector, files, timeoutMs)
+	return chrome.SetFileInput(targetID, selector, files, timeoutMs)
 }
 
 // WaitForSelector waits for an element to be present on the page (any selector form resolveSelector accepts).
 // state is "attached" (default — DOM presence) or "visible" (strict).
-func (pm *ProxyManager) WaitForSelector(proxyID string, selector string, timeoutMs int, state string) error {
+func (pm *ProxyManager) WaitForSelector(proxyID string, targetID string, selector string, timeoutMs int, state string) error {
 	chrome, err := pm.GetChromeRemote(proxyID)
 	if err != nil {
 		return err
 	}
-	return chrome.WaitForSelector("", selector, timeoutMs, state)
+	return chrome.WaitForSelector(targetID, selector, timeoutMs, state)
 }
 
 // Evaluate runs arbitrary JavaScript in the page context
-func (pm *ProxyManager) Evaluate(proxyID string, jsExpr string, timeoutMs int) (any, error) {
+func (pm *ProxyManager) Evaluate(proxyID string, targetID string, jsExpr string, timeoutMs int) (any, error) {
 	chrome, err := pm.GetChromeRemote(proxyID)
 	if err != nil {
 		return nil, err
 	}
 	var result any
-	if err := chrome.Evaluate("", jsExpr, &result, timeoutMs); err != nil {
+	if err := chrome.Evaluate(targetID, jsExpr, &result, timeoutMs); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -1330,6 +1330,7 @@ func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
 				Selector          string `json:"selector"`                    // CSS selector for element to click (required)
 				WaitForNavigation bool   `json:"waitForNavigation,omitempty"` // Wait for navigation after click (default: false)
 				UseJS             bool   `json:"useJS,omitempty"`             // Force JS .click() instead of native CDP click
+				TargetID          string `json:"targetId,omitempty"`          // Tab to act on (optional, empty = current tab)
 			}
 
 			var body ClickBody
@@ -1349,7 +1350,7 @@ func (backend *Backend) ClickProxy(e *core.ServeEvent) error {
 				body.ID, body.URL, body.Selector, body.WaitForNavigation)
 
 			// Click the element using ProxyManager.
-			result, err := ProxyMgr.ClickElement(body.ID, body.URL, body.Selector, body.WaitForNavigation, body.UseJS)
+			result, err := ProxyMgr.ClickElement(body.ID, body.TargetID, body.URL, body.Selector, body.WaitForNavigation, body.UseJS)
 			if err != nil {
 				log.Printf("[ClickProxy] Error clicking element: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
@@ -1391,8 +1392,9 @@ func (backend *Backend) GetElementsProxy(e *core.ServeEvent) error {
 			}
 
 			type ElementsBody struct {
-				ID  string `json:"id"`            // Proxy ID (required)
-				URL string `json:"url,omitempty"` // URL to navigate to (optional, empty = current page)
+				ID       string `json:"id"`                 // Proxy ID (required)
+				URL      string `json:"url,omitempty"`      // URL to navigate to (optional, empty = current page)
+				TargetID string `json:"targetId,omitempty"` // Tab to read (optional, empty = current tab)
 			}
 
 			var body ElementsBody
@@ -1407,7 +1409,7 @@ func (backend *Backend) GetElementsProxy(e *core.ServeEvent) error {
 			log.Printf("[GetElementsProxy] Getting elements for proxy %s (url=%s)", body.ID, body.URL)
 
 			// Get elements using ProxyManager
-			elements, err := ProxyMgr.GetElements(body.ID, body.URL)
+			elements, err := ProxyMgr.GetElements(body.ID, body.TargetID, body.URL)
 			if err != nil {
 				log.Printf("[GetElementsProxy] Error getting elements: %v", err)
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
@@ -1466,10 +1468,16 @@ func (backend *Backend) ListChromeTabs(e *core.ServeEvent) error {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": fmt.Sprintf("Failed to list tabs: %v", err)})
 			}
 
+			// The tab actions land on when targetId is omitted. Best effort: an
+			// empty browser has none, and that should not fail the listing.
+			current, _ := chrome.CurrentTarget()
+			chrome.ProbeTabVisibility(tabs)
+
 			return c.JSON(http.StatusOK, map[string]interface{}{
-				"tabs":      tabs,
-				"count":     len(tabs),
-				"timestamp": time.Now().Format(time.RFC3339),
+				"tabs":         tabs,
+				"count":        len(tabs),
+				"currentTabId": current,
+				"timestamp":    time.Now().Format(time.RFC3339),
 			})
 		},
 		Middlewares: []echo.MiddlewareFunc{
@@ -1617,6 +1625,7 @@ func (backend *Backend) TypeTextProxy(e *core.ServeEvent) error {
 				Text       string `json:"text"`
 				ClearFirst bool   `json:"clearFirst,omitempty"`
 				TimeoutMs  int    `json:"timeoutMs,omitempty"`
+				TargetID   string `json:"targetId,omitempty"`
 			}
 
 			var body TypeTextBody
@@ -1631,7 +1640,7 @@ func (backend *Backend) TypeTextProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
 			}
 
-			if err := ProxyMgr.TypeText(body.ID, body.Selector, body.Text, body.ClearFirst, body.TimeoutMs); err != nil {
+			if err := ProxyMgr.TypeText(body.ID, body.TargetID, body.Selector, body.Text, body.ClearFirst, body.TimeoutMs); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
@@ -1665,6 +1674,7 @@ func (backend *Backend) SetValueProxy(e *core.ServeEvent) error {
 				Selector  string `json:"selector"`
 				Value     string `json:"value"`
 				TimeoutMs int    `json:"timeoutMs,omitempty"`
+				TargetID  string `json:"targetId,omitempty"`
 			}
 
 			var body SetValueBody
@@ -1679,7 +1689,7 @@ func (backend *Backend) SetValueProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
 			}
 
-			if err := ProxyMgr.SetValue(body.ID, body.Selector, body.Value, body.TimeoutMs); err != nil {
+			if err := ProxyMgr.SetValue(body.ID, body.TargetID, body.Selector, body.Value, body.TimeoutMs); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
@@ -1719,6 +1729,7 @@ func (backend *Backend) SetFileProxy(e *core.ServeEvent) error {
 				ClickSelector string   `json:"clickSelector"`
 				Files         []string `json:"files"`
 				TimeoutMs     int      `json:"timeoutMs,omitempty"`
+				TargetID      string   `json:"targetId,omitempty"`
 			}
 
 			var body SetFileBody
@@ -1736,7 +1747,7 @@ func (backend *Backend) SetFileProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "At least one file is required"})
 			}
 
-			if err := ProxyMgr.SetFileInput(body.ID, body.Selector, body.ClickSelector, body.Files, body.TimeoutMs); err != nil {
+			if err := ProxyMgr.SetFileInput(body.ID, body.TargetID, body.Selector, body.ClickSelector, body.Files, body.TimeoutMs); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
@@ -1776,6 +1787,7 @@ func (backend *Backend) WaitForSelectorProxy(e *core.ServeEvent) error {
 				Selector  string `json:"selector"`
 				TimeoutMs int    `json:"timeoutMs,omitempty"`
 				State     string `json:"state,omitempty"`
+				TargetID  string `json:"targetId,omitempty"`
 			}
 
 			var body WaitForSelectorBody
@@ -1790,7 +1802,7 @@ func (backend *Backend) WaitForSelectorProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "Selector is required"})
 			}
 
-			if err := ProxyMgr.WaitForSelector(body.ID, body.Selector, body.TimeoutMs, body.State); err != nil {
+			if err := ProxyMgr.WaitForSelector(body.ID, body.TargetID, body.Selector, body.TimeoutMs, body.State); err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}
 
@@ -1823,6 +1835,7 @@ func (backend *Backend) EvaluateProxy(e *core.ServeEvent) error {
 				ID        string `json:"id"`
 				JS        string `json:"js"`
 				TimeoutMs int    `json:"timeoutMs,omitempty"`
+				TargetID  string `json:"targetId,omitempty"`
 			}
 
 			var body EvaluateBody
@@ -1837,7 +1850,7 @@ func (backend *Backend) EvaluateProxy(e *core.ServeEvent) error {
 				return c.JSON(http.StatusBadRequest, map[string]interface{}{"error": "JS expression is required"})
 			}
 
-			result, err := ProxyMgr.Evaluate(body.ID, body.JS, body.TimeoutMs)
+			result, err := ProxyMgr.Evaluate(body.ID, body.TargetID, body.JS, body.TimeoutMs)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]interface{}{"error": err.Error()})
 			}

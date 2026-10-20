@@ -154,6 +154,41 @@ func TestTabsLeaveBrowserAlone(t *testing.T) {
 		t.Errorf("after OpenTab the current tab is %s, want the new tab %s", cur, tabB)
 	}
 
+	// OpenTab leaves the new tab in the background, so the current tab is one
+	// Chrome is not showing. The tab list has to say so.
+	listed, err := cr.ListTabs()
+	if err != nil {
+		t.Fatalf("ListTabs: %v", err)
+	}
+	cr.ProbeTabVisibility(listed)
+	for _, tab := range listed {
+		if tab.Visible == nil {
+			t.Errorf("tab %s was not probed for visibility", tab.ID)
+			continue
+		}
+		switch tab.ID {
+		case tabB:
+			if *tab.Visible {
+				t.Errorf("background tab %s reported visible", tabB)
+			}
+		case tabA:
+			// Only a soft check: macOS reports an occluded window's tab as hidden.
+			if !*tab.Visible {
+				t.Logf("front tab %s reported hidden (window occluded?)", tabA)
+			}
+		}
+	}
+
+	// An explicit tab is acted on without becoming the current tab.
+	var title string
+	if err := cr.Evaluate(tabA, "document.title", &title, 5000); err != nil || title != "a" {
+		t.Errorf("eval on tab %s = %q (%v), want its title %q", tabA, title, err, "a")
+	}
+	if cur, _ := cr.CurrentTarget(); cur != tabB {
+		t.Errorf("eval with an explicit tab moved the current tab to %s, want %s", cur, tabB)
+	}
+	expectTabs(t, debugURL, "visibility probe and explicit-tab eval", tabA, tabB)
+
 	if err := cr.ActivateTab(tabA); err != nil {
 		t.Fatalf("ActivateTab: %v", err)
 	}
@@ -182,5 +217,45 @@ func TestTabsLeaveBrowserAlone(t *testing.T) {
 	expectTabs(t, debugURL, "CloseTab", tabA)
 	if cur, err := cr.CurrentTarget(); err != nil || cur != tabA {
 		t.Errorf("after closing a tab the current tab is %s (%v), want the remaining tab %s", cur, err, tabA)
+	}
+
+	// Closing the current tab hands over to the tab Chrome now shows, not to
+	// whichever tab comes first in the target list.
+	tabB, err = cr.OpenTab(pageB)
+	if err != nil {
+		t.Fatalf("OpenTab B: %v", err)
+	}
+	tabC, err := cr.OpenTab(pageC)
+	if err != nil {
+		t.Fatalf("OpenTab C: %v", err)
+	}
+	if err := cr.ActivateTab(tabC); err != nil {
+		t.Fatalf("ActivateTab C: %v", err)
+	}
+	if err := cr.CloseTab(tabC); err != nil {
+		t.Fatalf("CloseTab C: %v", err)
+	}
+	expectTabs(t, debugURL, "close the current tab", tabA, tabB)
+
+	cur, err := cr.CurrentTarget()
+	if err != nil {
+		t.Fatalf("CurrentTarget after closing the current tab: %v", err)
+	}
+	listed, err = cr.ListTabs()
+	if err != nil {
+		t.Fatalf("ListTabs: %v", err)
+	}
+	cr.ProbeTabVisibility(listed)
+	shown := ""
+	for _, tab := range listed {
+		if tab.Visible != nil && *tab.Visible {
+			shown = tab.ID
+		}
+	}
+	if shown == "" {
+		t.Skip("no tab reported visible (window occluded?), can't check the hand-over")
+	}
+	if cur != shown {
+		t.Errorf("after closing the current tab, current is %s but Chrome shows %s", cur, shown)
 	}
 }

@@ -369,31 +369,68 @@ func (cr *ChromeRemote) browserExec() context.Context {
 
 // CurrentTarget resolves "no tab given" to a tab. It sticks to the tab last
 // activated, opened or navigated, so a run of tool calls lands on one page.
-// When there is none yet, or that tab has since been closed, it picks the
-// first real page — skipping blank, chrome://, extension and devtools tabs —
-// and remembers it: Chrome's tab order is not stable, so re-picking on every
-// call would wander between tabs.
+// When there is none yet, or that tab has since been closed, it picks the tab
+// Chrome is showing, and remembers it: Chrome's tab order is not stable, so
+// re-picking on every call would wander between tabs.
 func (cr *ChromeRemote) CurrentTarget() (string, error) {
 	tabs, err := cr.ListTabs()
 	if err != nil {
 		return "", err
 	}
-
-	cr.mu.Lock()
-	defer cr.mu.Unlock()
-
-	if cr.lastActiveTargetID != "" {
-		for _, t := range tabs {
-			if t.ID == cr.lastActiveTargetID {
-				return t.ID, nil
-			}
-		}
+	if id, ok := cr.stickyTarget(tabs); ok {
+		return id, nil
 	}
 	if len(tabs) == 0 {
 		return "", fmt.Errorf("[ChromeRemote] no open tab in the browser")
 	}
 
-	chosen := tabs[0].ID
+	// Probed without holding cr.mu: Evaluate takes it.
+	chosen := cr.fallbackTarget(tabs)
+
+	// Another call may have set a tab while this one was probing.
+	if id, ok := cr.stickyTarget(tabs); ok {
+		return id, nil
+	}
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	log.Printf("[ChromeRemote] Current tab: %s", chosen)
+	cr.lastActiveTargetID = chosen
+	return chosen, nil
+}
+
+// stickyTarget returns the remembered current tab when it is still open.
+func (cr *ChromeRemote) stickyTarget(tabs []TabInfo) (string, bool) {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+	if cr.lastActiveTargetID == "" {
+		return "", false
+	}
+	for _, t := range tabs {
+		if t.ID == cr.lastActiveTargetID {
+			return t.ID, true
+		}
+	}
+	return "", false
+}
+
+// fallbackTarget picks the current tab when none is remembered: the tab Chrome
+// is showing, so that closing the current tab hands over to the one the user
+// now sees. With no visible tab (minimized window), the first real page —
+// skipping blank, chrome://, extension and devtools tabs — else the first tab.
+func (cr *ChromeRemote) fallbackTarget(tabs []TabInfo) string {
+	// Right after a tab closes, Chrome can take a moment to show its neighbour.
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			time.Sleep(250 * time.Millisecond)
+		}
+		cr.ProbeTabVisibility(tabs)
+		for _, t := range tabs {
+			if t.Visible != nil && *t.Visible {
+				return t.ID
+			}
+		}
+	}
+
 	for _, t := range tabs {
 		u := strings.TrimSpace(t.URL)
 		if u == "" || u == "about:blank" ||
@@ -402,12 +439,9 @@ func (cr *ChromeRemote) CurrentTarget() (string, error) {
 			strings.HasPrefix(u, "devtools://") {
 			continue
 		}
-		chosen = t.ID
-		break
+		return t.ID
 	}
-	log.Printf("[ChromeRemote] Current tab: %s", chosen)
-	cr.lastActiveTargetID = chosen
-	return chosen, nil
+	return tabs[0].ID
 }
 
 // getContext returns a context for the specific target ID.
@@ -987,6 +1021,9 @@ type TabInfo struct {
 	URL         string `json:"url"`         // Current URL
 	Type        string `json:"type"`        // Target type (usually "page")
 	Description string `json:"description"` // Description
+	// Visible is whether Chrome is showing the tab: the selected tab of a
+	// window that is not minimized. Nil when not probed, or the probe failed.
+	Visible *bool `json:"visible,omitempty"`
 }
 
 // ListTabs lists all open tabs in Chrome
@@ -1009,6 +1046,29 @@ func (cr *ChromeRemote) ListTabs() ([]TabInfo, error) {
 		}
 	}
 	return tabs, nil
+}
+
+// ProbeTabVisibility fills in Visible on each tab from the page's own
+// document.visibilityState. CDP's target list does not say which tab a window
+// is showing, so each page has to be asked. It is kept out of ListTabs because
+// CurrentTarget calls that on every action, and this attaches to every tab.
+func (cr *ChromeRemote) ProbeTabVisibility(tabs []TabInfo) {
+	var wg sync.WaitGroup
+	for i := range tabs {
+		wg.Add(1)
+		go func(t *TabInfo) {
+			defer wg.Done()
+			var state string
+			// Short budget: a frozen or discarded tab should not hold up the list.
+			if err := cr.Evaluate(t.ID, "document.visibilityState", &state, 1500); err != nil {
+				log.Printf("[ChromeRemote] visibility probe failed for %s: %v", t.ID, err)
+				return
+			}
+			visible := state == "visible"
+			t.Visible = &visible
+		}(&tabs[i])
+	}
+	wg.Wait()
 }
 
 // OpenTab opens a new tab and returns its target ID.
