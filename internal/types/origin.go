@@ -102,6 +102,10 @@ func parseRepeaterSend(what []string) (Origin, bool) {
 	// ai/<chat>
 	case len(what) == 2 && what[0] == "ai" && what[1] != "":
 		return Origin{Type: TypeRepeater, Actor: ActorAI, Chat: what[1]}, true
+
+	// chat/<chat>, the user resending from the AI panel
+	case len(what) == 2 && what[0] == "chat" && what[1] != "":
+		return Origin{Type: TypeRepeater, Actor: ActorUser, Chat: what[1]}, true
 	}
 
 	return Origin{}, false

@@ -33,7 +33,7 @@ The plan splits it into four fields and leaves `generated_by` itself untouched:
 
 ## 1. Every value
 
-Read-only over all 46 projects on the dev machine (`?immutable=1`): 19 shapes are stored, plus 3 that code writes but no project has yet (`manual`, `import/curl`, `fuzz_<index>`), 22 in all. `<proxy_id>`, `<chat_id>` and `<template_id>` are parameters; the split only depends on the shape.
+Read-only over all 46 projects on the dev machine (`?immutable=1`): 19 shapes are stored, plus 4 that code writes but no project has yet (`manual`, `import/curl`, `fuzz_<index>`, `repeater/chat/<chat>`), 23 in all. `<proxy_id>`, `<chat_id>` and `<template_id>` are parameters; the split only depends on the shape.
 
 ### Written by current code
 
@@ -49,11 +49,12 @@ Read-only over all 46 projects on the dev machine (`?immutable=1`): 19 shapes ar
 | 8 | `repeater/ai/<chat>` | AI `sendRequest`, frontend SDK | repeater | ai | | chat | 246 |
 | 9 | `repeater/ai/mcp/<chat>` | AI `sendRequest`, MCP | repeater | ai | | chat | 816 |
 | 10 | `repeater/ai/mcp/claudecode` | MCP `sendRequest` with no chat id | repeater | ai | | | 24 |
-| 11 | `hud/fuzzer` | HudFuzzer, HudFuzzer2 | fuzzer | user | | | 112 |
-| 12 | `ai/fuzzer` | AI fuzzer block | fuzzer | ai | | | 21 |
-| 13 | `fuzz_<index>`, `fuzz_<index>_<resultId>` | fuzzer "add results to history" | fuzzer | user | | | 123 |
-| 14 | `manual` | New Request popup, add without sending | manual | user | | | 0 |
-| 15 | `import/curl` | Import curl popup | import | user | | | 0 |
+| 11 | `repeater/chat/<chat>` | AI panel resend (Hud3) | repeater | user | | chat | 0 |
+| 12 | `hud/fuzzer` | HudFuzzer, HudFuzzer2 | fuzzer | user | | | 112 |
+| 13 | `ai/fuzzer` | AI fuzzer block | fuzzer | ai | | | 21 |
+| 14 | `fuzz_<index>`, `fuzz_<index>_<resultId>` | fuzzer "add results to history" | fuzzer | user | | | 123 |
+| 15 | `manual` | New Request popup, add without sending | manual | user | | | 0 |
+| 16 | `import/curl` | Import curl popup | import | user | | | 0 |
 
 ### Only in old rows
 

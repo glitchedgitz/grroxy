@@ -19,6 +19,7 @@ func TestParseGeneratedBy(t *testing.T) {
 		{"repeater/ai/x6s9c08ux5kd3k5", Origin{TypeRepeater, ActorAI, "", "x6s9c08ux5kd3k5"}},
 		{"repeater/ai/mcp/h9num2fhd84sbur", Origin{TypeRepeater, ActorAI, "", "h9num2fhd84sbur"}},
 		{"repeater/ai/mcp/claudecode", Origin{TypeRepeater, ActorAI, "", ""}},
+		{"repeater/chat/x6s9c08ux5kd3k5", Origin{TypeRepeater, ActorUser, "", "x6s9c08ux5kd3k5"}},
 		{"hud/fuzzer", Origin{TypeFuzzer, ActorUser, "", ""}},
 		{"ai/fuzzer", Origin{TypeFuzzer, ActorAI, "", ""}},
 		{"fuzz_2766", Origin{TypeFuzzer, ActorUser, "", ""}},
