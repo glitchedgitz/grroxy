@@ -63,13 +63,14 @@ var dataFields = map[string]bool{
 	"generated_by":     true,
 	// generated_by split, see docs/generated_by.md. "type" shadows the host
 	// table's own type (the sitemap node type) in these filters.
-	"type":     true,
-	"actor":    true,
-	"proxy":    true,
-	"chat":     true,
-	"extra":    true,
-	"attached": true,
-	"action":   true,
+	"type":      true,
+	"actor":     true,
+	"proxy":     true,
+	"chat":      true,
+	"extra":     true,
+	"attached":  true,
+	"action":    true,
+	"is_static": true, // css, image, font or video request, see internal/types/static.go
 }
 
 // isSitemapCollection reports whether the collection reaches request data through
@@ -204,7 +205,7 @@ type HostPrintSitemapArgs struct {
 type HostPrintRowsArgs struct {
 	Host   string `json:"host" jsonschema:"required" jsonschema_description:"the host to get the table for"`
 	Page   int    `json:"page" jsonschema:"required" jsonschema_description:"the page to get the data from, start from 1"`
-	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search, eg. \"req.url ~ '.js'\" or \"resp.status = 200\". Fields: req/req_edited (url, path, query, fragment, ext, raw, length, has_cookies, headers.NAME), resp/resp_edited (title, mime, status, length, raw, has_cookies), host, port, is_https, http, has_params, has_resp, index, type (proxy, repeater, fuzzer, automate, manual, import), actor (user, ai, template), proxy (padded proxy id), chat (AI chat id), generated_by. Use empty string for no filter"`
+	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search, eg. \"req.url ~ '.js'\" or \"resp.status = 200\". Fields: req/req_edited (url, path, query, fragment, ext, raw, length, has_cookies, headers.NAME), resp/resp_edited (title, mime, status, length, raw, has_cookies), host, port, is_https, http, has_params, has_resp, is_static (css, image, font or video request), index, type (proxy, repeater, fuzzer, automate, manual, import), actor (user, ai, template), proxy (padded proxy id), chat (AI chat id), generated_by. Use empty string for no filter"`
 }
 
 type ExtractValuesArgs struct {

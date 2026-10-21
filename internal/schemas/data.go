@@ -159,6 +159,7 @@ var Rows = schema.NewSchema(
 	// 	Name: "chat",
 	// 	Type: schema.FieldTypeText,
 	// },
+	// is_static (bool) is added the same way, by 1792561300_is_static.
 	&schema.SchemaField{
 		Name: "extra",
 		Type: schema.FieldTypeJson,

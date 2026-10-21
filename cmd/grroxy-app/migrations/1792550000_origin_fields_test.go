@@ -1,6 +1,7 @@
 package migrations_test
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,9 +16,9 @@ import (
 
 const originMigration = "1792550000_origin_fields.go"
 
-// projectBeforeOrigin is an existing project: a temp app with every migration
-// before the origin one applied.
-func projectBeforeOrigin(t *testing.T) *dbx.DB {
+// projectBefore is an existing project: a temp app with every migration
+// before the named one applied.
+func projectBefore(t *testing.T, migration string) *dbx.DB {
 	t.Helper()
 
 	app := core.NewBaseApp(core.BaseAppConfig{DataDir: t.TempDir()})
@@ -28,7 +29,7 @@ func projectBeforeOrigin(t *testing.T) *dbx.DB {
 
 	var before migrate.MigrationsList
 	for _, m := range pbmigrations.AppMigrations.Items() {
-		if !strings.HasSuffix(m.File, originMigration) {
+		if filepath.Base(m.File) < migration {
 			before.Register(m.Up, m.Down, m.File)
 		}
 	}
@@ -42,20 +43,27 @@ func projectBeforeOrigin(t *testing.T) *dbx.DB {
 	return app.DB()
 }
 
-// runOrigin applies the origin migration and returns the runner, for Down.
-func runOrigin(t *testing.T, db *dbx.DB) *migrate.Runner {
+// runMigration applies the named migration, and only it, and returns the
+// runner, for Down.
+func runMigration(t *testing.T, db *dbx.DB, migration string) *migrate.Runner {
 	t.Helper()
 
-	runner, err := migrate.NewRunner(db, pbmigrations.AppMigrations)
+	var upTo migrate.MigrationsList
+	for _, m := range pbmigrations.AppMigrations.Items() {
+		if filepath.Base(m.File) <= migration {
+			upTo.Register(m.Up, m.Down, m.File)
+		}
+	}
+	runner, err := migrate.NewRunner(db, upTo)
 	if err != nil {
 		t.Fatal(err)
 	}
 	applied, err := runner.Up()
 	if err != nil {
-		t.Fatalf("origin migration: %v", err)
+		t.Fatalf("%s: %v", migration, err)
 	}
-	if len(applied) != 1 || !strings.HasSuffix(applied[0], originMigration) {
-		t.Fatalf("applied %v, want only %s", applied, originMigration)
+	if len(applied) != 1 || filepath.Base(applied[0]) != migration {
+		t.Fatalf("applied %v, want only %s", applied, migration)
 	}
 	return runner
 }
@@ -100,7 +108,7 @@ type originRow struct {
 // An existing project: the migration adds the fields, fills them from
 // generated_by without changing it, and builds the indexes the views need.
 func TestOriginFieldsMigration(t *testing.T) {
-	db := projectBeforeOrigin(t)
+	db := projectBefore(t, originMigration)
 
 	if columns(t, db, "_data")["actor"] {
 		t.Fatal("_data has actor before the origin migration ran, internal/schemas must leave it out")
@@ -124,7 +132,7 @@ func TestOriginFieldsMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runner := runOrigin(t, db)
+	runner := runMigration(t, db, originMigration)
 
 	for table, fields := range map[string][]string{
 		"_data":       {"type", "actor", "proxy", "chat"},
@@ -198,7 +206,7 @@ func TestOriginFieldsMigration(t *testing.T) {
 // A project that already has the fields, eg. from an earlier build that only
 // added them: adding them is skipped, the rows are still filled and indexed.
 func TestOriginFieldsMigrationFieldsExist(t *testing.T) {
-	db := projectBeforeOrigin(t)
+	db := projectBefore(t, originMigration)
 	dao := daos.New(db)
 
 	collection, err := dao.FindCollectionByNameOrId("_data")
@@ -217,7 +225,7 @@ func TestOriginFieldsMigrationFieldsExist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runOrigin(t, db)
+	runMigration(t, db, originMigration)
 
 	var row originRow
 	if err := db.Select("id", "generated_by", "type", "actor", "proxy", "chat").From("_data").One(&row); err != nil {

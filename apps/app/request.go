@@ -317,6 +317,7 @@ func (backend *Backend) SaveRequestToBackend(reqBody types.AddRequestBodyType) (
 	userdata.Proxy = origin.Proxy
 	userdata.Chat = origin.Chat
 	userdata.GeneratedBy = generatedBy
+	userdata.IsStatic = types.IsStaticExt(userdata.ReqJson.Ext)
 
 	// Save _attached record
 	log.Printf("[SaveRequestToBackend] Saving _attached record")

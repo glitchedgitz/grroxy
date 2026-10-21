@@ -654,6 +654,9 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		}
 	}
 
+	// after the templates, which can rewrite the path
+	userdata["is_static"] = types.IsStaticExt(requestData["ext"].(string))
+
 	// Dump request to raw string
 	normalizeHTTP := (scheme == "http")
 	requestInString := rawhttp.DumpRequest(req, normalizeHTTP)

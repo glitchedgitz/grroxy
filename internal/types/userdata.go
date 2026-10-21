@@ -61,6 +61,7 @@ type UserData struct {
 	Actor          string         `db:"actor,omitempty" json:"actor,omitempty"`
 	Proxy          string         `db:"proxy,omitempty" json:"proxy,omitempty"`
 	Chat           string         `db:"chat,omitempty" json:"chat,omitempty"`
+	IsStatic       bool           `db:"is_static" json:"is_static"` // css, image, font or video, see static.go
 	Extra          map[string]any `db:"extra,omitempty" json:"extra,omitempty"`
 	Attached       string         `db:"attached,omitempty" json:"attached,omitempty"`
 
