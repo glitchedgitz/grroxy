@@ -7,27 +7,27 @@ import (
 	"github.com/glitchedgitz/pocketbase/tools/search"
 )
 
-// --- the generated_by tag ---
+// --- the proxy id ---
 
-// A caller says "1", the rows are stamped with the padded id — the tag has to
-// bridge the two, and must not pad an id that is already padded.
-func TestProxyHistoryTag(t *testing.T) {
+// A caller says "1", the rows carry the padded id — padProxyID bridges the
+// two, and must not pad an id that is already padded.
+func TestPadProxyID(t *testing.T) {
 	scenarios := []struct {
 		name    string
 		proxyID string
 		want    string
 	}{
-		{"every proxy", "", "proxy/"},
-		{"blank is every proxy", "   ", "proxy/"},
-		{"bare id is padded", "1", "proxy/______________1"},
-		{"padded id is left alone", "______________1", "proxy/______________1"},
-		{"two digit id", "11", "proxy/_____________11"},
+		{"empty stays empty", "", ""},
+		{"blank is empty", "   ", ""},
+		{"bare id is padded", "1", "______________1"},
+		{"padded id is left alone", "______________1", "______________1"},
+		{"two digit id", "11", "_____________11"},
 	}
 
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
-			if got := proxyHistoryTag(s.proxyID); got != s.want {
-				t.Fatalf("proxyHistoryTag(%q) = %q, want %q", s.proxyID, got, s.want)
+			if got := padProxyID(s.proxyID); got != s.want {
+				t.Fatalf("padProxyID(%q) = %q, want %q", s.proxyID, got, s.want)
 			}
 		})
 	}
@@ -35,11 +35,11 @@ func TestProxyHistoryTag(t *testing.T) {
 
 // FormatStringID pads with strings.Repeat, which panics on a negative count —
 // an id at or over the padded width must not reach it.
-func TestProxyHistoryTagOversizedID(t *testing.T) {
+func TestPadProxyIDOversizedID(t *testing.T) {
 	long := strings.Repeat("x", proxyIDWidth+5)
 
-	if got := proxyHistoryTag(long); got != "proxy/"+long {
-		t.Fatalf("proxyHistoryTag(%q) = %q, want it handed back unpadded", long, got)
+	if got := padProxyID(long); got != long {
+		t.Fatalf("padProxyID(%q) = %q, want it handed back unpadded", long, got)
 	}
 }
 
@@ -69,18 +69,17 @@ func TestProxyHistoryFilterIsResolvable(t *testing.T) {
 	}
 }
 
-// The tag is bound, never interpolated: a padded id is all underscores, and "_"
-// is a single-character wildcard in LIKE. Bound values get escaped, so
-// "proxy/______________1" cannot also match "proxy/_____________11".
-func TestProxyHistoryFilterBindsTag(t *testing.T) {
+// One proxy is an exact match on the proxy field, bound as a param; with no id
+// it is every proxy's rows, by type.
+func TestProxyHistoryFilterMatchesProxyField(t *testing.T) {
 	filter, params := proxyHistoryFilter("1", "", "")
-
-	if strings.Contains(filter, "proxy/") {
-		t.Fatalf("proxyHistoryFilter() = %q, want the tag bound as a param", filter)
+	if filter != "proxy = {:proxy}" || params["proxy"] != "______________1" {
+		t.Fatalf("proxyHistoryFilter(\"1\") = %q %v, want proxy = {:proxy} bound to the padded id", filter, params)
 	}
 
-	if got := params["proxy"]; got != "proxy/______________1" {
-		t.Fatalf("params[proxy] = %v, want %q", got, "proxy/______________1")
+	filter, params = proxyHistoryFilter("", "", "")
+	if filter != "type = {:type}" || params["type"] != "proxy" {
+		t.Fatalf("proxyHistoryFilter(\"\") = %q %v, want type = {:type} bound to proxy", filter, params)
 	}
 }
 

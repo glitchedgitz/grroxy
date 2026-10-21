@@ -61,9 +61,15 @@ var dataFields = map[string]bool{
 	"req_edited_json":  true,
 	"resp_edited_json": true,
 	"generated_by":     true,
-	"extra":            true,
-	"attached":         true,
-	"action":           true,
+	// generated_by split, see docs/generated_by.md. "type" shadows the host
+	// table's own type (the sitemap node type) in these filters.
+	"type":     true,
+	"actor":    true,
+	"proxy":    true,
+	"chat":     true,
+	"extra":    true,
+	"attached": true,
+	"action":   true,
 }
 
 // isSitemapCollection reports whether the collection reaches request data through
@@ -198,7 +204,7 @@ type HostPrintSitemapArgs struct {
 type HostPrintRowsArgs struct {
 	Host   string `json:"host" jsonschema:"required" jsonschema_description:"the host to get the table for"`
 	Page   int    `json:"page" jsonschema:"required" jsonschema_description:"the page to get the data from, start from 1"`
-	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search, eg. \"req.url ~ '.js'\" or \"resp.status = 200\". Fields: req/req_edited (url, path, query, fragment, ext, raw, length, has_cookies, headers.NAME), resp/resp_edited (title, mime, status, length, raw, has_cookies), host, port, is_https, http, has_params, has_resp, generated_by, index. Use empty string for no filter"`
+	Filter string `json:"filter" jsonschema:"required" jsonschema_description:"filter the results for faster search, eg. \"req.url ~ '.js'\" or \"resp.status = 200\". Fields: req/req_edited (url, path, query, fragment, ext, raw, length, has_cookies, headers.NAME), resp/resp_edited (title, mime, status, length, raw, has_cookies), host, port, is_https, http, has_params, has_resp, index, type (proxy, repeater, fuzzer, automate, manual, import), actor (user, ai, template), proxy (padded proxy id), chat (AI chat id), generated_by. Use empty string for no filter"`
 }
 
 type ExtractValuesArgs struct {
@@ -685,6 +691,10 @@ func (backend *Backend) hostPrintRowsInDetailsHandler(ctx context.Context, reque
 				"host":         dataRecord.GetString("host"),
 				"port":         dataRecord.GetString("port"),
 				"generated_by": dataRecord.GetString("generated_by"),
+				"type":         dataRecord.GetString("type"),
+				"actor":        dataRecord.GetString("actor"),
+				"proxy":        dataRecord.GetString("proxy"),
+				"chat":         dataRecord.GetString("chat"),
 				"has_params":   dataRecord.GetBool("has_params"),
 				"has_resp":     dataRecord.GetBool("has_resp"),
 				"http":         dataRecord.GetString("http"),
@@ -1801,8 +1811,7 @@ func (backend *Backend) interceptReadHandler(ctx context.Context, request mcp.Ca
 
 	dao := backend.App.Dao()
 
-	generatedBy := fmt.Sprintf("proxy/%s", args.ProxyID)
-	records, err := dao.FindRecordsByFilter("_intercept", "generated_by ~ {:gb}", "-created", 100, 0, dbx.Params{"gb": generatedBy})
+	records, err := dao.FindRecordsByFilter("_intercept", "proxy = {:proxy}", "-created", 100, 0, dbx.Params{"proxy": padProxyID(args.ProxyID)})
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to read intercepted rows: %v", err)), nil
 	}

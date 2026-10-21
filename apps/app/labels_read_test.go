@@ -21,6 +21,7 @@ func rowsResolver() search.FieldResolver {
 		"id", "created", "updated",
 		"index", "index_minor", "host", "port", "http",
 		"has_params", "has_resp", "is_https", "generated_by",
+		"type", "actor", "proxy", "chat",
 		`^req\.[\w\.]+$`, `^resp\.[\w\.]+$`,
 		`^attached\.[\w\.]+$`,
 	)

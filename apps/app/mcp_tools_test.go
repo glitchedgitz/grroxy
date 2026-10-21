@@ -56,6 +56,13 @@ func TestPrefixDataFilter(t *testing.T) {
 		{"value identifier untouched", "is_https = true", "data.is_https = true"},
 		{"regex operand preserved", `req.url ~ /\.js$/`, `data.req.url ~ /\.js$/`},
 		{"escaped quote preserved", `req.url ~ 'it\'s'`, `data.req.url ~ 'it\'s'`},
+		// generated_by split, see docs/generated_by.md: the request's origin fields
+		// win over the host table's own "type" (the sitemap node type)
+		{
+			"origin fields",
+			"type = 'proxy' AND actor = 'ai' AND proxy = '_____________17' AND chat = 'x6s9c08ux5kd3k5'",
+			"data.type = 'proxy' AND data.actor = 'ai' AND data.proxy = '_____________17' AND data.chat = 'x6s9c08ux5kd3k5'",
+		},
 		// unscannable input is passed through so the query reports the real error
 		{"unscannable passthrough", "req.url ~ '.js' &&", "req.url ~ '.js' &&"},
 	}
@@ -78,6 +85,8 @@ func TestPrefixDataFilterMakesSitemapFiltersResolvable(t *testing.T) {
 		"resp.status = 200 AND req.ext = 'js'",
 		"(req.url ~ '.js' OR req.url ~ '.map') AND has_resp = true",
 		"host ~ 'example.com'",
+		"actor = 'ai' AND proxy = '_____________17'",
+		"chat = 'x6s9c08ux5kd3k5'",
 	}
 
 	for _, filter := range filters {

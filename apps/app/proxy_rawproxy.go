@@ -68,20 +68,12 @@ type RawProxyWrapper struct {
 	Intercept    bool
 	Filters      string
 	RunTemplates bool
-	AIChatID     string // chat that owns this proxy; empty when no AI owner. Stamped into generated_by on every captured row.
+	AIChatID     string // chat that owns this proxy; empty when no AI owner. Stamped into the chat field on every captured row.
 }
 
-// formatGeneratedBy returns the generated_by value to stamp on rows captured
-// by this proxy. When an AI chat owns the proxy, the chat ID is prefixed so
-// per-chat filters (~ 'ai/<chatID>') match proxy-captured traffic too.
-func (rp *RawProxyWrapper) formatGeneratedBy() string {
-	if rp.AIChatID != "" {
-		return fmt.Sprintf("ai/%s/proxy/%s", rp.AIChatID, rp.proxyID)
-	}
-	return fmt.Sprintf("proxy/%s", rp.proxyID)
-}
-
-// origin is formatGeneratedBy split into fields, see docs/generated_by.md.
+// origin is what this proxy stamps on every captured row, see
+// docs/generated_by.md. Captures leave generated_by empty; older rows carry
+// "proxy/<id>" or "ai/<chatID>/proxy/<id>", which parse to the same fields.
 func (rp *RawProxyWrapper) origin() types.Origin {
 	if rp.AIChatID != "" {
 		return types.Origin{Type: types.TypeProxy, Actor: types.ActorAI, Proxy: rp.proxyID, Chat: rp.AIChatID}
@@ -602,7 +594,6 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		"is_https":     req.TLS != nil,                      // Secure if TLS is present (works with any scheme)
 		"http":         req.Proto,                           // HTTP version: HTTP/1.1, HTTP/2.0, etc.
 		"proxy_id":     reqData.RequestID,                   // Proxy request ID from rawproxy: req-00000001
-		"generated_by": rp.formatGeneratedBy(), // proxy/<id> or ai/<chatID>/proxy/<id> when AI-owned
 		"req_json":     requestData,
 		"resp_json": map[string]any{
 			"title":       "",
@@ -745,18 +736,14 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		// Track intercept counters (total, per-proxy)
 		rp.backend.CounterManager.IncrementWithStartup("_intercept", "_intercept", "", true)
 
-		var proxyInterceptKey string
-		if generatedBy, ok := userdata["generated_by"].(string); ok {
-			proxyInterceptKey = generatedBy + "/intercept"
-			rp.backend.CounterManager.Increment(proxyInterceptKey, "_intercept", "")
-		}
+		// per proxy, AI-owned or not; ProxyManager and intercept.go read proxy/<pid>/intercept
+		proxyInterceptKey := "proxy/" + rp.proxyID + "/intercept"
+		rp.backend.CounterManager.Increment(proxyInterceptKey, "_intercept", "")
 
 		// Ensure intercept counters are decremented after processing
 		defer func() {
 			rp.backend.CounterManager.Decrement("_intercept", "_intercept", "")
-			if proxyInterceptKey != "" {
-				rp.backend.CounterManager.Decrement(proxyInterceptKey, "_intercept", "")
-			}
+			rp.backend.CounterManager.Decrement(proxyInterceptKey, "_intercept", "")
 		}()
 
 		updatedString, edited := rp.interceptWait(userdata, "req", req.ContentLength, requestInString)
@@ -866,18 +853,14 @@ func (rp *RawProxyWrapper) onResponse(reqData *rawproxy.RequestData, resp *http.
 		// Track intercept counters (total, per-proxy, per-host)
 		rp.backend.CounterManager.IncrementWithStartup("_intercept", "_intercept", "", true)
 
-		var proxyInterceptKey string
-		if generatedBy, ok := userdata["generated_by"].(string); ok {
-			proxyInterceptKey = generatedBy + "/intercept"
-			rp.backend.CounterManager.Increment(proxyInterceptKey, "_intercept", "")
-		}
+		// per proxy, AI-owned or not; ProxyManager and intercept.go read proxy/<pid>/intercept
+		proxyInterceptKey := "proxy/" + rp.proxyID + "/intercept"
+		rp.backend.CounterManager.Increment(proxyInterceptKey, "_intercept", "")
 
 		// Ensure intercept counters are decremented after processing
 		defer func() {
 			rp.backend.CounterManager.Decrement("_intercept", "_intercept", "")
-			if proxyInterceptKey != "" {
-				rp.backend.CounterManager.Decrement(proxyInterceptKey, "_intercept", "")
-			}
+			rp.backend.CounterManager.Decrement(proxyInterceptKey, "_intercept", "")
 		}()
 
 		updatedString, edited := rp.interceptWait(userdata, "resp", resp.ContentLength, responseInString)
@@ -1044,10 +1027,10 @@ func (rp *RawProxyWrapper) saveRequestToDB(reqCtx *RequestContext, requestData m
 	// Total requests counter for _data (load_on_startup - recalculated from DB)
 	rp.backend.CounterManager.IncrementWithStartup("_data", "_data", "", true)
 
-	// Per-proxy counter (immediate sync for exact counts)
-	if generatedBy, ok := userdata["generated_by"].(string); ok {
-		rp.backend.CounterManager.Increment(generatedBy, "_data", "")
-	}
+	// Per-proxy counter (immediate sync for exact counts), AI-owned or not. Rows
+	// captured before this were counted under their generated_by, ProxyManager
+	// sums both.
+	rp.backend.CounterManager.Increment("proxy/"+rp.proxyID, "_data", "")
 
 	// Per-host counter (immediate sync for exact counts)
 	if host, ok := userdata["host"].(string); ok {

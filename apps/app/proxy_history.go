@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/glitchedgitz/grroxy/internal/types"
 	"github.com/glitchedgitz/grroxy/internal/utils"
 	"github.com/glitchedgitz/pocketbase/apis"
 	"github.com/glitchedgitz/pocketbase/core"
@@ -109,29 +110,23 @@ func padProxyID(proxyID string) string {
 	return utils.FormatStringID(proxyID, proxyIDWidth)
 }
 
-// proxyHistoryTag is the generated_by substring that marks a row as captured by
-// a proxy. A proxy stamps "proxy/<id>", or "ai/<chatID>/proxy/<id>" when it is
-// AI-owned (see RawProxyWrapper.formatGeneratedBy), so a contains-match on
-// "proxy/<id>" finds both forms and a bare "proxy/" finds every proxy's rows.
-func proxyHistoryTag(proxyID string) string {
-	if proxyID = padProxyID(proxyID); proxyID == "" {
-		return "proxy/"
-	}
-	return "proxy/" + proxyID
-}
-
-// proxyHistoryFilter builds the "_data" filter for a proxy's traffic.
-//
-// The tag is bound as a param rather than interpolated: a padded id is all
-// underscores, and "_" is a single-character wildcard in LIKE — bound values
-// are escaped (see wrapLikeParams in pocketbase/tools/search), so
-// "proxy/______________1" cannot also match "proxy/_____________11".
+// proxyHistoryFilter builds the "_data" filter for a proxy's traffic. Every row
+// a proxy captures carries its padded id in "proxy", AI-owned or not (see
+// docs/generated_by.md), which idx_data_proxy serves; with no id it reads every
+// proxy's rows.
 //
 // host and extra are optional. extra is parenthesised so that an OR inside it
 // cannot widen the proxy condition into "this proxy, or anything else matching".
 func proxyHistoryFilter(proxyID, host, extra string) (string, dbx.Params) {
-	conditions := []string{"generated_by ~ {:proxy}"}
-	params := dbx.Params{"proxy": proxyHistoryTag(proxyID)}
+	var conditions []string
+	params := dbx.Params{}
+	if proxyID = padProxyID(proxyID); proxyID != "" {
+		conditions = append(conditions, "proxy = {:proxy}")
+		params["proxy"] = proxyID
+	} else {
+		conditions = append(conditions, "type = {:type}")
+		params["type"] = types.TypeProxy
+	}
 
 	if host = strings.TrimSpace(host); host != "" {
 		// stored hosts carry the scheme ("https://example.com"), so a bare
@@ -225,6 +220,10 @@ func (backend *Backend) proxyHistoryLogic(body ProxyHistoryRequest) (ProxyHistor
 			// which proxy captured the row — the only thing telling them apart
 			// when the read was not scoped to one
 			"generated_by": record.GetString("generated_by"),
+			"type":         record.GetString("type"),
+			"actor":        record.GetString("actor"),
+			"proxy":        record.GetString("proxy"),
+			"chat":         record.GetString("chat"),
 			"has_params":   record.GetBool("has_params"),
 			"has_resp":     record.GetBool("has_resp"),
 			"http":         record.GetString("http"),
