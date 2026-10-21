@@ -57,6 +57,10 @@ type UserData struct {
 	ReqEditedJson  RequestData    `db:"req_edited_json,omitempty" json:"req_edited_json,omitempty"`
 	RespEditedJson ResponseData   `db:"resp_edited_json,omitempty" json:"resp_edited_json,omitempty"`
 	GeneratedBy    string         `db:"generated_by,omitempty" json:"generated_by,omitempty"`
+	Type           string         `db:"type,omitempty" json:"type,omitempty"` // generated_by split, see docs/generated_by.md
+	Actor          string         `db:"actor,omitempty" json:"actor,omitempty"`
+	Proxy          string         `db:"proxy,omitempty" json:"proxy,omitempty"`
+	Chat           string         `db:"chat,omitempty" json:"chat,omitempty"`
 	Extra          map[string]any `db:"extra,omitempty" json:"extra,omitempty"`
 	Attached       string         `db:"attached,omitempty" json:"attached,omitempty"`
 

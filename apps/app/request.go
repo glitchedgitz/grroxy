@@ -314,6 +314,16 @@ func (backend *Backend) SaveRequestToBackend(reqBody types.AddRequestBodyType) (
 		userdata.GeneratedBy = reqBody.GeneratedBy
 	}
 
+	// and split it into fields, see docs/generated_by.md
+	if origin, ok := types.ParseGeneratedBy(userdata.GeneratedBy); ok {
+		userdata.Type = origin.Type
+		userdata.Actor = origin.Actor
+		userdata.Proxy = origin.Proxy
+		userdata.Chat = origin.Chat
+	} else {
+		log.Printf("[SaveRequestToBackend] Unknown generated_by %q, origin fields left empty", userdata.GeneratedBy)
+	}
+
 	// Save _attached record
 	log.Printf("[SaveRequestToBackend] Saving _attached record")
 	collection, err := backend.App.Dao().FindCollectionByNameOrId("_attached")

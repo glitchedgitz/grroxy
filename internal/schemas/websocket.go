@@ -87,4 +87,19 @@ var Websockets = schema.NewSchema(
 		Name: "generated_by",
 		Type: schema.FieldTypeText,
 	},
+	// generated_by split into fields, see docs/generated_by.md. Added by
+	// migration 1792550000_origin_fields for new and old projects alike, so they
+	// stay out of the init schema. No "type" here, that name is the frame type.
+	// &schema.SchemaField{
+	// 	Name: "actor",
+	// 	Type: schema.FieldTypeText,
+	// },
+	// &schema.SchemaField{
+	// 	Name: "proxy",
+	// 	Type: schema.FieldTypeText,
+	// },
+	// &schema.SchemaField{
+	// 	Name: "chat",
+	// 	Type: schema.FieldTypeText,
+	// },
 )

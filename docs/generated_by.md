@@ -1,0 +1,159 @@
+# `generated_by`: every value, every use, and the split into fields
+
+Status: step 1 done (fields, backfill, indexes, writers) · 2026-10-21
+
+`generated_by` is a path-like string saying what made a row: `proxy/<pid>`, `ai/<chat>/proxy/<pid>`, `repeater/hud`, …
+Readers filter it with `~` (`LIKE '%…%'`), which no index can serve, so every such view scans all of `_data`.
+Packing the chat id into the string also means "all AI traffic" can only be found by substring.
+
+The plan splits it into four fields and leaves `generated_by` itself untouched:
+
+| Field | Values | Answers |
+|---|---|---|
+| `type` | `proxy`, `repeater`, `fuzzer`, `automate`, `manual`, `import` | which tool made the request |
+| `actor` | `user`, `ai`, `template` | who made it |
+| `proxy` | padded proxy id (`_____________17`) | which proxy captured it |
+| `chat` | AI chat id | which AI chat drove it |
+
+`_websockets` already has a `type` column (text/binary frame), and its rows only come from proxy capture, so it gets `actor`, `proxy` and `chat` only.
+
+**Steps**
+
+1. **Migration + writers** (done): nothing reads the new fields yet.
+   - Parser: `types.ParseGeneratedBy` in `internal/types/origin.go`, tested over every shape in §1.
+   - Migration `cmd/grroxy-app/migrations/1792550000_origin_fields.go`, for new and old projects alike (the fields are commented out in `internal/schemas` so init doesn't create them first). Per collection it:
+     - adds the fields
+     - fills them on existing rows from `generated_by`, one `UPDATE … WHERE generated_by = ?` per distinct value; unknown values are logged and left empty; `generated_by` itself is not changed
+     - adds the indexes through `collection.Indexes`: `_data` gets `(type|actor|proxy|chat, index, index_minor, id)`, `_websockets` gets `(proxy, id)`. Each ends in `id`, so PocketBase's `COUNT(DISTINCT id)` is answered from the index.
+   - Writers: proxy capture (`RawProxyWrapper.origin`, also copied to `_intercept`), WebSocket messages (copied from the `_data` row), `SaveRequestToBackend` (parses the value it stores, so repeater, fuzzer, manual, import, templates and AI/MCP sends are all covered).
+2. **Readers**: replace every `generated_by` reader listed in §3 with the new fields.
+3. **Cleanup**: new projects stop writing `generated_by`.
+
+---
+
+## 1. Every value
+
+Read-only over all 46 projects on the dev machine (`?immutable=1`): 19 shapes are stored, plus 3 that code writes but no project has yet (`manual`, `import/curl`, `fuzz_<index>`), 22 in all. `<proxy_id>`, `<chat_id>` and `<template_id>` are parameters; the split only depends on the shape.
+
+### Written by current code
+
+| # | Stored value | Writer | type | actor | proxy | chat | Rows |
+|---|---|---|---|---|---|---|---|
+| 1 | `proxy/<pid>` | proxy capture, no AI owner | proxy | user | pid | | 110,310 |
+| 2 | `ai/<chat>/proxy/<pid>` | proxy capture while a chat owns the proxy | proxy | ai | pid | chat | 176,787 |
+| 3 | `repeater/hud` | HudRepeater | repeater | user | | | 643 |
+| 4 | `repeater/new-request` | New Request popup, send | repeater | user | | | 7 |
+| 5 | `repeater/fetch-urls` | Fetch URLs popup | repeater | user | | | 7 |
+| 6 | `repeater/automate` | Automate | automate | user | | | 3,773 |
+| 7 | `repeater/template:<templateId>` | template `send_request` action | repeater | template | | | 810 |
+| 8 | `repeater/ai/<chat>` | AI `sendRequest`, frontend SDK | repeater | ai | | chat | 246 |
+| 9 | `repeater/ai/mcp/<chat>` | AI `sendRequest`, MCP | repeater | ai | | chat | 816 |
+| 10 | `repeater/ai/mcp/claudecode` | MCP `sendRequest` with no chat id | repeater | ai | | | 24 |
+| 11 | `hud/fuzzer` | HudFuzzer, HudFuzzer2 | fuzzer | user | | | 112 |
+| 12 | `ai/fuzzer` | AI fuzzer block | fuzzer | ai | | | 21 |
+| 13 | `fuzz_<index>`, `fuzz_<index>_<resultId>` | fuzzer "add results to history" | fuzzer | user | | | 123 |
+| 14 | `manual` | New Request popup, add without sending | manual | user | | | 0 |
+| 15 | `import/curl` | Import curl popup | import | user | | | 0 |
+
+### Only in old rows
+
+| Stored value | type | actor | chat | Rows | Where |
+|---|---|---|---|---|---|
+| `repeater/template:send_request` | repeater | template | | 40 | Apr 2026; the action name was stamped instead of the template id |
+| `ai` | repeater | ai | | 15 | Mar 2026 |
+| `repeater` | repeater | user | | 13 | Dec 2025 – Jan 2026 |
+| `hud/repeater` | repeater | user | | 2 | Dec 2025 |
+| `ai/repeater/<chat>` | repeater | ai | chat | 1 | Jan 2026; old AI send stamp, now commented out in `aibackend.ts:466` |
+| `repeater/import/curl` | import | user | | 1 | Aug 2026; import used to go through repeater send |
+
+Anything else parses to empty fields and is logged by the backfill.
+
+### Other collections
+
+- `_websockets.generated_by` copies the `_data` row that opened the socket: values 1–2 only.
+- `_intercept.generated_by` rows are copies of the `_data` row: values 1–2 only.
+- `_processes.generated_by` is a different thing: the fuzzer process stamps whatever its caller passed (`hud/fuzzer`, `ai/fuzzer`). Not part of this split.
+
+---
+
+## 2. Writers
+
+Paths: backend relative to `grroxy/`, frontend `UI/` = `cybernetic-ui/src/`.
+
+| Where | Writes | Path to storage |
+|---|---|---|
+| `apps/app/proxy_rawproxy.go:77` `formatGeneratedBy` | 1, 2 | capture `userdata` (:597) → `_data`, `_intercept` (`proxy_wait.go:127`, `Load(userdata)`) |
+| `apps/app/proxy_rawproxy.go:1266-1286` | copy of the `_data` value | `_websockets` |
+| `apps/app/repeater.go:55` | prefixes `repeater/` to whatever the caller sends | `SaveRequestToBackend` |
+| `apps/app/request.go:313` `SaveRequestToBackend` | the value it is given | `_data` |
+| `apps/app/request.go:260` `/api/request/add` | any non-empty string (no prefix) | `SaveRequestToBackend` |
+| `apps/app/template_actions.go:195` | `template:<id>` → 7 | repeater send |
+| `apps/app/mcp_tools.go:723-738` | `ai/mcp/<chat>`, `ai/mcp/claudecode` → 9, 10 | repeater send |
+| `UI/lib/molecules/HudRepeater.svelte:204` | `hud` → 3 | repeater send |
+| `UI/lib/organism/NewRequestPopup.svelte:109` | `new-request` → 4 | repeater send (`request_actions.ts:61`) |
+| `UI/lib/organism/FetchUrlsPopup.svelte:75` | `fetch-urls` → 5 | repeater send |
+| `UI/lib/molecules/Automate.svelte:105, 209, 391` | `automate` → 6 | repeater send |
+| `UI/lib/pages/tools/AI/aibackend.ts:505` | `ai/<chat>` → 8 | repeater send |
+| `UI/lib/molecules/HudFuzzer.svelte:148`, `HudFuzzer2.svelte:173` | `hud/fuzzer` → 11 | fuzzer → `/api/request/add` (`UI/lib/pages/intruder/fuzz.svelte.ts:248, 653`) |
+| `UI/lib/pages/tools/AI/AIFuzzerBlock.svelte:117` | `ai/fuzzer` → 12 | same |
+| `UI/lib/molecules/HudFuzzer.svelte:347, 366` | `fuzz_<index>[_<id>]` → 13 | `/api/request/add` |
+| `UI/lib/organism/NewRequestPopup.svelte:132` | `manual` → 14 | `/api/request/add` (`request_actions.ts:80`) |
+| `UI/lib/organism/ImportRequestPopup.svelte:94` | `import/curl` → 15 | `/api/request/add` |
+| `apps/tools/fuzzer.go:237`, `internal/sdk/process.go:89` | caller's value | `_processes` (not `_data`) |
+
+## 3. Readers: to replace in step 2
+
+### Filters (scans)
+
+| Where | Today | Replace with |
+|---|---|---|
+| `UI/lib/pages/proxy/History.svelte:16` | `generated_by ~ 'proxy/<pid>'` | `proxy = '<pid>'` |
+| `UI/lib/pages/proxy/ProxyNotRunning.svelte:62` | same, count | `proxy = '<pid>'` |
+| `UI/lib/pages/proxy/WebsocketHistory.svelte:180` | same, on `_websockets` | `proxy = '<pid>'` |
+| `UI/lib/pages/proxy/ProxyManager.svelte:1313` | `generated_by~'<pid>'` on `_intercept` | `proxy = '<pid>'` |
+| `UI/lib/pages/proxy/Intercept.svelte:445` | same | `proxy = '<pid>'` |
+| `UI/lib/pages/aichat/AIPanel.svelte:444, 447` | exact `generated_by =` for Sent and proxy tabs | Sent: `chat = '<id>' AND type = 'repeater'`; proxy tab: `proxy = '<pid>'` (+ `chat` if only this chat's rows) |
+| `UI/lib/molecules/HudRepeater.svelte:65` | `index = N AND (generated_by ~ 'repeater' OR ~ 'proxy')` | `index = N AND (type = 'repeater' OR type = 'proxy')` |
+| `UI/lib/molecules/HudFuzzer2.svelte:85` | `index = N AND (~ 'fuzzer' OR ~ 'proxy')` | `type = 'fuzzer' OR type = 'proxy'` |
+| `UI/lib/scripts/categories.ts:26-54` | `~ 'repeater' / 'automate' / 'fuzzer' / 'proxy' / 'ai'` | `type = …`; AI: `actor = 'ai'` |
+| `UI/lib/scripts/categories.ts:72`, `UI/lib/pages/sitemaps/MultipleData2.svelte:280`, `UI/lib/pages/sitemaps/Data.svelte:646` | rewrite `^generated_by` → `data.generated_by` on host tables | same for the new field names. Host tables have their own `type` column, so the prefix is required |
+| `UI/lib/pages/sitemaps/CategorySidebar.svelte:30-48, 112-115` | category `~` filters | dead code (F-17): delete |
+| `apps/app/proxy_history.go:112-133` `proxyHistoryTag` | `generated_by ~ {:proxy}` (MCP + `/api/proxy/history`) | `proxy = {:proxy}`; mirror in `aitools.ts` per CLAUDE.md |
+| `apps/app/mcp_tools.go:1804-1805` | `_intercept`, `generated_by ~ 'proxy/<pid>'` | `proxy = {:pid}` |
+| `apps/app/intercept.go:158-173` | in-Go match: `== proxy/<pid>` or suffix `/proxy/<pid>` | `record.proxy == pid` |
+
+### Display and branching on the string
+
+| Where | Does | Replace with |
+|---|---|---|
+| `UI/lib/atoms/Table/Cell/GeneratedBy.svelte` | regexes `template:<id>` and `ai/<id>` for the link and tooltip; icon by substring (`template:`, `ai/mcp`, `ai`, `fuzzer`) | `actor`, `chat`; template id see open question |
+| `UI/lib/atoms/Table/Table.svelte:1198-1221`, `VirtualTable.svelte:387-420` | row icon by `includes('automate' / 'repeater' / 'fuzzer' / 'ai' / 'claude')` | `type`, `actor` |
+| `UI/lib/molecules/TwinEditors2.svelte:240, 414` | fuzzer row if `includes('fuzzer')` | `type = 'fuzzer'` |
+| `UI/lib/pages/proxy/ProxyManager.svelte:628` | colour swatch: `generated_by` includes `proxy/<pid>` | field `proxy`, exact |
+| `UI/lib/pages/cockpit/Overview.svelte:367, 412` | process "AI" vs "You" by `includes('ai/')` | `_processes`, out of scope |
+| `UI/lib/stores/History.ts:203-211, 408-416`, `WebsocketHistory.svelte:143-149` | `generated_by` column | add `type` / `actor` columns, keep `generated_by` for old rows |
+| `UI/lib/molecules/filters.ts:407` | filter autocomplete field | add the new fields |
+
+### Counters keyed by the string
+
+| Where | Key | Replace with |
+|---|---|---|
+| `apps/app/proxy_rawproxy.go:1037-1038` | `<generated_by>` per captured row | `proxy/<pid>` for every row of the proxy (fixes F-6) |
+| `apps/app/proxy_rawproxy.go:738-739, 859-860` | `<generated_by>/intercept` | `proxy/<pid>/intercept` |
+| `UI/lib/pages/proxy/ProxyManager.svelte:568, 589, 599, 741, 1035, 1301` | reads `proxy/…` keys, sums `…/proxy/<pid>` suffixes | `proxy/<pid>` |
+| `UI/lib/pages/cockpit/ProxyStatus.svelte:29` | `counter_key ~ 'proxy/%'` | same keys, simpler |
+
+### Passed through / help text
+
+- `apps/app/proxy_history.go:227`, `apps/app/labels_read.go:276`, `apps/app/mcp_tools.go:63, 687`, `UI/lib/pages/tools/AI/aibackend.ts:746`: return `generated_by` on rows; add the new fields.
+- `UI/lib/pages/tools/AI/aitools.ts:112, 247, 780`, `apps/app/mcp_tools.go:201`, `apps/app/api.md`, `docs/app_api_docs.md`, `docs/tools_api_docs.md`: help text and examples; teach `type` / `actor` / `proxy` / `chat`.
+- `apps/app/mcp.go:31`, `apps/app/proxy.go:685`, `proxy_rawproxy.go:71`: comments.
+- Types: `internal/types/api.go:8`, `internal/types/userdata.go:59`, `UI/lib/scripts/backend_app.ts:634, 1273`, `UI/lib/scripts/backend_tools.ts:430`.
+- Tests: `apps/app/sqltest_test.go:21, 45`, `apps/app/labels_read_test.go:23`, `apps/app/proxy_history_test.go`.
+- Schemas and index: `internal/schemas/data.go:140`, `intercept.go:115`, `websocket.go:87`, `map.go:128` (`idx_data_generated_by`).
+
+## 4. Open questions
+
+1. **Template id.** `repeater/template:<id>` drives the template link and tooltip in `GeneratedBy.svelte`. Splitting it out needs a fifth field (`ref`?) or keeping the cell on `generated_by` for template rows.
+2. **AIPanel proxy tabs.** Show every row of the proxy (`proxy = pid`), or only this chat's (`proxy = pid AND chat = id`)?
+3. **New-project writers.** Once a project has the `data_layout` flag, should writers stop filling `generated_by` (as planned), or keep it for display?

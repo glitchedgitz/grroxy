@@ -81,6 +81,14 @@ func (rp *RawProxyWrapper) formatGeneratedBy() string {
 	return fmt.Sprintf("proxy/%s", rp.proxyID)
 }
 
+// origin is formatGeneratedBy split into fields, see docs/generated_by.md.
+func (rp *RawProxyWrapper) origin() types.Origin {
+	if rp.AIChatID != "" {
+		return types.Origin{Type: types.TypeProxy, Actor: types.ActorAI, Proxy: rp.proxyID, Chat: rp.AIChatID}
+	}
+	return types.Origin{Type: types.TypeProxy, Actor: types.ActorUser, Proxy: rp.proxyID}
+}
+
 // ProxyStats tracks proxy statistics
 type ProxyStats struct {
 	RequestsTotal   atomic.Uint64
@@ -606,6 +614,9 @@ func (rp *RawProxyWrapper) onRequest(reqData *rawproxy.RequestData, req *http.Re
 		},
 		"is_req_edited":  false,
 		"is_resp_edited": false,
+	}
+	for field, value := range rp.origin().Fields() {
+		userdata[field] = value
 	}
 
 	// Run before_request templates (synchronous — can modify request)
@@ -1258,12 +1269,16 @@ func (rp *RawProxyWrapper) saveWebSocketMessageToDB(msg *rawproxy.WebSocketMessa
 	var id = ""
 	var dataIndex = ""
 	var generatedBy = ""
+	var actor, proxy, chat string
 
 	// Find the parent _data record to get its user-friendly index
 	// The WebSocket RequestID corresponds to the proxy_id in the _data collection
 	if dataRecord, err := dao.FindFirstRecordByData(rp.dataCollection.Name, "proxy_id", msg.RequestID); err == nil {
 		dataIndex = dataRecord.GetString("index")
 		generatedBy = dataRecord.GetString("generated_by")
+		actor = dataRecord.GetString("actor")
+		proxy = dataRecord.GetString("proxy")
+		chat = dataRecord.GetString("chat")
 	}
 
 	// id = fmt.Sprintf("%s.%d", dataIndex, msg.Index)
@@ -1284,6 +1299,9 @@ func (rp *RawProxyWrapper) saveWebSocketMessageToDB(msg *rawproxy.WebSocketMessa
 	record.Set("proxy_id", msg.RequestID)
 	record.Set("data_index", dataIndex)
 	record.Set("generated_by", generatedBy)
+	record.Set("actor", actor)
+	record.Set("proxy", proxy)
+	record.Set("chat", chat)
 
 	if err := dao.SaveRecord(record); err != nil {
 		log.Printf("[RawProxy][DB][ERROR] Failed to save WebSocket message for %s: %v", msg.RequestID, err)
