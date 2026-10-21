@@ -236,7 +236,7 @@ type SendRequestArgs struct {
 	Host                    string   `json:"host" jsonschema:"required" jsonschema_description:"the host to send the request to"`
 	Port                    int      `json:"port" jsonschema:"required" jsonschema_description:"the port to send the request to"`
 	HttpVersion             int      `json:"httpVersion" jsonschema:"required" jsonschema_description:"1 or 2"`
-	AttachToIndex           float64  `json:"attachToIndex" jsonschema:"required" jsonschema_description:"origin index of request you are modifying"`
+	AttachToIndex           float64  `json:"attachToIndex" jsonschema:"required" jsonschema_description:"index of the request you are modifying, to nest this one under it; 0 for a new request"`
 	Request                 string   `json:"request" jsonschema:"required" jsonschema_description:"raw request"`
 	Note                    string   `json:"note" jsonschema:"required" jsonschema_description:"the note to attach to the request"`
 	Labels                  []string `json:"labels,omitempty" jsonschema_description:"the labels to attach to the request"`

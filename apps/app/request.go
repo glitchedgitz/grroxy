@@ -285,7 +285,10 @@ func (backend *Backend) SaveRequestToBackend(reqBody types.AddRequestBodyType) (
 	var newindex = float64(reqBody.Index)
 	var indexMinor float64 = -1
 
-	if reqBody.Index == 0 {
+	// Real indexes start at 1. Anything below means "no origin row": callers,
+	// the AI included, pass 0 or -1 for a request written from scratch, and
+	// nesting it under a non-existent row gave it ids like -1.1.
+	if reqBody.Index <= 0 {
 		newindex = float64(ProxyMgr.GetNextIndex())
 		reqBody.Index = newindex
 	} else {
